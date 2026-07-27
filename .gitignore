@@ -1,0 +1,21 @@
+# Copilot agent folder may contain credentials/tokens per Spec Kit's own warning
+.github/copilot-instructions.md.bak
+
+# Node / Vite
+node_modules/
+dist/
+build/
+logs/
+*.log
+.env*
+
+# Generated tool files
+*.timestamp-*.mjs
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+Thumbs.db
+*.tmp
+*.swp
