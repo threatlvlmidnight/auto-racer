@@ -8,10 +8,13 @@ import type { ItemDefinition, VehicleBuild, VehicleId } from "../../src/simulati
  * written against the generic `board: (Item|null)[]` array; this preserves that
  * ergonomics while producing a real topology-ordered `VehicleBuild`.
  *
- * The default vehicle is The Highwheel. Slot *type* does not affect lap
- * simulation today — Fitted/Improvised behavior is applied at contest-lock time
- * (feature 010 US5/Phase 7) — so existing numeric expectations are unaffected
- * by which vehicle a build uses.
+ * The default vehicle is The Highwheel. Since 010 US3, slot *type* does affect
+ * lap simulation: an installed item's Fitted/Improvised behavior is folded in
+ * by `resolveInstallation` (src/simulation/slots.ts) based on which slot it
+ * occupies. `testItem` below defaults Fitted/Improvised to inert `"none"`
+ * behavior precisely so existing numeric expectations stay unaffected by which
+ * slot a synthetic test item lands in; only real catalog items carry a
+ * consequential Fitted/Improvised delta.
  */
 export const TEST_VEHICLE_ID: VehicleId = "the-highwheel";
 

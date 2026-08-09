@@ -17,12 +17,14 @@ import {
   type GarageReplacement,
   type GarageSource,
 } from "../simulation/garage";
-import type { OfferedItem } from "../simulation/types";
+import type { OfferedItem, SlotType } from "../simulation/types";
 import type { PracticeOriginInput, ProtectedPreparationOrigin } from "../simulation/practice";
 import {
+  garageItemInspector,
   garageSlotModels,
   garageStorageModels,
   garageVehicleHeader,
+  type GarageItemInspector,
 } from "./garagePresentation";
 import { createItemCard, enableItemTooltip } from "./itemVisuals";
 import {
@@ -154,7 +156,7 @@ export class PrepareScene extends Phaser.Scene {
     }).setOrigin(0.5);
     const card = this.add.container(x, y, [background, itemCard, label]).setSize(SLOT_WIDTH, 84);
     this.track(card);
-    enableItemTooltip(this, card, item);
+    enableItemTooltip(this, card, item, this.offerInspectorText(item));
     if (!enabled) return;
     card.setInteractive({ useHandCursor: true });
     card.on("pointerdown", () => { this.selectedOfferId = offerId; });
@@ -225,7 +227,7 @@ export class PrepareScene extends Phaser.Scene {
       }));
       const item = this.run!.build.slots[index].item;
       if (item) {
-        this.createHeldItem(x, BOARD_Y, item, { area: "vehicle", slotId: slot.slotId }, slotWidth, slot.installationLabel);
+        this.createHeldItem(x, BOARD_Y, item, { area: "vehicle", slotId: slot.slotId }, slotWidth, slot.installationLabel, slot.slotType);
       } else {
         this.track(this.add.text(x, BOARD_Y, `Empty ${slot.typeLabel.toLowerCase()} slot`, {
           fontSize: "11px",
@@ -269,6 +271,7 @@ export class PrepareScene extends Phaser.Scene {
           { area: "storage", index: position.index },
           slotWidth,
           position.storageActive ? "Active while stored" : null,
+          null,
         );
       } else {
         this.track(this.add.text(x, STORAGE_Y, `Empty storage ${index + 1}`, {
@@ -287,11 +290,12 @@ export class PrepareScene extends Phaser.Scene {
     source: GarageSource,
     slotWidth: number,
     stateLabel: string | null,
+    slotType: SlotType | null,
   ): void {
     const card = createItemCard(this, x, y, item, { width: slotWidth - 16, height: SLOT_HEIGHT - 8 })
       .setInteractive({ useHandCursor: true });
     this.track(card);
-    enableItemTooltip(this, card, item);
+    enableItemTooltip(this, card, item, this.inspectorText(garageItemInspector(item, slotType, this.run!.credits)));
     if (stateLabel) {
       this.track(this.add.text(x, y + SLOT_HEIGHT / 2 - 3, stateLabel, {
         fontSize: "9px",
@@ -343,6 +347,29 @@ export class PrepareScene extends Phaser.Scene {
       },
     };
     this.scene.start("TestDayScene", { run: this.run, origin });
+  }
+
+  /** Shared lines every inspector tooltip shows regardless of destination. */
+  private inspectorText(inspector: GarageItemInspector): string {
+    const lines = [
+      `${inspector.name} [${inspector.originLabel} · ${inspector.categoryLabel}]`,
+      `${inspector.baseEffectLabel} · ${inspector.cooldownLabel}`,
+      `${inspector.priceLabel}${inspector.affordable ? "" : " · unaffordable"} · ${inspector.storageBehaviorLabel}`,
+    ];
+    if (inspector.installationState) {
+      lines.push(`Installation: ${inspector.installationState}`);
+      if (inspector.gainedBehaviorLabel) lines.push(inspector.gainedBehaviorLabel);
+      if (inspector.lostBehaviorLabel) lines.push(`Loses: ${inspector.lostBehaviorLabel}`);
+      if (inspector.noAdditionalConsequenceLabel) lines.push(inspector.noAdditionalConsequenceLabel);
+    }
+    return lines.join("\n");
+  }
+
+  /** An offer has no destination yet, so both possible installation outcomes
+   *  are disclosed up front instead of resolving just one. */
+  private offerInspectorText(item: OfferedItem): string {
+    const base = this.inspectorText(garageItemInspector(item, null, this.run!.credits));
+    return `${base}\n${item.fittedBehavior.description}\n${item.improvisedBehavior.description}`;
   }
 
   private track<T extends Phaser.GameObjects.GameObject>(object: T): T {

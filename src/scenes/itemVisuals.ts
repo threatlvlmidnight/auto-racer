@@ -116,6 +116,7 @@ export function enableItemTooltip(
   scene: Phaser.Scene,
   target: Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform,
   item: OfferedItem,
+  textOverride?: string,
 ): void {
   let tooltip: Phaser.GameObjects.Text | undefined;
 
@@ -127,7 +128,7 @@ export function enableItemTooltip(
   target.on("pointerover", (pointer: Phaser.Input.Pointer) => {
     hide();
     tooltip = scene.add
-      .text(pointer.x, pointer.y - 16, itemDetailsLabel(item), {
+      .text(pointer.x, pointer.y - 16, textOverride ?? itemDetailsLabel(item), {
         fontSize: "11px",
         fontFamily: UI_FONT,
         color: "#f3e5bd",

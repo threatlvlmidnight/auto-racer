@@ -230,10 +230,13 @@ export interface ContributionEvidence {
   resultingLapTime: number;
   storageActive: boolean;
   reason: string | null;
+  /** Present only for vehicle-slot items; storage has no installation state. */
   installation?: {
     state: "fitted" | "flexible" | "improvised";
     behavior: string;
   };
+  /** The stable slot id the item occupied, present only for vehicle-slot items. */
+  slotId?: string;
 }
 
 export interface LapBreakdown {

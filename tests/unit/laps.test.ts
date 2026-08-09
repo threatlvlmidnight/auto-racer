@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ITEM_POOL } from "../../src/content/sample-data";
 import { firesOnLap, simulatePlayerLaps } from "../../src/simulation/laps";
 import {
   LAP_COUNT,
@@ -15,6 +16,10 @@ import { testItem, vehicleBuild } from "../fixtures/vehicle-build-fixtures";
 
 function emptyBuild(): Build {
   return vehicleBuild();
+}
+
+function catalogItem(id: string): OfferedItem {
+  return structuredClone(ITEM_POOL.find((candidate) => candidate.id === id)!);
 }
 
 describe("simulatePlayerLaps", () => {
@@ -270,6 +275,121 @@ describe("simulatePlayerLaps", () => {
       const unrelatedFired = lap.firedItems.find((fired) => fired.id === unrelatedDirect.id);
       expect(unrelatedFired).toEqual({ id: unrelatedDirect.id, contribution: -2 });
     });
+  });
+});
+
+describe("simulatePlayerLaps — installation-aware behavior (010 US3)", () => {
+  it("adds the item's Fitted behavior on top of its base effect in a matching-category slot", () => {
+    // item-001 is a Power item; The Highwheel's slot 1 is Power.
+    const item = catalogItem("item-001");
+    const lap = simulatePlayerLaps(vehicleBuild([item, null, null, null]))[0];
+
+    expect(lap.firedItems).toEqual([{ id: item.id, contribution: -3.4 }]);
+    expect(lap.contributions.find((entry) => entry.sourceItemId === item.id)?.installation).toEqual({
+      state: "fitted",
+      behavior: item.fittedBehavior.description,
+    });
+  });
+
+  it("adds the item's Improvised behavior on top of its base effect in a conflicting-category slot", () => {
+    // item-001 is a Power item; The Highwheel's slot 2 is Chassis.
+    const item = catalogItem("item-001");
+    const lap = simulatePlayerLaps(vehicleBuild([null, item, null, null]))[0];
+
+    expect(lap.firedItems).toEqual([{ id: item.id, contribution: -2.7 }]);
+    expect(lap.contributions.find((entry) => entry.sourceItemId === item.id)?.installation).toEqual({
+      state: "improvised",
+      behavior: item.improvisedBehavior.description,
+    });
+  });
+
+  it("applies only the base effect in a Flex slot, regardless of the item's category", () => {
+    // The Highwheel's slot 4 is Flex.
+    const item = catalogItem("item-001");
+    const lap = simulatePlayerLaps(vehicleBuild([null, null, null, item]))[0];
+
+    expect(lap.firedItems).toEqual([{ id: item.id, contribution: -3 }]);
+    expect(lap.contributions.find((entry) => entry.sourceItemId === item.id)?.installation).toEqual({
+      state: "flexible",
+      behavior: expect.stringContaining("Base"),
+    });
+  });
+
+  it("invents no penalty for an explicit no-consequence Improvised item in a conflicting slot", () => {
+    // item-003 is a Chassis item with improvisedBehavior kind "none"; slot 1 is Power.
+    const item = catalogItem("item-003");
+    const lap = simulatePlayerLaps(vehicleBuild([item, null, null, null]))[0];
+
+    expect(lap.firedItems).toEqual([{ id: item.id, contribution: item.timeModifier }]);
+    expect(lap.contributions.find((entry) => entry.sourceItemId === item.id)?.installation?.state)
+      .toBe("improvised");
+  });
+
+  it("amplifies a buff item's own boost by its Fitted buff-boost when installed in a matching slot", () => {
+    // item-012 is a Power buff item (boostPercent 5, Fitted +2); slot 1 is Power.
+    const buffItem = catalogItem("item-012");
+    const companion = testItem({
+      id: "companion-direct", name: "Companion", price: 1, timeModifier: -1,
+      identityTag: "performance", cooldown: 1,
+    });
+    const lap = simulatePlayerLaps(vehicleBuild([buffItem, companion, null, null]))[0];
+
+    expect(lap.firedItems.find((fired) => fired.id === companion.id)).toEqual({
+      id: companion.id,
+      contribution: -1.07,
+    });
+  });
+
+  it("reduces a buff item's own boost by its Improvised buff-boost when installed in a conflicting slot", () => {
+    // item-012 is a Power buff item (boostPercent 5, Improvised -2); slot 2 is Chassis.
+    const buffItem = catalogItem("item-012");
+    const companion = testItem({
+      id: "companion-direct", name: "Companion", price: 1, timeModifier: -1,
+      identityTag: "performance", cooldown: 1,
+    });
+    const lap = simulatePlayerLaps(vehicleBuild([null, buffItem, companion, null]))[0];
+
+    expect(lap.firedItems.find((fired) => fired.id === companion.id)).toEqual({
+      id: companion.id,
+      contribution: -1.03,
+    });
+  });
+
+  it("never applies installation behavior to a stored item, even one active while stored", () => {
+    // item-013 (Tyre Rack) is activeWhileStored; storage has no slot type or installation state.
+    const item = catalogItem("item-013");
+    const lap = simulatePlayerLaps(vehicleBuild([], [item, null, null]))[0];
+    const evidence = lap.contributions.find((entry) => entry.sourceItemId === item.id);
+
+    expect(lap.firedItems).toEqual([{ id: item.id, contribution: item.timeModifier }]);
+    expect(evidence?.installation).toBeUndefined();
+  });
+
+  it("produces identical results regardless of which same-type slot holds the item", () => {
+    // item-004 is a Chassis item; The Highwheel's slots 2 and 3 are both Chassis.
+    const item = catalogItem("item-004");
+    const inSlotTwo = simulatePlayerLaps(vehicleBuild([null, item, null, null]));
+    const inSlotThree = simulatePlayerLaps(vehicleBuild([null, null, item, null]));
+
+    expect(inSlotTwo.map((lap) => lap.time)).toEqual(inSlotThree.map((lap) => lap.time));
+    expect(inSlotTwo.map((lap) => lap.firedItems)).toEqual(inSlotThree.map((lap) => lap.firedItems));
+  });
+
+  it("keeps existing cooldown and buff firing order stable for inert (non-catalog) test items", () => {
+    const direct = testItem({
+      id: "boosted-direct", name: "Boosted Direct", price: 2, timeModifier: -1,
+      identityTag: "performance", cooldown: 3,
+    });
+    const flatBuff = testItem({
+      id: "flat-buff", name: "Flat Buff", price: 2, timeModifier: 0,
+      identityTag: "performance", buff: { boostPercent: 5 },
+    });
+    const result = simulatePlayerLaps(vehicleBuild([direct, flatBuff, null, null]));
+
+    expect(result[0].firedItems).toEqual([
+      { id: direct.id, contribution: -1.05 },
+      { id: flatBuff.id, contribution: 5 },
+    ]);
   });
 });
 

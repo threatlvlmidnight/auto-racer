@@ -6,8 +6,8 @@ import {
   type GarageCommand,
   type GarageContext,
 } from "../../src/simulation/garage";
-import { installedItems, storedItems } from "../../src/simulation/slots";
-import type { ItemDefinition, VehicleBuild } from "../../src/simulation/types";
+import { installedItems, resolveInstallation, storedItems } from "../../src/simulation/slots";
+import type { ItemDefinition, SlotType, VehicleBuild } from "../../src/simulation/types";
 import { testItem, vehicleBuild } from "../fixtures/vehicle-build-fixtures";
 
 // The Highwheel: power / chassis / chassis / flex
@@ -368,5 +368,60 @@ describe("garage item-copy conservation", () => {
     expect(result.build.slots[0].item).toBeNull();
     expect(result.build.slots[1].item).toStrictEqual(OTHER_ITEM);
     expect(result.build.storage[0].item).toStrictEqual(OTHER_ITEM);
+  });
+});
+
+describe("resolveInstallation — full catalog matrix", () => {
+  const SLOT_TYPES: SlotType[] = ["power", "chassis", "flex"];
+
+  it("is legal for every shipped item against every slot type and never mutates the item", () => {
+    ITEM_POOL.forEach((item) => {
+      const snapshot = structuredClone(item);
+      SLOT_TYPES.forEach((slotType) => {
+        expect(() => resolveInstallation(item, slotType)).not.toThrow();
+      });
+      expect(item).toStrictEqual(snapshot);
+    });
+  });
+
+  it("resolves Fitted with the item's own Fitted behavior when the slot matches its category", () => {
+    ITEM_POOL.forEach((item) => {
+      const resolution = resolveInstallation(item, item.installationCategory);
+
+      expect(resolution.state).toBe("fitted");
+      expect(resolution.appliedInstallationBehavior).toStrictEqual(item.fittedBehavior);
+      expect(resolution.lostFittedBehavior).toBeNull();
+      expect(resolution.noAdditionalImprovisedConsequence).toBe(false);
+      expect(resolution.baseBehavior).toStrictEqual({
+        kind: "time-modifier",
+        timeModifier: item.timeModifier,
+        description: `Base: ${item.timeModifier.toFixed(2)}s per firing.`,
+      });
+    });
+  });
+
+  it("resolves Improvised — still legal — with the item's own Improvised behavior when the slot conflicts", () => {
+    const opposite: Record<"power" | "chassis", "power" | "chassis"> = { power: "chassis", chassis: "power" };
+    ITEM_POOL.forEach((item) => {
+      const conflictingSlot = opposite[item.installationCategory];
+      const resolution = resolveInstallation(item, conflictingSlot);
+      const hasConsequence = item.improvisedBehavior.kind !== "none";
+
+      expect(resolution.state).toBe("improvised");
+      expect(resolution.lostFittedBehavior).toStrictEqual(item.fittedBehavior);
+      expect(resolution.appliedInstallationBehavior).toStrictEqual(hasConsequence ? item.improvisedBehavior : null);
+      expect(resolution.noAdditionalImprovisedConsequence).toBe(!hasConsequence);
+    });
+  });
+
+  it("resolves Flexible with base-only behavior in a Flex slot regardless of category", () => {
+    ITEM_POOL.forEach((item) => {
+      const resolution = resolveInstallation(item, "flex");
+
+      expect(resolution.state).toBe("flexible");
+      expect(resolution.appliedInstallationBehavior).toBeNull();
+      expect(resolution.lostFittedBehavior).toStrictEqual(item.fittedBehavior);
+      expect(resolution.noAdditionalImprovisedConsequence).toBe(false);
+    });
   });
 });

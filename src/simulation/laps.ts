@@ -4,6 +4,7 @@ import {
   matchingDirectItemCount,
   type StackingState,
 } from "./buffs";
+import { resolveInstallation } from "./slots";
 import {
   LAP_COUNT,
   MIN_LAP_TIME,
@@ -12,6 +13,7 @@ import {
   type ContributionEffectKind,
   type ContributionEvidence,
   type FiredItem,
+  type InstallationResolution,
   type OfferedItem,
 } from "./types";
 
@@ -22,21 +24,55 @@ export interface PlayerLap {
 }
 
 interface LocatedItem {
+  /** Base item with time-modifier/buff-boost already folded in for a vehicle slot. */
   item: OfferedItem;
   area: "board" | "storage";
   index: number;
   active: boolean;
+  slotId?: string;
+  installation?: InstallationResolution;
 }
 
 export function firesOnLap(cooldown: number, lap: number): boolean {
   return (lap - 1) % cooldown === 0;
 }
 
+/**
+ * Folds an item's authored Fitted/Improvised behavior into its own numeric
+ * fields so every downstream calculation (buffs, direct effects) reads one
+ * effective item without duplicating the truth table (010 US3, contract §4).
+ * Storage items and Flex placements have no additional behavior to fold in.
+ */
+function effectiveItem(item: OfferedItem, installation: InstallationResolution): OfferedItem {
+  const behavior = installation.appliedInstallationBehavior;
+  if (!behavior) return item;
+  if (behavior.kind === "time-modifier") {
+    return { ...item, timeModifier: item.timeModifier + (behavior.timeModifier ?? 0) };
+  }
+  if (behavior.kind === "buff-boost" && item.buff) {
+    return { ...item, buff: { ...item.buff, boostPercent: item.buff.boostPercent + (behavior.buffBoostPercent ?? 0) } };
+  }
+  return item;
+}
+
+function installationBehaviorSource(installation: InstallationResolution): string {
+  return installation.appliedInstallationBehavior?.description ?? installation.baseBehavior.description;
+}
+
 export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT): PlayerLap[] {
   const locatedItems: LocatedItem[] = [
-    ...build.slots.flatMap((slot, index) => slot.item
-      ? [{ item: slot.item, area: "board" as const, index, active: true }]
-      : []),
+    ...build.slots.flatMap((slot, index) => {
+      if (!slot.item) return [];
+      const installation = resolveInstallation(slot.item, slot.slotType);
+      return [{
+        item: effectiveItem(slot.item, installation),
+        area: "board" as const,
+        index,
+        active: true,
+        slotId: slot.slotId,
+        installation,
+      }];
+    }),
     ...build.storage.flatMap((position, index) => position.item
       ? [{
         item: position.item,
@@ -151,6 +187,10 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT): PlayerLa
         clampAdjustment: 0,
         resultingLapTime: 0,
         storageActive: located.area === "storage" && located.active,
+        slotId: located.slotId,
+        installation: located.installation
+          ? { state: located.installation.state, behavior: installationBehaviorSource(located.installation) }
+          : undefined,
         reason,
       });
     });

@@ -14,6 +14,7 @@ import type {
   SlotType,
   VehicleBuild,
 } from "../simulation/types";
+import { itemVisualDescriptor } from "./itemVisualDescriptor";
 
 // Pure presentation models for the named-vehicle garage. These format the
 // authoritative build and the pure garage preview — they never recompute
@@ -148,6 +149,59 @@ function itemSummary(item: ItemDefinition): GarageItemSummary {
     baseEffectLabel: `${item.timeModifier >= 0 ? "+" : ""}${item.timeModifier.toFixed(2)}s per firing`,
     fittedLabel: item.fittedBehavior.description,
     improvisedLabel: item.improvisedBehavior.description,
+  };
+}
+
+function cooldownLabel(item: ItemDefinition): string {
+  const descriptor = itemVisualDescriptor(item);
+  if (item.buff && item.cooldown === undefined) return "Always on";
+  return descriptor.cooldown === 1 ? "Fires every lap" : `Fires every ${descriptor.cooldown} laps`;
+}
+
+export interface GarageItemInspector extends GarageItemSummary {
+  synergyTags: readonly string[];
+  priceLabel: string;
+  affordable: boolean;
+  cooldownLabel: string;
+  storageBehaviorLabel: string;
+  /** Null only for a storage destination, which has no installation state. */
+  installationState: InstallationState | null;
+  /** The additional behavior this placement grants, if any. */
+  gainedBehaviorLabel: string | null;
+  /** The item's own Fitted behavior, disclosed only when this placement loses it. */
+  lostBehaviorLabel: string | null;
+  /** Set only for an Improvised placement that adds no consequence. */
+  noAdditionalConsequenceLabel: string | null;
+}
+
+/**
+ * The persistent selected-item inspector (contract §6): every authored,
+ * installation, price, affordability, and storage-behavior fact needed to
+ * decide a placement without hovering. `slotType` is the destination under
+ * consideration — `null` for a storage destination, which has no
+ * installation state of its own.
+ */
+export function garageItemInspector(
+  item: ItemDefinition,
+  slotType: SlotType | null,
+  credits: number,
+): GarageItemInspector {
+  const summary = itemSummary(item);
+  const resolution = slotType ? resolveInstallation(item, slotType) : null;
+
+  return {
+    ...summary,
+    synergyTags: item.synergyTags,
+    priceLabel: `${item.price} credits`,
+    affordable: item.price <= credits,
+    cooldownLabel: cooldownLabel(item),
+    storageBehaviorLabel: item.activeWhileStored ? "Active while stored" : "Inert while stored",
+    installationState: resolution?.state ?? null,
+    gainedBehaviorLabel: resolution?.appliedInstallationBehavior?.description ?? null,
+    lostBehaviorLabel: resolution?.lostFittedBehavior?.description ?? null,
+    noAdditionalConsequenceLabel: resolution?.noAdditionalImprovisedConsequence
+      ? item.improvisedBehavior.description
+      : null,
   };
 }
 
