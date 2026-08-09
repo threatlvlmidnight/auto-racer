@@ -99,7 +99,10 @@ between races.
 ## Core loop
 Async auto battler, structured as prepare → contest:
 
-- **Contest:** a 1v1 race against another player's ghost.
+- **Contest:** a race against one or more recorded ghosts, never a live
+  opponent (Constitution Principle I, amended v1.3.0 — see
+  `specs/skribidi-gap-decisions.md` §1). Decided direction is 6-8
+  simultaneous cars; still to be built.
 - **Prepare:** between races, the player acquires new components, upgrades existing ones, and adjusts their setup to improve their odds next race.
 
 ## Race presentation
@@ -155,7 +158,8 @@ Async auto battler, structured as prepare → contest:
 - **Shipped as feature 005** (`specs/005-lap-tick-simulation/`): races resolve as `LAP_COUNT` (10, fixed) discrete laps. Every item carries a per-lap magnitude and a lap-based cooldown gating recurring effects. Buff items come in two kinds — **flat** (no cooldown, constant boost every lap) and **stacking** (cooldown-gated, each firing permanently adds to a cumulative boost, additive not compounding). The ghost is a fixed-pace "control car" (a per-lap `lapTime`, no items/modifiers, no variance). A minimum lap-time floor guards against degenerate (zero/negative) lap times from aggressive stacking. The result exposes a full lap-by-lap breakdown (`ContestResult.laps`), which feature 006's visualizer consumes directly.
 - **Shipped as feature 006** (see Race presentation above): the connection between this lap-tick model and Spectation-First — explicitly unresolved at the time 005 was written — is now resolved. The visualizer derives real car pacing and item-firing callouts directly from `laps[]`.
 - **Planned in feature 009**: PvP races use 10 then 12 laps within a six-stage run. The shipped implementation remains fixed at 10 until `009-run-progression` is built. A ghost with its own recorded build/items (rather than a fixed constant pace) is still out of scope — a much larger future feature (real async ghost recording), explicitly not this one.
-- Item synergy beyond 003's original buff item and 005's flat/stacking mechanism (richer, multi-axis combos) remains open — tracked in `specs/DEFERRED.md`.
+- Item synergy beyond 003's original buff item and 005's flat/stacking mechanism (richer, multi-axis combos) remains open — tracked in `specs/DEFERRED.md`, direction decided in `specs/skribidi-gap-decisions.md` §4 (own tag set, count-based thresholds).
+- **Post-demo direction** (`specs/skribidi-gap-decisions.md`): the 1v1 ghost model is superseded by N-ghost racing (§1), which raises a real-async-ghost-recording requirement this vision doc already anticipated — race results must be canonical across every viewer, not just deterministic per player (§2, flagged for its own architecture spec).
 
 ## Run structure / encounter system (planned in feature 009, not yet implemented)
 - A run is not just "a sequence of contests" — it's divided into discrete encounters (The Bazaar's "day, ~10 encounters" structure is the reference point, though the intent is explicitly *not* to copy that system wholesale, just to borrow the shape).
@@ -175,7 +179,7 @@ Eight features shipped and playable:
 - **007 count-synergy buff** (`specs/007-count-synergy-buff/`): held-item-count scaling for matching direct items.
 - **008 race UI polish** (`specs/008-race-ui-polish/`): buff contribution flashes, compact item logos/names, cooldown/dependency details, and hover tooltips.
 
-**Planned next**: `009-run-progression` now specifies the run/encounter structure, variable lap counts, Supplier economy, Reward Draft, Sponsor Meeting, and scheduled PvP. It may complete against the current generic-board placeholder. Build Testing Access remains its mandatory immediate follow-up. The four-entrant initial roster and thematic ecosystems are committed in `specs/launch-roster.md`; the intended vehicle system is committed in `specs/vehicle-topology.md`. **Still open**: championship and game title; final character biographies and visual designs; exact visual style; topology implementation and final slot distributions; richer item synergy and final tag taxonomy; entrant selection; phase-two encounters; weight as a possible soft constraint; real async ghost recording; and whether data visibility itself should be a build choice.
+**Planned next**: `009-run-progression` now specifies the run/encounter structure, variable lap counts, Supplier economy, Reward Draft, Sponsor Meeting, and scheduled PvP. It may complete against the current generic-board placeholder. Build Testing Access remains its mandatory immediate follow-up. The four-entrant initial roster and thematic ecosystems are committed in `specs/launch-roster.md`; the intended vehicle system is committed in `specs/vehicle-topology.md`. **Still open**: championship and game title; final character biographies and visual designs; exact visual style; weight as a possible soft constraint; and whether data visibility itself should be a build choice. Topology implementation and final slot distributions, entrant selection, and phase-two encounters shipped in `010-entrant-vehicle-garage` and `011-build-test-day`. **Post-demo, decided but not yet built** (`specs/skribidi-gap-decisions.md`): N-ghost contest model and race-spectacle visuals, richer item synergy and final tag taxonomy, duplicate-item tiering, economy depth (reputation/interest/streaks), and season-length growth. Real async ghost recording remains open, now sharpened by the requirement that multi-viewer race results be canonical, not just per-player deterministic.
 
 The target interface, current-state gap analysis, persistent run HUD, menu flow,
 responsive requirements, vehicle workshop, race/result overhaul, and phased

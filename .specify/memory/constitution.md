@@ -1,7 +1,14 @@
 <!--
 Sync Impact Report
-Version change: 1.1.0 -> 1.2.0 (materially expanded Product Constraints)
-Modified principles: none
+Version change: 1.2.0 -> 1.3.0 (redefined Principle I's opponent-count rule)
+Modified principles:
+  - I. Prepare → Contest Integrity — "1v1 races" loosened to "one or more
+    recorded ghosts"; the non-negotiable rule was never the exact count, it
+    was "never a live opponent." Prompted by the post-demo gap analysis
+    against Alex's Skribidi Skids POC, which races a full field (owner
+    decision: authored NPC ghosts now, 6-8 cars, real async multiplayer
+    ghosts as a separate later feature; no live/non-deterministic contact
+    resolution in this pass).
 Added sections: none
 Removed sections: none
 Modified sections:
@@ -31,15 +38,24 @@ Follow-up TODOs:
 Every feature MUST preserve the core loop's two-phase shape: a **prepare**
 phase where the player makes every decision (drafting, building, tuning,
 adjusting), followed by a **contest** phase that runs to completion without
-live player input once started. Contests resolve as 1v1 races against a
-recorded opponent (a "ghost"), never a live opponent. Any proposal that
-introduces direct player control, live input, or manual intervention during
-the contest phase is a constitutional violation, not a design trade-off, and
-requires an explicit amendment to this document before it may be built.
-**Rationale**: this phase separation is the defining structural bet of the
-project — it is what makes the game an auto-battler-in-a-racing-skin rather
-than a racing game with a garage screen, and it is the property the whole
-design is organized around.
+live player input once started. Contests resolve against one or more
+recorded opponents ("ghosts"), never a live opponent. The number of
+simultaneous ghosts in a contest is a design/planning decision, not a
+constitutional one; what is fixed here is that every non-player competitor
+is precomputed, recorded data — never live synchronous opposition, and
+never resolved by non-deterministic randomness during playback (see
+Principle III, Transparency & Legibility). Any proposal that introduces
+direct player control, live input, manual intervention, or a live/non-
+deterministic opponent during the contest phase is a constitutional
+violation, not a design trade-off, and requires an explicit amendment to
+this document before it may be built. **Rationale**: this phase separation
+is the defining structural bet of the project — it is what makes the game
+an auto-battler-in-a-racing-skin rather than a racing game with a garage
+screen, and it is the property the whole design is organized around. The
+opponent-count language was originally written as "1v1" when the project
+only had one ghost to race against; the 1.3.0 amendment corrects that to
+match what was always the actual non-negotiable — recorded, never live —
+now that multiple simultaneous ghosts are in scope.
 
 ### II. Fairness
 No purchasable content, currency, or subscription MAY affect contest
@@ -157,4 +173,4 @@ plan does not violate any Core Principle above; violations must be
 justified in that plan's Complexity Tracking table or the plan must be
 revised.
 
-**Version**: 1.2.0 | **Ratified**: 2026-07-26 | **Last Amended**: 2026-08-08
+**Version**: 1.3.0 | **Ratified**: 2026-07-26 | **Last Amended**: 2026-08-09
