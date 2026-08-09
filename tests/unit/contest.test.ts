@@ -3,19 +3,14 @@ import { BASELINE_CAR, SAMPLE_GHOST } from "../../src/content/sample-data";
 import { ghostLapTimes, resolveContest } from "../../src/simulation/contest";
 import {
   LAP_COUNT,
-  SLOT_CAPACITY,
-  STORAGE_CAPACITY,
   type Build,
   type OfferedItem,
   type SampleGhost,
 } from "../../src/simulation/types";
+import { testItem, vehicleBuild } from "../fixtures/vehicle-build-fixtures";
 
 function emptyBuild(): Build {
-  return {
-    car: BASELINE_CAR,
-    board: Array(SLOT_CAPACITY).fill(null),
-    storage: Array(STORAGE_CAPACITY).fill(null),
-  };
+  return vehicleBuild();
 }
 
 describe("resolveContest lap-loop shell", () => {
@@ -31,6 +26,7 @@ describe("resolveContest lap-loop shell", () => {
         playerLapTime: BASELINE_CAR.baseLapTime,
         ghostLapTime: SAMPLE_GHOST.lapTime,
         firedItems: [],
+        contributions: [],
       });
     });
   });
@@ -61,6 +57,21 @@ describe("resolveContest lap-loop shell", () => {
     expect(build).toEqual(buildSnapshot);
     expect(SAMPLE_GHOST).toEqual(ghostSnapshot);
   });
+
+  it("stores explicit lap count and adds only the two scheduled laps at 12", () => {
+    const ten = resolveContest(emptyBuild(), SAMPLE_GHOST, 10);
+    const twelve = resolveContest(emptyBuild(), SAMPLE_GHOST, 12);
+
+    expect(ten.lapCount).toBe(10);
+    expect(twelve.lapCount).toBe(12);
+    expect(ten.laps).toHaveLength(10);
+    expect(twelve.laps).toHaveLength(12);
+    expect(twelve.laps.slice(0, 10)).toEqual(ten.laps);
+    expect(twelve.playerTime).toBe(ten.playerTime + BASELINE_CAR.baseLapTime * 2);
+    expect(twelve.ghostTime).toBe(ten.ghostTime + SAMPLE_GHOST.lapTime * 2);
+    expect(resolveContest(emptyBuild(), SAMPLE_GHOST, 10)).toEqual(ten);
+    expect(resolveContest(emptyBuild(), SAMPLE_GHOST, 12)).toEqual(twelve);
+  });
 });
 
 describe("ghostLapTimes", () => {
@@ -76,34 +87,42 @@ describe("ghostLapTimes", () => {
       SAMPLE_GHOST.lapTime * LAP_COUNT
     );
   });
+
+  it("uses the supplied terminal count", () => {
+    expect(ghostLapTimes(SAMPLE_GHOST, 10)).toHaveLength(10);
+    expect(ghostLapTimes(SAMPLE_GHOST, 12)).toHaveLength(12);
+  });
 });
 
 describe("ContestResult lap breakdown", () => {
   it("records real item firings and reconstructs both reported totals exactly", () => {
-    const directItem: OfferedItem = {
+    const directItem: OfferedItem = testItem({
       id: "periodic-direct",
       name: "Periodic Direct",
+      price: 2,
       timeModifier: -1,
       identityTag: "performance",
       cooldown: 3,
-    };
-    const flatBuff: OfferedItem = {
+    });
+    const flatBuff: OfferedItem = testItem({
       id: "flat-buff",
       name: "Flat Buff",
+      price: 2,
       timeModifier: 0,
       identityTag: "performance",
       buff: { boostPercent: 5 },
-    };
-    const stackingBuff: OfferedItem = {
+    });
+    const stackingBuff: OfferedItem = testItem({
       id: "stacking-buff",
       name: "Stacking Buff",
+      price: 2,
       timeModifier: 0,
       identityTag: "performance",
       cooldown: 3,
       buff: { boostPercent: 1 },
-    };
+    });
     const result = resolveContest(
-      { ...emptyBuild(), board: [directItem, flatBuff, stackingBuff] },
+      vehicleBuild([directItem, flatBuff, stackingBuff]),
       SAMPLE_GHOST
     );
 
@@ -128,36 +147,82 @@ describe("ContestResult lap breakdown", () => {
   });
 });
 
+describe("count-synergy buff (SC-003)", () => {
+  it("changes the outcome when an extra matching item sits inert in storage vs. absent entirely", () => {
+    const countBuff: OfferedItem = testItem({
+      id: "count-buff",
+      name: "Count Buff",
+      price: 2,
+      timeModifier: 0,
+      identityTag: "performance",
+      buff: { boostPercent: 3, perCount: true },
+    });
+    const receiver: OfferedItem = testItem({
+      id: "receiver",
+      name: "Receiver",
+      price: 2,
+      timeModifier: -2,
+      identityTag: "performance",
+      cooldown: 1,
+    });
+    const extraMatch: OfferedItem = testItem({
+      id: "extra-match",
+      name: "Extra Match",
+      price: 2,
+      timeModifier: -1,
+      identityTag: "performance",
+      cooldown: 1,
+    });
+
+    const withInertExtra = resolveContest(
+      vehicleBuild([countBuff, receiver, null], [extraMatch, null, null]),
+      SAMPLE_GHOST
+    );
+    const withoutExtra = resolveContest(
+      vehicleBuild([countBuff, receiver, null]),
+      SAMPLE_GHOST
+    );
+
+    expect(withInertExtra.playerTime).not.toBe(withoutExtra.playerTime);
+    // qualifying count 2 (receiver + extraMatch) vs. 1 (receiver only):
+    // receiver's boosted magnitude is -2 * (1 + boost/100) in each case.
+    expect(withInertExtra.playerTime).toBeLessThan(withoutExtra.playerTime);
+  });
+});
+
 describe("lap simulation order independence", () => {
   it("produces identical outcomes and lap times for permutations of the same items", () => {
-    const directItem: OfferedItem = {
+    const directItem: OfferedItem = testItem({
       id: "order-direct",
       name: "Order Direct",
+      price: 2,
       timeModifier: -2,
       identityTag: "performance",
       cooldown: 2,
-    };
-    const flatBuff: OfferedItem = {
+    });
+    const flatBuff: OfferedItem = testItem({
       id: "order-flat",
       name: "Order Flat",
+      price: 2,
       timeModifier: 0,
       identityTag: "performance",
       buff: { boostPercent: 5 },
-    };
-    const stackingBuff: OfferedItem = {
+    });
+    const stackingBuff: OfferedItem = testItem({
       id: "order-stacking",
       name: "Order Stacking",
+      price: 2,
       timeModifier: 0,
       identityTag: "performance",
       cooldown: 3,
       buff: { boostPercent: 1 },
-    };
+    });
     const first = resolveContest(
-      { ...emptyBuild(), board: [directItem, flatBuff, stackingBuff] },
+      vehicleBuild([directItem, flatBuff, stackingBuff]),
       SAMPLE_GHOST
     );
     const second = resolveContest(
-      { ...emptyBuild(), board: [stackingBuff, directItem, flatBuff] },
+      vehicleBuild([stackingBuff, directItem, flatBuff]),
       SAMPLE_GHOST
     );
 

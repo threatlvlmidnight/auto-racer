@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <rect width="120" height="120" fill="#2a3542"/>
+  <circle cx="60" cy="44" r="22" fill="#d8b48c"/>
+  <path d="M38 42c0-14 10-22 22-22s22 8 22 22l-6-4-16 6-16-6z" fill="#241f1c"/>
+  <path d="M26 120c0-23 15-36 34-36s34 13 34 36z" fill="#9f3038"/>
+  <path d="M42 92h36l-4 28H46z" fill="#e0e6ea" opacity=".9"/>
+  <rect x="52" y="78" width="16" height="12" fill="#d8b48c"/>
+  <text x="60" y="116" font-family="Georgia,serif" font-size="9" fill="#f3e5bd" text-anchor="middle">SOTO</text>
+</svg>

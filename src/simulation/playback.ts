@@ -1,10 +1,4 @@
-import { isFlatBuff } from "./buffs";
-import {
-  LAP_COUNT,
-  type ContestResult,
-  type LapBreakdown,
-  type OfferedItem,
-} from "./types";
+import type { ContestResult, LapBreakdown, OfferedItem } from "./types";
 
 export const RACE_ANIMATION_SECONDS = 20;
 export const MIN_VISUAL_LAP_SECONDS = 0.5;
@@ -67,7 +61,11 @@ export function carProgressAt(
   const finalBoundary =
     carSchedule.visualLapBoundaries[carSchedule.visualLapBoundaries.length - 1] ?? 0;
   if (visualTimeSeconds >= finalBoundary) {
-    return { lapIndex: LAP_COUNT, lapProgress: 1, finished: true };
+    return {
+      lapIndex: carSchedule.visualLapBoundaries.length,
+      lapProgress: 1,
+      finished: true,
+    };
   }
 
   const lapIndex = carSchedule.visualLapBoundaries.findIndex(
@@ -102,10 +100,23 @@ export function calloutEventsForLap(
   lap: LapBreakdown,
   itemsById: Map<string, OfferedItem>,
 ): CalloutEvent[] {
-  return lap.firedItems.flatMap(({ id, contribution }) => {
+  const candidates = lap.firedItems.flatMap(({ id, contribution }) => {
     const item = itemsById.get(id);
-    return !item || isFlatBuff(item) ? [] : [{ item, contribution }];
+    return item ? [{ item, contribution }] : [];
   });
+
+  // Tags of direct (non-buff) items that fired this lap — used to gate buff flashes.
+  const firedDirectTags = new Set(
+    candidates
+      .filter(({ item }) => !item.buff && item.identityTag !== undefined)
+      .map(({ item }) => item.identityTag!),
+  );
+
+  return candidates.filter(
+    ({ item }) =>
+      !item.buff ||
+      (item.identityTag !== undefined && firedDirectTags.has(item.identityTag)),
+  );
 }
 
 export function liveGapAt(schedule: PlaybackSchedule, visualTimeSeconds: number): number {

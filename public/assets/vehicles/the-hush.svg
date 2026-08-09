@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="80" viewBox="0 0 160 80">
+  <ellipse cx="80" cy="72" rx="62" ry="5" fill="#172225" opacity=".35"/>
+  <circle cx="42" cy="58" r="13" fill="none" stroke="#3d4750" stroke-width="5"/>
+  <circle cx="120" cy="58" r="13" fill="none" stroke="#3d4750" stroke-width="5"/>
+  <!-- low stripped roadster -->
+  <path d="M22 54 L34 40 H126 L142 54 Z" fill="#232b30" stroke="#9f3038" stroke-width="3"/>
+  <path d="M50 40 L60 30 H98 L106 40 Z" fill="#1d1a18"/>
+  <!-- shuttered lamp + concealed compartment seam -->
+  <rect x="132" y="42" width="10" height="8" fill="#f6df8c"/>
+  <path d="M132 44h10M132 47h10" stroke="#232b30" stroke-width="2"/>
+  <path d="M66 44 v10 M92 44 v10" stroke="#3d4750" stroke-width="2" stroke-dasharray="3 3"/>
+</svg>

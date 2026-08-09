@@ -28,6 +28,7 @@ function resultWithLapTimes(playerLapTimes: number[], ghostLapTimes: number[]): 
   const ghostTime = ghostLapTimes.reduce((sum, time) => sum + time, 0);
 
   return {
+    lapCount: laps.length,
     playerTime,
     ghostTime,
     gap: playerTime - ghostTime,
@@ -112,17 +113,35 @@ describe("playback frame math", () => {
     expect(frame.liveGap).toBe(0);
     expect(frame.newCallouts).toEqual([]);
   });
+
+  it("derives 10 and 12 lap completion from each schedule", () => {
+    const ten = buildPlaybackSchedule(resultWithLapTimes(Array(10).fill(4), Array(10).fill(5)));
+    const twelve = buildPlaybackSchedule(resultWithLapTimes(Array(12).fill(4), Array(12).fill(5)));
+
+    expect(carProgressAt(ten.player, 100)).toEqual({
+      lapIndex: 10,
+      lapProgress: 1,
+      finished: true,
+    });
+    expect(carProgressAt(twelve.player, 100)).toEqual({
+      lapIndex: 12,
+      lapProgress: 1,
+      finished: true,
+    });
+    expect(twelve.player.visualLapBoundaries).toHaveLength(12);
+  });
 });
 
 describe("item callouts", () => {
-  const directItem = ITEM_POOL.find((item) => !item.buff)!;
+  const directItem = ITEM_POOL.find((item) => !item.buff)!; // performance, cooldown:1
+  const directItem2 = ITEM_POOL.find((item) => !item.buff && item.id !== directItem.id)!;
   const flatBuff = ITEM_POOL.find((item) => item.buff && item.cooldown === undefined)!;
   const stackingBuff = ITEM_POOL.find((item) => item.buff && item.cooldown !== undefined)!;
   const itemsById = new Map(
-    [directItem, flatBuff, stackingBuff].map((item) => [item.id, item]),
+    [directItem, directItem2, flatBuff, stackingBuff].map((item) => [item.id, item]),
   );
 
-  it("includes direct and stacking effects with contributions but excludes flat buffs", () => {
+  it("includes direct items and their matching buff items when both fire on the same lap", () => {
     const lap: LapBreakdown = {
       lap: 1,
       playerLapTime: 4,
@@ -136,11 +155,57 @@ describe("item callouts", () => {
 
     expect(calloutEventsForLap(lap, itemsById)).toEqual([
       { item: directItem, contribution: -3 },
+      { item: flatBuff, contribution: 5 },
       { item: stackingBuff, contribution: 2 },
     ]);
   });
 
-  it("emits all of a lap's firing events once when the player enters it", () => {
+  it("excludes a buff item when no matching direct item fires that lap (FR-002)", () => {
+    const lap: LapBreakdown = {
+      lap: 3,
+      playerLapTime: 4,
+      ghostLapTime: 5,
+      firedItems: [{ id: stackingBuff.id, contribution: 2 }],
+    };
+
+    expect(calloutEventsForLap(lap, itemsById)).toEqual([]);
+  });
+
+  it("includes the buff exactly once when two matching direct items fire on the same lap (FR-003)", () => {
+    const lap: LapBreakdown = {
+      lap: 1,
+      playerLapTime: 4,
+      ghostLapTime: 5,
+      firedItems: [
+        { id: directItem.id, contribution: -3 },
+        { id: directItem2.id, contribution: -1.25 },
+        { id: flatBuff.id, contribution: 5 },
+      ],
+    };
+
+    const events = calloutEventsForLap(lap, itemsById);
+    expect(events.filter((e) => e.item.id === flatBuff.id)).toHaveLength(1);
+    expect(events).toHaveLength(3);
+  });
+
+  it("includes both a flat buff and a stacking buff when a matching direct fires (edge case, spec.md)", () => {
+    const lap: LapBreakdown = {
+      lap: 3,
+      playerLapTime: 4,
+      ghostLapTime: 5,
+      firedItems: [
+        { id: directItem.id, contribution: -3 },
+        { id: flatBuff.id, contribution: 5 },
+        { id: stackingBuff.id, contribution: 3 },
+      ],
+    };
+
+    const events = calloutEventsForLap(lap, itemsById);
+    expect(events.map((e) => e.item.id)).toContain(flatBuff.id);
+    expect(events.map((e) => e.item.id)).toContain(stackingBuff.id);
+  });
+
+  it("emits buff callouts alongside direct callouts through frameStateAt; excludes buff when no direct fires", () => {
     const result = resultWithLapTimes(Array(LAP_COUNT).fill(4), Array(LAP_COUNT).fill(5));
     result.board = [directItem, flatBuff];
     result.storage = [stackingBuff];
@@ -149,19 +214,19 @@ describe("item callouts", () => {
       { id: flatBuff.id, contribution: 5 },
       { id: stackingBuff.id, contribution: 2 },
     ];
+    // Lap 2: only stacking buff fires (its cooldown tick) — no direct → buff excluded.
     result.laps[1].firedItems = [{ id: stackingBuff.id, contribution: 2 }];
     const schedule = buildPlaybackSchedule(result);
 
     expect(frameStateAt(schedule, result, 0, -1).newCallouts).toEqual([
       { item: directItem, contribution: -3 },
+      { item: flatBuff, contribution: 5 },
       { item: stackingBuff, contribution: 2 },
     ]);
     expect(frameStateAt(schedule, result, 0.1, 0).newCallouts).toEqual([]);
 
     const secondLapTime = schedule.player.visualLapBoundaries[0] + 0.01;
-    expect(frameStateAt(schedule, result, secondLapTime, 0).newCallouts).toEqual([
-      { item: stackingBuff, contribution: 2 },
-    ]);
+    expect(frameStateAt(schedule, result, secondLapTime, 0).newCallouts).toEqual([]);
     expect(frameStateAt(schedule, result, secondLapTime + 0.01, 1).newCallouts).toEqual([]);
   });
 });
@@ -180,6 +245,22 @@ describe("live gap", () => {
     const schedule = buildPlaybackSchedule(result);
 
     expect(frameStateAt(schedule, result, 18, 9).liveGap).toBeCloseTo(-5);
+    expect(frameStateAt(schedule, result, 100, LAP_COUNT).liveGap).toBe(result.gap);
+  });
+
+  it("keeps authoritative result facts invariant across presentation-only controls", () => {
+    const result = resultWithLapTimes(Array(LAP_COUNT).fill(4), Array(LAP_COUNT).fill(5));
+    const before = structuredClone(result);
+    const schedule = buildPlaybackSchedule(result);
+    const presentationStates = [
+      { paused: true, speed: 1, reducedMotion: false, time: 0 },
+      { paused: false, speed: 2, reducedMotion: false, time: 10 },
+      { paused: false, speed: 4, reducedMotion: true, time: 100 },
+    ];
+
+    presentationStates.forEach(({ time }) => frameStateAt(schedule, result, time, -1));
+    expect(result).toStrictEqual(before);
+    expect(buildPlaybackSchedule(result)).toStrictEqual(schedule);
     expect(frameStateAt(schedule, result, 100, LAP_COUNT).liveGap).toBe(result.gap);
   });
 });

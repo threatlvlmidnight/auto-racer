@@ -14,6 +14,7 @@
 
 - Q: What kind of synergy should this feature add — specific item-to-item pairing, threshold/count synergy, or both? → A: Threshold/count synergy. An effect scales with how many matching-tag items are held, extending the existing tag concept (`003-item-pool-draft`) rather than introducing item-to-item pairing (the original, more ambitious idea logged in `specs/DEFERRED.md`, which remains available for a future feature).
 - Design decisions made without a further question, each a reasonable default given established precedent (see Assumptions for full reasoning): the count includes matching items in storage even if not flagged active-while-stored (the item being *counted* need not be active; the counting buff itself still must be); the counting buff has no cooldown (always potentially active, like a flat buff); the count considers only direct items, not other buffs, matching `003-item-pool-draft`'s existing buff-to-direct-item convention; no artificial cap, since the board/storage container's own finite capacity already bounds it.
+- Q: SC-003 compared a build with an inert matching item present vs. absent and claimed the two produce "different outcomes" — but a count-synergy buff's boost only applies to *active* matching items (FR-003/FR-004); with nothing else active and matching in either build, the count change would have nothing to apply to, and both builds would produce the identical `playerTime`, making SC-003 false as originally written. → A: Fix SC-003 to require an active matching-tag receiver present in both compared builds — the only thing that differs between them is whether the extra item is inert-in-storage or absent entirely, which is what actually makes the outcome difference real and testable.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -83,7 +84,7 @@ Wherever an item's effect is already shown (prepare-phase display, result screen
 
 - **SC-001**: A build holding a count-synergy buff and exactly N other matching-tag direct items produces a boost equal to exactly the buff's per-item rate × N, for several different values of N.
 - **SC-002**: A build holding a count-synergy buff and zero matching-tag direct items produces no boost from it at all.
-- **SC-003**: A matching-tag item held only in inert storage (not active-while-stored) still counts toward a count-synergy buff's total — verified by comparing a build with that item present-but-inert against an otherwise-identical build where it's absent entirely, and confirming the two produce different outcomes.
+- **SC-003**: A matching-tag item held only in inert storage (not active-while-stored) still counts toward a count-synergy buff's total — verified by comparing two builds that are otherwise identical and both hold at least one *active* matching-tag direct item (so there's something for the boost to actually apply to): one where an additional matching item sits inert in storage, one where that additional item is absent entirely. The two MUST produce different outcomes.
 - **SC-004**: Wherever a count-synergy item's effect is displayed, its description communicates the per-item rate rather than presenting as an ordinary flat percentage.
 
 ## Assumptions

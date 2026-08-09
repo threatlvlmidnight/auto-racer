@@ -1,64 +1,80 @@
-import type { Build, OfferedItem } from "./types";
+import type { ItemDefinition, VehicleBuild } from "./types";
 
-export function hasOpenStorageSlot(build: Build): boolean {
-  return build.storage.some((slot) => slot === null);
+export function hasOpenStorageSlot(build: VehicleBuild): boolean {
+  return build.storage.some((position) => position.item === null);
 }
 
 export function addItemToStorage(
-  build: Build,
-  item: OfferedItem,
+  build: VehicleBuild,
+  item: ItemDefinition,
   storageIndex: number
-): Build {
-  if (build.storage[storageIndex] !== null) {
+): VehicleBuild {
+  const position = build.storage[storageIndex];
+  if (!position || position.item !== null) {
     throw new Error(`Cannot add an item to storage slot ${storageIndex}`);
   }
 
   return {
     ...build,
-    storage: build.storage.map((slot, index) => (index === storageIndex ? item : slot)),
+    storage: build.storage.map((position, index) =>
+      (index === storageIndex ? { ...position, item } : position)),
   };
 }
 
-export function moveToStorage(build: Build, boardIndex: number, storageIndex: number): Build {
-  const item = build.board[boardIndex];
-  if (!item || build.storage[storageIndex] !== null) {
-    throw new Error(`Cannot move board slot ${boardIndex} to storage slot ${storageIndex}`);
+export function moveToStorage(
+  build: VehicleBuild,
+  slotIndex: number,
+  storageIndex: number
+): VehicleBuild {
+  const item = build.slots[slotIndex]?.item ?? null;
+  const target = build.storage[storageIndex];
+  if (!item || !target || target.item !== null) {
+    throw new Error(`Cannot move vehicle slot ${slotIndex} to storage slot ${storageIndex}`);
   }
 
   return {
     ...build,
-    board: build.board.map((slot, index) => (index === boardIndex ? null : slot)),
-    storage: build.storage.map((slot, index) => (index === storageIndex ? item : slot)),
+    slots: build.slots.map((slot, index) => (index === slotIndex ? { ...slot, item: null } : slot)),
+    storage: build.storage.map((position, index) =>
+      (index === storageIndex ? { ...position, item } : position)),
   };
 }
 
-export function moveToBoard(build: Build, storageIndex: number, boardIndex: number): Build {
-  const item = build.storage[storageIndex];
-  if (!item || build.board[boardIndex] !== null) {
-    throw new Error(`Cannot move storage slot ${storageIndex} to board slot ${boardIndex}`);
+export function moveToBoard(
+  build: VehicleBuild,
+  storageIndex: number,
+  slotIndex: number
+): VehicleBuild {
+  const item = build.storage[storageIndex]?.item ?? null;
+  const target = build.slots[slotIndex];
+  if (!item || !target || target.item !== null) {
+    throw new Error(`Cannot move storage slot ${storageIndex} to vehicle slot ${slotIndex}`);
   }
 
   return {
     ...build,
-    board: build.board.map((slot, index) => (index === boardIndex ? item : slot)),
-    storage: build.storage.map((slot, index) => (index === storageIndex ? null : slot)),
+    slots: build.slots.map((slot, index) => (index === slotIndex ? { ...slot, item } : slot)),
+    storage: build.storage.map((position, index) =>
+      (index === storageIndex ? { ...position, item: null } : position)),
   };
 }
 
 export function swapBoardStorage(
-  build: Build,
-  boardIndex: number,
+  build: VehicleBuild,
+  slotIndex: number,
   storageIndex: number
-): Build {
-  const boardItem = build.board[boardIndex];
-  const storageItem = build.storage[storageIndex];
-  if (!boardItem || !storageItem) {
-    throw new Error(`Cannot swap board slot ${boardIndex} with storage slot ${storageIndex}`);
+): VehicleBuild {
+  const slotItem = build.slots[slotIndex]?.item ?? null;
+  const storedItem = build.storage[storageIndex]?.item ?? null;
+  if (!slotItem || !storedItem) {
+    throw new Error(`Cannot swap vehicle slot ${slotIndex} with storage slot ${storageIndex}`);
   }
 
   return {
     ...build,
-    board: build.board.map((slot, index) => (index === boardIndex ? storageItem : slot)),
-    storage: build.storage.map((slot, index) => (index === storageIndex ? boardItem : slot)),
+    slots: build.slots.map((slot, index) =>
+      (index === slotIndex ? { ...slot, item: storedItem } : slot)),
+    storage: build.storage.map((position, index) =>
+      (index === storageIndex ? { ...position, item: slotItem } : position)),
   };
 }

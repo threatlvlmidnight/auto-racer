@@ -12,8 +12,27 @@ export function isFlatBuff(item: OfferedItem): boolean {
   return !!item.buff && item.cooldown === undefined;
 }
 
+/** A buff whose applied boost scales with how many matching direct items are held (007-count-synergy-buff). */
+export function isCountSynergyBuff(item: OfferedItem): boolean {
+  return !!item.buff?.perCount;
+}
+
+/**
+ * Count of items in allHeldItems that are not `item` itself, are not buffs,
+ * and share `item`'s identity tag — the input driving a count-synergy buff's
+ * boost. allHeldItems is expected to include inert storage items (unlike
+ * activeItems), since the count spans everything held, active or not.
+ */
+export function matchingDirectItemCount(allHeldItems: OfferedItem[], item: OfferedItem): number {
+  return allHeldItems.filter(
+    (candidate) =>
+      candidate !== item && !candidate.buff && candidate.identityTag === item.identityTag
+  ).length;
+}
+
 export function computeBoostsForLap(
   activeItems: OfferedItem[],
+  allHeldItems: OfferedItem[],
   lap: number,
   incomingState: StackingState
 ): LapBoosts {
@@ -23,13 +42,17 @@ export function computeBoostsForLap(
   activeItems.forEach((item, index) => {
     if (!item.buff || !item.identityTag) return;
 
-    let applicableBoost = item.buff.boostPercent;
-    if (item.cooldown !== undefined) {
+    let applicableBoost: number;
+    if (isCountSynergyBuff(item)) {
+      applicableBoost = item.buff.boostPercent * matchingDirectItemCount(allHeldItems, item);
+    } else if (item.cooldown !== undefined) {
       const previousBoost = stackingState[index] ?? 0;
       applicableBoost = firesOnLap(item.cooldown, lap)
         ? previousBoost + item.buff.boostPercent
         : previousBoost;
       stackingState[index] = applicableBoost;
+    } else {
+      applicableBoost = item.buff.boostPercent;
     }
 
     const hasMatchingDirectItem = activeItems.some(

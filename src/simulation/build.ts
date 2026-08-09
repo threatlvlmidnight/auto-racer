@@ -1,5 +1,29 @@
+import { vehicleById } from "../content/entrants";
+import { BASELINE_CAR } from "../content/sample-data";
 import { simulatePlayerLaps } from "./laps";
-import type { Build } from "./types";
+import { VEHICLE_STORAGE_CAPACITY, type VehicleBuild, type VehicleId } from "./types";
+
+/**
+ * The empty starting build for a named vehicle: the authored topology in
+ * canonical order plus three indexed storage positions. Slot IDs/types come
+ * from the vehicle definition and are never invented here.
+ */
+export function createEmptyVehicleBuild(vehicleId: VehicleId): VehicleBuild {
+  const vehicle = vehicleById(vehicleId);
+  if (!vehicle) {
+    throw new Error(`Unknown vehicle definition: ${vehicleId}`);
+  }
+
+  return {
+    vehicleId,
+    car: BASELINE_CAR,
+    slots: vehicle.slots.map((slot) => ({ slotId: slot.id, slotType: slot.type, item: null })),
+    storage: Array.from({ length: VEHICLE_STORAGE_CAPACITY }, (_unused, index) => ({
+      index,
+      item: null,
+    })),
+  };
+}
 
 /**
  * Resulting finishing time for a Build: baseline time plus every held item
@@ -8,7 +32,7 @@ import type { Build } from "./types";
  * Pure function — no mutation, no I/O, no randomness (simulation-contract.md
  * Invariant 4).
  */
-export function resultingTime(build: Build): number {
+export function resultingTime(build: VehicleBuild): number {
   const total = simulatePlayerLaps(build).reduce((sum, lap) => sum + lap.time, 0);
 
   // Defensive guard (Polish, T020): malformed content data (NaN/Infinity)

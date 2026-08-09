@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="80" viewBox="0 0 160 80">
+  <ellipse cx="80" cy="72" rx="58" ry="5" fill="#172225" opacity=".35"/>
+  <!-- three wheels: two front, one rear -->
+  <circle cx="46" cy="56" r="14" fill="none" stroke="#6f7a4a" stroke-width="4"/>
+  <circle cx="96" cy="56" r="14" fill="none" stroke="#6f7a4a" stroke-width="4"/>
+  <circle cx="132" cy="60" r="9" fill="none" stroke="#6f7a4a" stroke-width="3"/>
+  <!-- patched canvas body -->
+  <path d="M34 50 L50 28 H96 L112 50 Z" fill="#7d7a52" stroke="#b8d0c4" stroke-width="3" stroke-dasharray="7 4"/>
+  <rect x="56" y="32" width="30" height="12" fill="#dcb894"/>
+  <!-- rear propeller -->
+  <path d="M126 20 v44" stroke="#d8b45a" stroke-width="4"/>
+  <path d="M126 22 q14 10 0 20 q-14 10 0 20" fill="none" stroke="#e0e6ea" stroke-width="3"/>
+</svg>

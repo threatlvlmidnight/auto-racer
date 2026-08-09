@@ -1,30 +1,25 @@
 <!--
 Sync Impact Report
-Version change: 1.0.0 → 1.0.1 (clarification, no scope change)
-Modified principles:
-  - V. "Practice Tooling as Core, Not Bolt-On" → "Build Testing Access as
-    Core, Not Bolt-On" — decoupled the principle from the "training room"
-    implementation specifically (that idea is being reworked, likely toward
-    a diegetic non-PvP encounter such as a "test day"). The underlying
-    requirement (players get a low-stakes way to test builds and see the
-    data behind the result, before it counts) is unchanged; only the
-    fixed-implementation language was removed.
+Version change: 1.1.0 -> 1.2.0 (materially expanded Product Constraints)
+Modified principles: none
 Added sections: none
 Removed sections: none
+Modified sections:
+  - Product Constraints, "Mechanical parity" - equal total capacity is retained,
+    but vehicles now differ in Power/Chassis/Flex slot distribution and item-
+    authored installation behavior.
 Templates requiring updates:
   - .specify/templates/plan-template.md ✅ no change needed.
   - .specify/templates/spec-template.md ✅ no change needed.
   - .specify/templates/tasks-template.md ✅ no change needed.
   - .github/agents/*.agent.md, .github/prompts/*.prompt.md ✅ no change
     needed.
-Follow-up TODOs (carried over, unchanged):
+Follow-up TODOs:
   - TODO(ENGINEERING_STACK): Language/engine/tech stack intentionally left
     undecided — this is a /speckit.plan decision, not a constitution one.
   - TODO(TESTING_DISCIPLINE): Whether TDD is strictly enforced (red-green-
     refactor) or looser for early prototyping has not been decided by the
     team; Development Workflow section below states the minimum bar only.
-  - TODO(THEME): Narrative/visual theme (gothic, sci-fi, fantastical skin,
-    etc.) is explicitly deferred — see Product Constraints.
 -->
 
 # Auto Racer Constitution
@@ -106,16 +101,28 @@ consistent with Principle I's contest-phase integrity.
 for a future 3D upgrade — chosen for cost discipline and to leave room for a
 distinctive illustrated style rather than competing on production budget.
 
-**Structural frame — spec series**: All builds begin from the same shared
-baseline car ("spec car"). Team/build identity is expressed through *how
-much and where* a build deviates from that baseline (heavy car modification
-vs. driver/race-craft focus vs. scoring-interference focus), not through
-independently constructed cars. Real-world spec-racing rulesets are a
-naming/flavor reference only and are not otherwise simulated or enforced.
+**Mechanical parity and vehicle topology**: Every entrant MUST begin with
+equivalent baseline performance, total active item capacity, storage capacity,
+and contest rules. Entrants MAY use radically different vehicle silhouettes and
+MAY distribute the same total capacity differently among Power, Chassis, and
+Flex slots. Every item MUST be categorized as Power or Chassis and MUST remain
+legal in every slot: matching typed placement activates an item-authored Fitted
+effect, Flex placement provides base behavior, and mismatched typed placement
+uses the item's visible Improvised behavior. The system MUST NOT use a universal
+hidden numerical alignment modifier. Character or vehicle choice MUST NOT grant
+more total slots, superior base statistics, or a private movement/race model.
 
-**Theme**: TODO(THEME) — narrative and visual theme is explicitly
-undecided at this stage and MUST NOT be assumed by any spec, plan, or task
-that isn't itself about deciding it.
+**Theme**: The game takes place at the dawn of an alternate Motor Age. In
+1901, shortly after the combustion engine's discovery, invited owner-builders
+from varied racing and engineering backgrounds enter the first international
+Auto Race Championship. "Auto" means any self-propelled machine: motor
+carriages, motor cycles, propeller-assisted contraptions, and other experiments
+share the track. The visual vocabulary draws from the 1910s-1920s without being
+bound to real chronology. The tone MUST emphasize earnest competition,
+improvisation, and adventurous spectacle; the objective is to invent a way to
+win, not to converge on the fastest modern racecar. Historical inspiration MUST
+NOT override 2D legibility, mechanical transparency, or the prepare-to-contest
+structure.
 
 ## Development Workflow
 
@@ -150,4 +157,4 @@ plan does not violate any Core Principle above; violations must be
 justified in that plan's Complexity Tracking table or the plan must be
 revised.
 
-**Version**: 1.0.1 | **Ratified**: 2026-07-26 | **Last Amended**: 2026-07-26
+**Version**: 1.2.0 | **Ratified**: 2026-07-26 | **Last Amended**: 2026-08-08

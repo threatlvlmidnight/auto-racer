@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="80" viewBox="0 0 160 80">
+  <ellipse cx="80" cy="72" rx="58" ry="4" fill="#172225" opacity=".35"/>
+  <!-- slender bicycle-derived wheels -->
+  <circle cx="34" cy="52" r="18" fill="none" stroke="#c9ced2" stroke-width="3"/>
+  <circle cx="126" cy="52" r="18" fill="none" stroke="#c9ced2" stroke-width="3"/>
+  <!-- narrow tubular frame -->
+  <path d="M34 52 L74 26 L110 26 L126 52 M74 26 L92 52 L34 52" fill="none" stroke="#9f3038" stroke-width="4"/>
+  <circle cx="92" cy="52" r="7" fill="none" stroke="#d8b45a" stroke-width="3"/>
+  <path d="M108 22 h16" stroke="#e0e6ea" stroke-width="4"/>
+</svg>

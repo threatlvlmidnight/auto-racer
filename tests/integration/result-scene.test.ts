@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   boardItemsLabel,
   gapLabel,
+  itemCooldownLabel,
+  itemDependencyNote,
   itemDetailsLabel,
   outcomeLabel,
   storageItemsLabel,
@@ -16,6 +18,7 @@ import type { ContestResult } from "../../src/simulation/types";
 
 function result(overrides: Partial<ContestResult>): ContestResult {
   return {
+    lapCount: 10,
     playerTime: 57,
     ghostTime: 58.5,
     gap: -1.5,
@@ -94,6 +97,18 @@ describe("ResultScene required fields (FR-006, FR-007)", () => {
     expect(itemDetailsLabel(buffItem!)).toContain("Boosts Performance items by 5%");
   });
 
+  it("renders a count-synergy buff's per-item rate, distinct from a flat buff's phrasing", () => {
+    const countBuff = ITEM_POOL.find((item) => item.buff?.perCount);
+
+    expect(countBuff).toBeDefined();
+    expect(itemDetailsLabel(countBuff!)).toContain("[Performance]");
+    expect(itemDetailsLabel(countBuff!)).toContain(
+      "Boosts Performance items by 2% per Performance item held"
+    );
+    // Distinct from a flat buff's plain "Boosts Performance items by N%" (no trailing "per item held").
+    expect(itemDetailsLabel(countBuff!)).not.toMatch(/items by \d+%$/);
+  });
+
   it("distinguishes the item that remains active in storage", () => {
     const activeStorageItem = ITEM_POOL.find((item) => item.activeWhileStored);
 
@@ -101,5 +116,62 @@ describe("ResultScene required fields (FR-006, FR-007)", () => {
     expect(storageItemsLabel(result({ storage: [activeStorageItem!] }))).toContain(
       "[Active in storage]"
     );
+  });
+});
+
+describe("itemCooldownLabel — US2 FR-005 / FR-006", () => {
+  it("returns '1 lap' for an item with no authored cooldown (fires every lap)", () => {
+    const flatBuff = ITEM_POOL.find((item) => item.buff && item.cooldown === undefined)!;
+    expect(itemCooldownLabel(flatBuff)).toBe("1 lap");
+  });
+
+  it("returns '1 lap' for an item with cooldown: 1", () => {
+    const everyLap = ITEM_POOL.find((item) => item.cooldown === 1)!;
+    expect(itemCooldownLabel(everyLap)).toBe("1 lap");
+  });
+
+  it("returns 'N laps' for an item with cooldown > 1", () => {
+    const every2 = ITEM_POOL.find((item) => item.cooldown === 2)!;
+    const every4 = ITEM_POOL.find((item) => item.cooldown === 4)!;
+    expect(itemCooldownLabel(every2)).toBe("2 laps");
+    expect(itemCooldownLabel(every4)).toBe("4 laps");
+  });
+
+  it("includes the cooldown label in itemDetailsLabel for every item (FR-008 single source)", () => {
+    ITEM_POOL.forEach((item) => {
+      expect(itemDetailsLabel(item)).toContain(itemCooldownLabel(item));
+    });
+  });
+});
+
+describe("itemDependencyNote — US2 FR-007", () => {
+  it("returns null for a direct (non-buff) item", () => {
+    const directItem = ITEM_POOL.find((item) => !item.buff)!;
+    expect(itemDependencyNote(directItem)).toBeNull();
+  });
+
+  it("returns a non-null note for every buff item", () => {
+    const buffItems = ITEM_POOL.filter((item) => item.buff);
+    expect(buffItems.length).toBeGreaterThan(0);
+    buffItems.forEach((item) => {
+      const note = itemDependencyNote(item);
+      expect(note).not.toBeNull();
+      expect(note).toContain("active");
+      expect(note).toContain("Performance");
+    });
+  });
+
+  it("includes the dependency note in itemDetailsLabel for buff items (FR-008 single source)", () => {
+    const buffItems = ITEM_POOL.filter((item) => item.buff);
+    buffItems.forEach((item) => {
+      expect(itemDetailsLabel(item)).toContain(itemDependencyNote(item)!);
+    });
+  });
+
+  it("does not include a dependency note in itemDetailsLabel for direct items", () => {
+    const directItems = ITEM_POOL.filter((item) => !item.buff);
+    directItems.forEach((item) => {
+      expect(itemDetailsLabel(item)).not.toContain("Requires");
+    });
   });
 });

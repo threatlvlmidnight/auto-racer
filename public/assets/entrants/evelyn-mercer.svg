@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <rect width="120" height="120" fill="#2b3a33"/>
+  <circle cx="60" cy="46" r="24" fill="#e8d6ae"/>
+  <path d="M36 46a24 24 0 0 1 48 0v-6c0-14-10-20-24-20S36 26 36 40z" fill="#5a4632"/>
+  <path d="M24 120c0-24 16-38 36-38s36 14 36 38z" fill="#8c6d3f"/>
+  <rect x="52" y="82" width="16" height="14" fill="#e8d6ae"/>
+  <circle cx="60" cy="100" r="5" fill="#d8b45a"/>
+  <text x="60" y="116" font-family="Georgia,serif" font-size="9" fill="#f3e5bd" text-anchor="middle">MERCER</text>
+</svg>

@@ -1,4 +1,5 @@
 import { simulatePlayerLaps } from "./laps";
+import { installedItems, storedItems } from "./slots";
 import {
   LAP_COUNT,
   type Build,
@@ -7,8 +8,8 @@ import {
   type SampleGhost,
 } from "./types";
 
-export function ghostLapTimes(ghost: SampleGhost): number[] {
-  return Array(LAP_COUNT).fill(ghost.lapTime);
+export function ghostLapTimes(ghost: SampleGhost, lapCount = LAP_COUNT): number[] {
+  return Array(lapCount).fill(ghost.lapTime);
 }
 
 /**
@@ -24,13 +25,18 @@ export function ghostLapTimes(ghost: SampleGhost): number[] {
  *  4. Order-independence — only the active item set matters.
  *  5. No side effects — build and ghost are only read, never mutated.
  */
-export function resolveContest(build: Build, ghost: SampleGhost): ContestResult {
-  const ghostLaps = ghostLapTimes(ghost);
-  const laps = simulatePlayerLaps(build).map((playerLap, index) => ({
+export function resolveContest(
+  build: Build,
+  ghost: SampleGhost,
+  lapCount = LAP_COUNT,
+): ContestResult {
+  const ghostLaps = ghostLapTimes(ghost, lapCount);
+  const laps = simulatePlayerLaps(build, lapCount).map((playerLap, index) => ({
     lap: index + 1,
     playerLapTime: playerLap.time,
     ghostLapTime: ghostLaps[index],
     firedItems: playerLap.firedItems,
+    contributions: playerLap.contributions,
   }));
   const playerTime = laps.reduce((sum, lap) => sum + lap.playerLapTime, 0);
   const ghostTime = laps.reduce((sum, lap) => sum + lap.ghostLapTime, 0);
@@ -39,12 +45,14 @@ export function resolveContest(build: Build, ghost: SampleGhost): ContestResult 
   const outcome: ContestOutcome = gap < 0 ? "win" : gap > 0 ? "loss" : "tie";
 
   return {
+    lapCount,
     playerTime,
     ghostTime,
     gap,
     outcome,
-    board: build.board.filter((item): item is NonNullable<typeof item> => item !== null),
-    storage: build.storage.filter((item): item is NonNullable<typeof item> => item !== null),
+    board: installedItems(build).filter((item): item is NonNullable<typeof item> => item !== null),
+    storage: storedItems(build).filter((item): item is NonNullable<typeof item> => item !== null),
     laps,
+    contributions: laps.flatMap((lap) => lap.contributions),
   };
 }

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <rect width="120" height="120" fill="#33372a"/>
+  <circle cx="60" cy="46" r="23" fill="#dcb894"/>
+  <path d="M34 40c4-16 16-22 26-22s22 6 26 22l-8 2c-6-8-30-8-36 0z" fill="#6b4a2f"/>
+  <circle cx="50" cy="44" r="7" fill="none" stroke="#b8d0c4" stroke-width="3"/>
+  <circle cx="72" cy="44" r="7" fill="none" stroke="#b8d0c4" stroke-width="3"/>
+  <path d="M57 44h8" stroke="#b8d0c4" stroke-width="3"/>
+  <path d="M24 120c0-24 16-38 36-38s36 14 36 38z" fill="#6f7a4a"/>
+  <rect x="44" y="92" width="32" height="6" fill="#d8b45a"/>
+  <text x="60" y="116" font-family="Georgia,serif" font-size="9" fill="#f3e5bd" text-anchor="middle">ROOK</text>
+</svg>

@@ -1,3 +1,4 @@
+import { isCountSynergyBuff } from "../simulation/buffs";
 import type { ContestResult, OfferedItem } from "../simulation/types";
 
 // Pure formatting helpers for ResultScene (User Story 1's outcome banner,
@@ -45,6 +46,9 @@ export function itemIdentityLabel(item: OfferedItem): string {
 
 export function itemEffectLabel(item: OfferedItem): string {
   if (item.buff) {
+    if (isCountSynergyBuff(item)) {
+      return `Boosts ${itemIdentityLabel(item)} items by ${item.buff.boostPercent}% per ${itemIdentityLabel(item)} item held`;
+    }
     return `Boosts ${itemIdentityLabel(item)} items by ${item.buff.boostPercent}%`;
   }
 
@@ -52,9 +56,24 @@ export function itemEffectLabel(item: OfferedItem): string {
   return `${modifier}s`;
 }
 
+/** "1 lap" for always-firing items; "N laps" otherwise. */
+export function itemCooldownLabel(item: OfferedItem): string {
+  const n = item.cooldown ?? 1;
+  return n === 1 ? "1 lap" : `${n} laps`;
+}
+
+/** Dependency note for buff items; null for direct items. */
+export function itemDependencyNote(item: OfferedItem): string | null {
+  if (!item.buff) return null;
+  return `Requires an active ${itemIdentityLabel(item)} item to have any effect`;
+}
+
 export function itemDetailsLabel(item: OfferedItem): string {
   const storageStatus = item.activeWhileStored ? " [Active in storage]" : "";
-  return `${item.name} [${itemIdentityLabel(item)}]${storageStatus} — ${itemEffectLabel(item)}`;
+  const cooldown = `${itemCooldownLabel(item)} cooldown`;
+  const dependency = itemDependencyNote(item);
+  const base = `${item.name} [${itemIdentityLabel(item)}]${storageStatus} — ${itemEffectLabel(item)} · ${cooldown}`;
+  return dependency ? `${base}\n${dependency}` : base;
 }
 
 function itemSectionLabel(title: string, items: OfferedItem[]): string {

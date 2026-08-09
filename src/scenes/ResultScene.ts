@@ -1,13 +1,21 @@
 import Phaser from "phaser";
-import type { ContestResult } from "../simulation/types";
+import type { ContestResult, OfferedItem } from "../simulation/types";
+import type { Run } from "../simulation/run";
 import {
-  boardItemsLabel,
   gapLabel,
   outcomeColor,
   outcomeLabel,
-  storageItemsLabel,
   timesLabel,
 } from "./resultFormatting";
+import { createItemCard, enableItemTooltip } from "./itemVisuals";
+import { continueRunFromResult } from "./runPresentation";
+import {
+  addDemoBackdrop,
+  addRunStamp,
+  createDemoButton,
+  DISPLAY_FONT,
+  UI_FONT,
+} from "./demoTheme";
 
 /**
  * Result view. User Story 1 established the outcome banner; User Story 2
@@ -17,65 +25,88 @@ import {
  */
 export class ResultScene extends Phaser.Scene {
   private result!: ContestResult;
+  private run!: Run;
+  private encounterId!: string;
 
   constructor() {
     super("ResultScene");
   }
 
-  create(data: { result: ContestResult }): void {
+  create(data: { result?: ContestResult; run?: Run; encounterId?: string }): void {
+    if (!data.result || !data.run || !data.encounterId) {
+      this.scene.start("RunScene", { unavailable: true });
+      return;
+    }
     this.result = data.result;
+    this.run = data.run;
+    this.encounterId = data.encounterId;
     const { width } = this.scale;
+    addDemoBackdrop(this, "race-day", 0.73);
+    addRunStamp(this, this.run);
 
     this.add
       .text(width / 2, 80, outcomeLabel(this.result), {
         fontSize: "32px",
+        fontFamily: DISPLAY_FONT,
+        fontStyle: "bold",
         color: outcomeColor(this.result),
       })
       .setOrigin(0.5);
 
     this.renderDetails(width);
 
-    const again = this.add
-      .text(width / 2, 380, "Race Again", {
-        fontSize: "18px",
-        color: "#ffffff",
-        backgroundColor: "#333333",
-        padding: { x: 16, y: 8 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-
-    again.on("pointerdown", () => this.scene.start("PrepareScene"));
+    createDemoButton(this, width / 2, 380, "CONTINUE CHAMPIONSHIP", () => {
+      const run = continueRunFromResult(this.run, this.encounterId, this.result);
+      this.scene.start("RunScene", { run });
+    });
   }
 
   private renderDetails(width: number): void {
     this.add
       .text(width / 2, 150, timesLabel(this.result), { fontSize: "18px", color: "#ffffff" })
+      .setFontFamily(UI_FONT)
       .setOrigin(0.5);
 
     this.add
       .text(width / 2, 185, `Gap: ${gapLabel(this.result)}`, {
         fontSize: "16px",
+        fontFamily: UI_FONT,
         color: "#cccccc",
       })
       .setOrigin(0.5);
 
-    this.add
-      .text(width * 0.27, 235, boardItemsLabel(this.result), {
-        fontSize: "13px",
-        color: "#ffdd77",
-        wordWrap: { width: width * 0.44 },
-        align: "center",
-      })
-      .setOrigin(0.5, 0);
+    this.renderItemRow(width * 0.27, 235, "THE HIGHWHEEL", this.result.board, "#ffdd77");
+    this.renderItemRow(width * 0.73, 235, "WORKSHOP STORAGE", this.result.storage, "#8fd8ff");
+  }
 
-    this.add
-      .text(width * 0.73, 235, storageItemsLabel(this.result), {
-        fontSize: "13px",
-        color: "#8fd8ff",
-        wordWrap: { width: width * 0.44 },
-        align: "center",
-      })
-      .setOrigin(0.5, 0);
+  private renderItemRow(
+    centerX: number,
+    y: number,
+    label: string,
+    items: OfferedItem[],
+    color: string,
+  ): void {
+    this.add.text(centerX, y, label, {
+      fontSize: "13px",
+      fontFamily: UI_FONT,
+      fontStyle: "bold",
+      color,
+    }).setOrigin(0.5);
+    if (items.length === 0) {
+      this.add.text(centerX, y + 42, "None", { fontSize: "12px", color: "#71808a" }).setOrigin(0.5);
+      return;
+    }
+
+    const spacing = 104;
+    const startX = centerX - ((items.length - 1) * spacing) / 2;
+    items.forEach((item, index) => {
+      const card = createItemCard(this, startX + index * spacing, y + 48, item, {
+        width: 96,
+        height: 82,
+        iconSize: 44,
+        layout: "column",
+      }).setInteractive({ useHandCursor: true });
+      enableItemTooltip(this, card, item);
+    });
   }
 }

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="80" viewBox="0 0 160 80">
+  <ellipse cx="80" cy="72" rx="62" ry="5" fill="#172225" opacity=".35"/>
+  <!-- tall spoked carriage wheels -->
+  <circle cx="36" cy="52" r="20" fill="none" stroke="#8c6d3f" stroke-width="4"/>
+  <circle cx="124" cy="48" r="24" fill="none" stroke="#8c6d3f" stroke-width="4"/>
+  <path d="M36 32v40M16 52h40M124 24v48M100 48h48" stroke="#8c6d3f" stroke-width="2"/>
+  <!-- sprung hardwood body -->
+  <path d="M40 44 L54 24 H108 L120 44 Z" fill="#6b4a2f" stroke="#d8b45a" stroke-width="3"/>
+  <rect x="58" y="28" width="42" height="12" fill="#e8d6ae"/>
+  <path d="M46 44 Q80 54 116 44" stroke="#d8b45a" stroke-width="3" fill="none"/>
+</svg>

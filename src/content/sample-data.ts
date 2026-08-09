@@ -1,107 +1,328 @@
-import type { OfferedItem, SampleGhost, SpecCar } from "../simulation/types";
+import type { ItemDefinition, SampleGhost, SpecCar } from "../simulation/types";
 
 // Static, illustrative content. The real catalog and theme remain later
 // features; these varied values make slot and eviction choices observable.
+//
+// Feature 010 added `origin`, `installationCategory`, `synergyTags`,
+// `fittedBehavior`, and `improvisedBehavior` to every item. Every shipped ID,
+// price, cooldown, buff link, storage flag, and base `timeModifier` is
+// unchanged — the migration is additive by contract (contract §8), and
+// tests/unit/item-pool.test.ts pins the old values against regression.
+//
+// Origin is a draft-weighting and thematic label only; installation category is
+// independent of it, and every origin carries both Power and Chassis items so
+// category never becomes a second origin label.
 
 export const BASELINE_CAR: SpecCar = {
   id: "spec-car-baseline",
   baseLapTime: 6,
 };
 
-export const ITEM_POOL: OfferedItem[] = [
+export const ITEM_POOL: ItemDefinition[] = [
   {
     id: "item-001",
     name: "Close-Ratio Gearset",
+    price: 4,
     timeModifier: -3,
     identityTag: "performance",
     cooldown: 1,
+    origin: "coachworks",
+    installationCategory: "power",
+    synergyTags: ["gearing", "momentum"],
+    fittedBehavior: {
+      kind: "time-modifier",
+      timeModifier: -0.4,
+      description: "Fitted: driveline properly aligned — a further 0.40s per firing.",
+    },
+    improvisedBehavior: {
+      kind: "time-modifier",
+      timeModifier: 0.3,
+      description: "Improvised: shimmed into a chassis mount — 0.30s lost to driveline slop.",
+    },
   },
   {
     id: "item-002",
     name: "Lightweight Flywheel",
+    price: 3,
     timeModifier: -1.25,
     identityTag: "performance",
     cooldown: 2,
+    origin: "velodrome",
+    installationCategory: "power",
+    synergyTags: ["momentum", "lightweight"],
+    fittedBehavior: {
+      kind: "time-modifier",
+      timeModifier: -0.25,
+      description: "Fitted: spins true on the crank — a further 0.25s per firing.",
+    },
+    improvisedBehavior: {
+      kind: "time-modifier",
+      timeModifier: 0.2,
+      description: "Improvised: carried as ballast rather than driven — 0.20s lost.",
+    },
   },
   {
     id: "item-003",
     name: "Experimental Brake Bias",
+    price: 2,
     timeModifier: 0.75,
     cooldown: 3,
+    origin: "fieldworks",
+    installationCategory: "chassis",
+    synergyTags: ["control", "pressure"],
+    fittedBehavior: {
+      kind: "time-modifier",
+      timeModifier: -0.5,
+      description: "Fitted: bias bar reaches both axles — recovers 0.50s of its own penalty.",
+    },
+    improvisedBehavior: {
+      kind: "none",
+      description: "Improvised: no additional consequence — it simply loses its Fitted correction.",
+    },
   },
   {
     id: "item-004",
     name: "Track-Spec Dampers",
+    price: 4,
     timeModifier: -2.1,
     identityTag: "performance",
     cooldown: 2,
+    origin: "coachworks",
+    installationCategory: "chassis",
+    synergyTags: ["suspension", "control"],
+    fittedBehavior: {
+      kind: "time-modifier",
+      timeModifier: -0.35,
+      description: "Fitted: valved for this chassis — a further 0.35s per firing.",
+    },
+    improvisedBehavior: {
+      kind: "time-modifier",
+      timeModifier: 0.25,
+      description: "Improvised: strapped near the engine bay — 0.25s of unwanted harshness.",
+    },
   },
   {
     id: "item-005",
     name: "Blueprinted Engine",
+    price: 5,
     timeModifier: -4.5,
     identityTag: "performance",
     cooldown: 4,
+    origin: "fieldworks",
+    installationCategory: "power",
+    synergyTags: ["heat", "gearing"],
+    fittedBehavior: {
+      kind: "time-modifier",
+      timeModifier: -0.6,
+      description: "Fitted: mounted and plumbed correctly — a further 0.60s per firing.",
+    },
+    improvisedBehavior: {
+      kind: "time-modifier",
+      timeModifier: 0.5,
+      description: "Improvised: bolted where it does not belong — 0.50s lost to poor cooling.",
+    },
   },
   {
     id: "item-006",
     name: "Low-Drag Mirror Set",
+    price: 2,
     timeModifier: -0.6,
     cooldown: 1,
+    origin: "velodrome",
+    installationCategory: "chassis",
+    synergyTags: ["lightweight", "airflow"],
+    fittedBehavior: {
+      kind: "time-modifier",
+      timeModifier: -0.15,
+      description: "Fitted: faired into the body line — a further 0.15s per firing.",
+    },
+    improvisedBehavior: {
+      kind: "none",
+      description: "Improvised: no additional consequence — it simply loses its Fitted fairing.",
+    },
   },
   {
     id: "item-007",
     name: "Forged Control Arms",
+    price: 3,
     timeModifier: -1.8,
     identityTag: "performance",
     cooldown: 3,
+    origin: "coachworks",
+    installationCategory: "chassis",
+    synergyTags: ["suspension", "material"],
+    fittedBehavior: {
+      kind: "time-modifier",
+      timeModifier: -0.3,
+      description: "Fitted: geometry preserved under load — a further 0.30s per firing.",
+    },
+    improvisedBehavior: {
+      kind: "time-modifier",
+      timeModifier: 0.2,
+      description: "Improvised: braced against the powertrain — 0.20s of bind.",
+    },
   },
   {
     id: "item-008",
     name: "Ceramic Heat Shield",
+    price: 2,
     timeModifier: 0.4,
     cooldown: 2,
+    origin: "fieldworks",
+    installationCategory: "chassis",
+    synergyTags: ["heat", "material"],
+    fittedBehavior: {
+      kind: "time-modifier",
+      timeModifier: -0.45,
+      description: "Fitted: shields the structure it was cut for — recovers 0.45s of its penalty.",
+    },
+    improvisedBehavior: {
+      kind: "none",
+      description: "Improvised: no additional consequence — it simply loses its Fitted shielding.",
+    },
   },
   {
     id: "item-009",
     name: "Limited-Slip Differential",
+    price: 4,
     timeModifier: -2.7,
     identityTag: "performance",
     cooldown: 4,
+    origin: "backroads",
+    installationCategory: "power",
+    synergyTags: ["gearing", "traction"],
+    fittedBehavior: {
+      kind: "time-modifier",
+      timeModifier: -0.4,
+      description: "Fitted: driving both wheels as intended — a further 0.40s per firing.",
+    },
+    improvisedBehavior: {
+      kind: "time-modifier",
+      timeModifier: 0.35,
+      description: "Improvised: hung off the chassis — 0.35s lost to a compromised driveline.",
+    },
   },
   {
     id: "item-010",
     name: "Reinforced Skid Plate",
+    price: 2,
     timeModifier: 1.1,
     cooldown: 1,
+    origin: "backroads",
+    installationCategory: "chassis",
+    synergyTags: ["material", "traction"],
+    fittedBehavior: {
+      kind: "time-modifier",
+      timeModifier: -0.55,
+      description: "Fitted: carries load through the frame — recovers 0.55s of its weight penalty.",
+    },
+    improvisedBehavior: {
+      kind: "time-modifier",
+      timeModifier: 0.2,
+      description: "Improvised: dead weight over the engine — a further 0.20s.",
+    },
   },
   {
     id: "item-011",
     name: "Compact Data Logger",
+    price: 3,
     timeModifier: -0.9,
     cooldown: 2,
+    origin: "backroads",
+    installationCategory: "chassis",
+    synergyTags: ["information", "control"],
+    fittedBehavior: {
+      kind: "time-modifier",
+      timeModifier: -0.2,
+      description: "Fitted: sensors reach the running gear — a further 0.20s per firing.",
+    },
+    improvisedBehavior: {
+      kind: "none",
+      description: "Improvised: no additional consequence — it simply loses its Fitted sensor run.",
+    },
   },
   {
     id: "item-012",
     name: "Performance Calibration Suite",
+    price: 4,
     timeModifier: 0,
     identityTag: "performance",
     buff: { boostPercent: 5 },
+    origin: "coachworks",
+    installationCategory: "power",
+    synergyTags: ["information", "gearing"],
+    fittedBehavior: {
+      kind: "buff-boost",
+      buffBoostPercent: 2,
+      description: "Fitted: calibrated against the powertrain — amplifies by a further 2%.",
+    },
+    improvisedBehavior: {
+      kind: "buff-boost",
+      buffBoostPercent: -2,
+      description: "Improvised: reading a system it cannot tune — 2% less amplification.",
+    },
   },
   {
     id: "item-013",
     name: "Tyre Rack",
+    price: 2,
     timeModifier: -0.35,
     cooldown: 3,
     activeWhileStored: true,
+    origin: "fieldworks",
+    installationCategory: "chassis",
+    synergyTags: ["wheel", "cargo"],
+    fittedBehavior: {
+      kind: "time-modifier",
+      timeModifier: -0.15,
+      description: "Fitted: mounted where fresh rubber is reachable — a further 0.15s per firing.",
+    },
+    improvisedBehavior: {
+      kind: "none",
+      description: "Improvised: no additional consequence — it simply loses its Fitted mounting.",
+    },
   },
   {
     id: "item-014",
     name: "Adaptive Telemetry Loop",
+    price: 4,
     timeModifier: 0,
     identityTag: "performance",
     cooldown: 3,
     buff: { boostPercent: 1 },
+    origin: "velodrome",
+    installationCategory: "power",
+    synergyTags: ["information", "momentum"],
+    fittedBehavior: {
+      kind: "buff-boost",
+      buffBoostPercent: 1,
+      description: "Fitted: sampling the drivetrain directly — amplifies by a further 1%.",
+    },
+    improvisedBehavior: {
+      kind: "buff-boost",
+      buffBoostPercent: -1,
+      description: "Improvised: sampling the wrong system — 1% less amplification.",
+    },
+  },
+  {
+    id: "item-015",
+    name: "Race Engineer Headset",
+    price: 5,
+    timeModifier: 0,
+    identityTag: "performance",
+    buff: { boostPercent: 2, perCount: true },
+    origin: "velodrome",
+    installationCategory: "chassis",
+    synergyTags: ["information", "crowd"],
+    fittedBehavior: {
+      kind: "buff-boost",
+      buffBoostPercent: 1,
+      description: "Fitted: clear line to the pit wall — amplifies by a further 1% per matching item.",
+    },
+    improvisedBehavior: {
+      kind: "none",
+      description: "Improvised: no additional consequence — it simply loses its Fitted clarity.",
+    },
   },
 ];
 

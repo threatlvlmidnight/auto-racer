@@ -1,292 +1,269 @@
 import Phaser from "phaser";
-import { BASELINE_CAR, ITEM_POOL } from "../content/sample-data";
-import { drawItem } from "../simulation/draft";
-import { addItem, evictAndAdd } from "../simulation/slots";
+import { ITEM_POOL } from "../content/sample-data";
 import {
-  addItemToStorage,
-  moveToBoard,
-  moveToStorage,
-  swapBoardStorage,
-} from "../simulation/storage";
+  acceptReward,
+  declineReward,
+  leaveSupplier,
+  purchaseStock,
+  restockSupplier,
+  type PartsSupplierPayload,
+  type PlacementCommand,
+  type RewardDraftPayload,
+} from "../simulation/encounters";
+import type { Run } from "../simulation/run";
+import { moveToBoard, moveToStorage, swapBoardStorage } from "../simulation/storage";
+import type { OfferedItem } from "../simulation/types";
+import type { PracticeOriginInput, ProtectedPreparationOrigin } from "../simulation/practice";
+import { installedItems, storedItems } from "../simulation/slots";
+import { vehicleById } from "../content/entrants";
+import { createItemCard, enableItemTooltip } from "./itemVisuals";
 import {
-  ACTIVE_IDENTITY_TAG,
-  SLOT_CAPACITY,
-  STORAGE_CAPACITY,
-  TAG_WEIGHT,
-  type Build,
-  type OfferedItem,
-} from "../simulation/types";
-import { itemDetailsLabel } from "./resultFormatting";
+  addDemoBackdrop,
+  addHeaderBand,
+  addRunStamp,
+  createDemoButton,
+  DISPLAY_FONT,
+  UI_FONT,
+} from "./demoTheme";
 
-const OFFER_ROUNDS = 5;
 const SLOT_WIDTH = 190;
-const SLOT_HEIGHT = 72;
+const SLOT_HEIGHT = 66;
 const SLOT_GAP = 22;
-const BOARD_Y = 250;
+const BOARD_Y = 255;
 const STORAGE_Y = 365;
 
-/**
- * Prepare phase: process a fixed sequence of offers before starting the
- * contest with the player's final build.
- */
 export class PrepareScene extends Phaser.Scene {
-  private build!: Build;
-  private round = 0;
-  private refreshesRemaining = 1;
-  private currentOffer: OfferedItem | null = null;
-  private storageVisible = false;
-  private roundObjects: Phaser.GameObjects.GameObject[] = [];
+  private run?: Run;
+  private objects: Phaser.GameObjects.GameObject[] = [];
+  private selectedOfferId: string | null = null;
 
   constructor() {
     super("PrepareScene");
   }
 
-  create(): void {
-    this.build = {
-      car: BASELINE_CAR,
-      board: Array(SLOT_CAPACITY).fill(null),
-      storage: Array(STORAGE_CAPACITY).fill(null),
-    };
-    this.round = 0;
-    this.refreshesRemaining = 1;
-    this.currentOffer = this.drawOffer();
-    this.storageVisible = false;
-    this.renderRound();
-  }
-
-  private renderRound(): void {
-    this.roundObjects.forEach((object) => object.destroy());
-    this.roundObjects = [];
-
-    if (this.round >= OFFER_ROUNDS) {
-      this.scene.start("ContestScene", { build: this.build });
+  create(data: { run?: Run; originState?: ProtectedPreparationOrigin }): void {
+    const run = data.run;
+    if (!run?.activeEncounter) {
+      this.scene.start("RunScene", { unavailable: true });
       return;
     }
-
-    const { width } = this.scale;
-    this.track(
-      this.add
-        .text(width / 2, 20, `Prepare · Round ${this.round + 1}/${OFFER_ROUNDS}`, {
-          fontSize: "22px",
-          color: "#ffffff",
-        })
-        .setOrigin(0.5)
-    );
-
-    if (this.currentOffer) {
-      this.createDraggableOffer(width / 2, 80, this.currentOffer);
-    } else {
-      this.track(
-        this.add
-          .text(width / 2, 80, "Offer placed · rearrange items or continue", {
-            fontSize: "16px",
-            color: "#8fd6b5",
-          })
-          .setOrigin(0.5)
-      );
+    this.run = run;
+    this.selectedOfferId = data.originState?.selection ?? null;
+    if (run.activeEncounter.type !== "reward-draft" && run.activeEncounter.type !== "parts-supplier") {
+      this.scene.start("RunScene", { run });
+      return;
     }
-
-    this.createControl(150, 150, this.storageVisible ? "Hide Storage" : "Show Storage", () => {
-      this.storageVisible = !this.storageVisible;
-      this.renderRound();
-    });
-    this.createControl(400, 150, `Refresh (${this.refreshesRemaining})`, () => this.refreshOffer(), {
-      enabled: this.refreshesRemaining > 0 && this.currentOffer !== null,
-    });
-    this.createControl(650, 150, "Next", () => this.nextRound());
-
-    this.renderSlotRow("BOARD · ACTIVE", this.build.board, BOARD_Y, "board");
-    if (this.storageVisible) {
-      this.renderSlotRow("STORAGE · INERT BY DEFAULT", this.build.storage, STORAGE_Y, "storage");
-    }
+    addDemoBackdrop(this, "workshop", 0.7);
+    addHeaderBand(this);
+    this.add.image(400, 303, "player-vehicle").setDisplaySize(360, 180).setAlpha(0.08);
+    this.render();
   }
 
-  private renderSlotRow(
-    label: string,
-    slots: (OfferedItem | null)[],
-    y: number,
-    area: "board" | "storage"
-  ): void {
-    const totalWidth = slots.length * SLOT_WIDTH + (slots.length - 1) * SLOT_GAP;
-    const startX = (this.scale.width - totalWidth) / 2 + SLOT_WIDTH / 2;
-    this.track(
-      this.add.text(startX - SLOT_WIDTH / 2, y - SLOT_HEIGHT / 2 - 28, label, {
-        fontSize: "14px",
-        color: area === "board" ? "#ffdd77" : "#9eb5c9",
-      })
-    );
+  private render(): void {
+    this.objects.forEach((object) => object.destroy());
+    this.objects = [];
+    const run = this.run!;
+    const encounter = run.activeEncounter!;
+    const supplier = encounter.type === "parts-supplier";
+    // Purchases and restocks mutate credits in place and then re-render, so the
+    // stamp is tracked here rather than drawn once in create() — otherwise the
+    // header keeps the credit count the scene was entered with.
+    addRunStamp(this, run).forEach((object) => this.track(object));
+    this.track(this.add.text(this.scale.width / 2, 54, supplier ? "Parts Supplier" : "Reward Draft", {
+      fontSize: "22px",
+      fontFamily: DISPLAY_FONT,
+      fontStyle: "bold",
+      color: "#f3e5bd",
+    }).setOrigin(0.5));
 
-    slots.forEach((item, index) => {
-      const x = startX + index * (SLOT_WIDTH + SLOT_GAP);
-      const zone = this.add.zone(x, y, SLOT_WIDTH, SLOT_HEIGHT).setRectangleDropZone(SLOT_WIDTH, SLOT_HEIGHT);
-      zone.setData("area", area);
-      zone.setData("index", index);
-      this.track(zone);
-      this.track(
-        this.add
-          .rectangle(x, y, SLOT_WIDTH, SLOT_HEIGHT, item ? 0x263640 : 0x171d21, 1)
-          .setStrokeStyle(2, item ? 0x6f91a8 : 0x45515a)
-      );
-      if (item) {
-        this.createDraggableHeldItem(x, y, item, area, index);
-      } else {
-        this.track(
-          this.add
-            .text(x, y, `Empty ${area} slot ${index + 1}`, {
-              fontSize: "12px",
-              color: "#71808a",
-            })
-            .setOrigin(0.5)
-        );
-      }
+    if (supplier) this.renderSupplier(encounter.payload as PartsSupplierPayload);
+    else this.renderReward(encounter.payload as RewardDraftPayload);
+    this.createControl(680, 170, "TEST DAY", () => this.openTestDay());
+    this.renderSlotRow(installedRowLabel(run), installedItems(run.build), BOARD_Y, "board");
+    this.renderSlotRow("WORKSHOP STORAGE · INERT BY DEFAULT", storedItems(run.build), STORAGE_Y, "storage");
+  }
+
+  private renderReward(payload: RewardDraftPayload): void {
+    payload.offers.forEach((offer, index) => {
+      this.createDraggableOffer(170 + index * 230, 95, offer.id, offer.item, true, false);
+    });
+    this.createControl(400, 170, "Decline all", () => {
+      const next = declineReward(this.run!, this.run!.activeEncounter!.id, Math.random);
+      this.scene.start("RunScene", { run: next });
     });
   }
 
-  private createDraggableHeldItem(
-    x: number,
-    y: number,
-    item: OfferedItem,
-    sourceArea: "board" | "storage",
-    sourceIndex: number
-  ): Phaser.GameObjects.Text {
-    const card = this.add
-      .text(x, y, itemDetailsLabel(item), {
-        fontSize: "12px",
-        color: "#ffffff",
-        align: "center",
-        wordWrap: { width: SLOT_WIDTH - 16 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-    this.input.setDraggable(card);
-    card.on("drag", (_pointer: Phaser.Input.Pointer, dragX: number, dragY: number) => {
-      card.setPosition(dragX, dragY);
+  private renderSupplier(payload: PartsSupplierPayload): void {
+    if (payload.unavailable) {
+      this.track(this.add.text(400, 95, "No compatible stock available", {
+        fontSize: "16px",
+        color: "#d9a7a7",
+      }).setOrigin(0.5));
+    }
+    payload.stock.forEach((entry, index) => {
+      const affordable = entry.item.price <= this.run!.credits;
+      this.createDraggableOffer(170 + index * 230, 95, entry.id, entry.item, entry.state === "available" && affordable, entry.state === "purchased");
     });
-    card.on("drop", (_pointer: Phaser.Input.Pointer, dropZone: Phaser.GameObjects.Zone) => {
-      this.handleHeldItemDrop(sourceArea, sourceIndex, dropZone);
+    this.createControl(300, 170, payload.restockUsed ? "Restock used" : "Restock · 1 credit", () => {
+      this.run = restockSupplier(this.run!, this.run!.activeEncounter!.id, Math.random, ITEM_POOL);
+      this.render();
+    }, { enabled: !payload.restockUsed && !payload.unavailable && this.run!.credits >= 1 });
+    this.createControl(500, 170, "Leave Supplier", () => {
+      const next = leaveSupplier(this.run!, this.run!.activeEncounter!.id, Math.random);
+      this.scene.start("RunScene", { run: next });
     });
-    card.on("dragend", () => {
-      if (card.active) card.setPosition(x, y);
-    });
-    return this.track(card);
   }
 
   private createDraggableOffer(
     x: number,
     y: number,
-    item: OfferedItem
-  ): Phaser.GameObjects.Container {
-    const background = this.add
-      .rectangle(0, 0, SLOT_WIDTH, SLOT_HEIGHT, 0x433b24, 1)
-      .setStrokeStyle(2, 0xffdd77);
-    const text = this.add
-      .text(0, -8, itemDetailsLabel(item), {
-        fontSize: "12px",
-        color: "#ffffff",
-        align: "center",
-        wordWrap: { width: SLOT_WIDTH - 16 },
-      })
-      .setOrigin(0.5);
-    const hint = this.add
-      .text(0, 25, "Drag to board or storage", { fontSize: "9px", color: "#c5b777" })
-      .setOrigin(0.5);
-    const card = this.add
-      .container(x, y, [background, text, hint])
-      .setSize(SLOT_WIDTH, SLOT_HEIGHT);
+    offerId: string,
+    item: OfferedItem,
+    enabled: boolean,
+    purchased: boolean,
+  ): void {
+    const background = this.add.rectangle(0, 0, SLOT_WIDTH, 84, purchased ? 0x26352f : 0x433b24)
+      .setStrokeStyle(2, enabled ? 0xffdd77 : 0x5d666b);
+    const itemCard = createItemCard(this, 0, -10, item, { width: SLOT_WIDTH - 18, height: 48, iconSize: 40 });
+    const status = purchased ? "Purchased" : `${item.price} credits${enabled ? "" : " · unavailable"}`;
+    const label = this.add.text(0, 29, status, {
+      fontSize: "11px",
+      fontFamily: UI_FONT,
+      color: purchased ? "#74c69d" : enabled ? "#ffe39a" : "#858f95",
+    }).setOrigin(0.5);
+    const card = this.add.container(x, y, [background, itemCard, label]).setSize(SLOT_WIDTH, 84);
+    this.track(card);
+    enableItemTooltip(this, card, item);
+    if (!enabled) return;
     card.setInteractive({ useHandCursor: true });
+    card.on("pointerdown", () => { this.selectedOfferId = offerId; });
     this.input.setDraggable(card);
-    card.on("drag", (_pointer: Phaser.Input.Pointer, dragX: number, dragY: number) => {
-      card.setPosition(dragX, dragY);
-    });
-    card.on("drop", (_pointer: Phaser.Input.Pointer, dropZone: Phaser.GameObjects.Zone) => {
-      this.handleOfferDrop(item, dropZone);
+    card.on("drag", (_pointer: Phaser.Input.Pointer, dragX: number, dragY: number) => card.setPosition(dragX, dragY));
+    card.on("drop", (_pointer: Phaser.Input.Pointer, zone: Phaser.GameObjects.Zone) => {
+      // Drop zones still carry the legacy area/index pair; translate it into the
+      // garage's stable slot-id destination. The full garage rewrite is US2
+      // T028/T030 — this keeps acquisition working against the new contract.
+      const zoneArea = zone.getData("area") as "board" | "storage";
+      const zoneIndex = zone.getData("index") as number;
+      const placement: PlacementCommand = zoneArea === "storage"
+        ? { area: "storage", index: zoneIndex }
+        : { area: "vehicle", slotId: this.run!.build.slots[zoneIndex]?.slotId ?? "" };
+      const encounter = this.run!.activeEncounter!;
+      if (encounter.type === "reward-draft") {
+        const next = acceptReward(this.run!, encounter.id, offerId, placement, Math.random);
+        this.scene.start("RunScene", { run: next });
+      } else {
+        this.run = purchaseStock(this.run!, encounter.id, offerId, placement);
+        this.render();
+      }
     });
     card.on("dragend", () => {
       if (card.active) card.setPosition(x, y);
     });
-    return this.track(card);
   }
 
-  private handleOfferDrop(item: OfferedItem, dropZone: Phaser.GameObjects.Zone): void {
-    if (this.currentOffer !== item) return;
-    const area = dropZone.getData("area") as "board" | "storage";
-    const index = dropZone.getData("index") as number;
-
-    if (area === "storage") {
-      if (this.build.storage[index] !== null) return;
-      this.build = addItemToStorage(this.build, item, index);
-    } else {
-      this.build = this.build.board[index]
-        ? evictAndAdd(this.build, index, item)
-        : addItem(this.build, item, index);
-    }
-    this.currentOffer = null;
-    this.renderRound();
+  private renderSlotRow(label: string, slots: (OfferedItem | null)[], y: number, area: "board" | "storage"): void {
+    // The vehicle row now holds four slots (feature 010), which no longer fit at
+    // the original fixed width. Size slots to the available canvas so no slot is
+    // clipped at either edge, capped so the three-slot storage row is unchanged.
+    const margin = 24;
+    const available = this.scale.width - margin * 2;
+    const slotWidth = Math.min(
+      SLOT_WIDTH,
+      Math.floor((available - (slots.length - 1) * SLOT_GAP) / slots.length),
+    );
+    const totalWidth = slots.length * slotWidth + (slots.length - 1) * SLOT_GAP;
+    const startX = (this.scale.width - totalWidth) / 2 + slotWidth / 2;
+    this.track(this.add.text(startX - slotWidth / 2, y - SLOT_HEIGHT / 2 - 24, label, {
+      fontSize: "13px",
+      fontFamily: UI_FONT,
+      fontStyle: "bold",
+      color: area === "board" ? "#ffdd77" : "#9eb5c9",
+    }));
+    slots.forEach((item, index) => {
+      const x = startX + index * (slotWidth + SLOT_GAP);
+      const zone = this.add.zone(x, y, slotWidth, SLOT_HEIGHT).setRectangleDropZone(slotWidth, SLOT_HEIGHT);
+      zone.setData("area", area).setData("index", index);
+      this.track(zone);
+      this.track(this.add.rectangle(x, y, slotWidth, SLOT_HEIGHT, item ? 0x263640 : 0x171d21)
+        .setStrokeStyle(2, item ? 0x6f91a8 : 0x45515a));
+      if (item) this.createHeldItem(x, y, item, area, index, slotWidth);
+      else this.track(this.add.text(x, y, `Empty ${area === "board" ? "vehicle" : "storage"} slot ${index + 1}`, {
+        fontSize: "11px",
+        fontFamily: UI_FONT,
+        color: "#839b98",
+      }).setOrigin(0.5));
+    });
   }
 
-  private handleHeldItemDrop(
-    sourceArea: "board" | "storage",
-    sourceIndex: number,
-    dropZone: Phaser.GameObjects.Zone
-  ): void {
-    const targetArea = dropZone.getData("area") as "board" | "storage";
-    const targetIndex = dropZone.getData("index") as number;
-    if (sourceArea === targetArea) return;
-
-    if (sourceArea === "board") {
-      if (this.build.storage[targetIndex] !== null) return;
-      this.build = moveToStorage(this.build, sourceIndex, targetIndex);
-    } else if (this.build.board[targetIndex] === null) {
-      this.build = moveToBoard(this.build, sourceIndex, targetIndex);
-    } else {
-      this.build = swapBoardStorage(this.build, targetIndex, sourceIndex);
-    }
-    this.renderRound();
-  }
-
-  private refreshOffer(): void {
-    if (this.refreshesRemaining <= 0 || !this.currentOffer) return;
-    this.refreshesRemaining -= 1;
-    this.currentOffer = this.drawOffer();
-    this.renderRound();
-  }
-
-  private nextRound(): void {
-    this.round += 1;
-    this.refreshesRemaining = 1;
-    this.currentOffer = this.round < OFFER_ROUNDS ? this.drawOffer() : null;
-    this.renderRound();
-  }
-
-  private drawOffer(): OfferedItem {
-    return drawItem(ITEM_POOL, ACTIVE_IDENTITY_TAG, TAG_WEIGHT, Math.random);
-  }
-
-  private createControl(
+  private createHeldItem(
     x: number,
     y: number,
-    label: string,
-    onClick: () => void,
-    options: { enabled?: boolean } = {}
-  ): Phaser.GameObjects.Text {
+    item: OfferedItem,
+    sourceArea: "board" | "storage",
+    sourceIndex: number,
+    slotWidth: number = SLOT_WIDTH,
+  ): void {
+    const card = createItemCard(this, x, y, item, { width: slotWidth - 16, height: SLOT_HEIGHT - 8 })
+      .setInteractive({ useHandCursor: true });
+    this.track(card);
+    enableItemTooltip(this, card, item);
+    this.input.setDraggable(card);
+    card.on("drag", (_pointer: Phaser.Input.Pointer, dragX: number, dragY: number) => card.setPosition(dragX, dragY));
+    card.on("drop", (_pointer: Phaser.Input.Pointer, zone: Phaser.GameObjects.Zone) => {
+      const targetArea = zone.getData("area") as "board" | "storage";
+      const targetIndex = zone.getData("index") as number;
+      if (sourceArea === targetArea) return;
+      let build = this.run!.build;
+      if (sourceArea === "board") {
+        if (build.storage[targetIndex]?.item != null) return;
+        build = moveToStorage(build, sourceIndex, targetIndex);
+      } else if (build.slots[targetIndex]?.item == null) {
+        build = moveToBoard(build, sourceIndex, targetIndex);
+      } else {
+        build = swapBoardStorage(build, targetIndex, sourceIndex);
+      }
+      this.run = { ...this.run!, build };
+      this.render();
+    });
+    card.on("dragend", () => {
+      if (card.active) card.setPosition(x, y);
+    });
+  }
+
+  private createControl(x: number, y: number, label: string, action: () => void, options: { enabled?: boolean } = {}): void {
     const enabled = options.enabled ?? true;
-    const control = this.add
-      .text(x, y, label, {
-        fontSize: "15px",
-        color: enabled ? "#ffffff" : "#69737a",
-        backgroundColor: enabled ? "#303a40" : "#20262a",
-        padding: { x: 14, y: 7 },
-      })
-      .setOrigin(0.5);
-    if (enabled) {
-      control.setInteractive({ useHandCursor: true });
-      control.on("pointerdown", onClick);
-    }
-    return this.track(control);
+    const control = createDemoButton(this, x, y, label, action, enabled);
+    this.track(control);
+  }
+
+  private openTestDay(): void {
+    const encounter = this.run!.activeEncounter!;
+    const context = encounter.type === "parts-supplier" ? "supplier" : "reward-draft";
+    const origin: PracticeOriginInput = {
+      context,
+      selection: this.selectedOfferId,
+      navigation: {
+        viewToken: context,
+        focusToken: "test-day-control",
+        scrollToken: "top",
+      },
+    };
+    this.scene.start("TestDayScene", { run: this.run, origin });
   }
 
   private track<T extends Phaser.GameObjects.GameObject>(object: T): T {
-    this.roundObjects.push(object);
+    this.objects.push(object);
     return object;
   }
+}
+
+/**
+ * Names the active-build row after the run's actual named vehicle. The full
+ * garage surface is feature 010 US2 (Phase 4); this keeps the label truthful
+ * for whichever entrant is running rather than hardcoding one vehicle.
+ */
+function installedRowLabel(run: Run): string {
+  const vehicle = vehicleById(run.identity.vehicleId);
+  return `${(vehicle?.name ?? "VEHICLE").toUpperCase()} · INSTALLED`;
 }

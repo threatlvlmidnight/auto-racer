@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <rect width="120" height="120" fill="#232b30"/>
+  <circle cx="60" cy="46" r="23" fill="#cfa987"/>
+  <path d="M34 44c0-16 12-24 26-24s26 8 26 24l-10-8H44z" fill="#1d1a18"/>
+  <path d="M36 54h48v5H36z" fill="#1d1a18" opacity=".7"/>
+  <path d="M24 120c0-24 16-38 36-38s36 14 36 38z" fill="#3d4750"/>
+  <path d="M46 84l14 10 14-10" fill="none" stroke="#9f3038" stroke-width="4"/>
+  <text x="60" y="116" font-family="Georgia,serif" font-size="9" fill="#f3e5bd" text-anchor="middle">VOSS</text>
+</svg>

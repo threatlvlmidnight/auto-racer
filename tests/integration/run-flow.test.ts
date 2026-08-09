@@ -1,0 +1,198 @@
+import { describe, expect, it } from "vitest";
+import { ITEM_POOL } from "../../src/content/sample-data";
+import {
+  chooseEncounter,
+  purchaseStock,
+  selectSponsorOption,
+  type PartsSupplierPayload,
+  type SponsorMeetingPayload,
+} from "../../src/simulation/encounters";
+import { resolveContest } from "../../src/simulation/contest";
+import {
+  completeNonPvpEncounter,
+  createUnavailableRun,
+  createRun,
+  runIdentityForEntrant,
+  RunTransitionError,
+} from "../../src/simulation/run";
+import {
+  activeEncounterPresentation,
+  contestSceneInput,
+  continueRunFromResult,
+  raceLapLabel,
+  runPresentation,
+  runRoute,
+} from "../../src/scenes/runPresentation";
+import {
+  createPracticeReturnContext,
+  createPracticeSession,
+  resolvePractice,
+} from "../../src/simulation/practice";
+import { runHubPracticeFixture } from "../fixtures/practice-run-fixtures";
+import { vehicleBuild } from "../fixtures/vehicle-build-fixtures";
+
+const create = () =>
+  createRun({
+    runId: "integration-run",
+    seed: 17,
+    identityTag: "performance",
+    identity: runIdentityForEntrant("evelyn-mercer")!,
+    build: vehicleBuild(),
+    rng: (() => {
+      const values = [0, 0.9];
+      let index = 0;
+      return () => values[index++ % values.length];
+    })(),
+  });
+
+describe("run scene boundary", () => {
+  it("keeps practice results structurally separate from scored continuation", () => {
+    const fixture = runHubPracticeFixture();
+    const context = createPracticeReturnContext(fixture.run, {
+      context: fixture.context,
+      selection: fixture.selection,
+      navigation: fixture.navigation,
+    });
+    const practice = resolvePractice(createPracticeSession(fixture.run, context));
+
+    expect(practice.result?.authority).toBe("practice-only");
+    expect(practice.result).not.toHaveProperty("run");
+    expect(practice.result).not.toHaveProperty("encounterId");
+    expect(practice.result).not.toHaveProperty("creditTransactions");
+  });
+
+  it("presents stored choices and routes the selected encounter without regenerating them", () => {
+    const run = create();
+    const model = runPresentation(run);
+
+    expect(model.progressLabel).toBe("Stage 1 of 6");
+    expect(model.creditsLabel).toBe("5 credits");
+    expect(model.choices.map(({ id }) => id)).toEqual(run.availableChoices.map(({ id }) => id));
+    expect(runRoute(run)).toBe("RunScene");
+
+    const selected = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+    expect(runRoute(selected)).toBe(
+      selected.activeEncounter?.type === "sponsor-meeting" ? "RunScene" : "PrepareScene",
+    );
+    expect(selected.stageIndex).toBe(0);
+    expect(selected.build).toEqual(run.build);
+  });
+
+  it("carries PvP context through one guarded result continuation with explicit labels", () => {
+    let run = create();
+    for (let stage = 0; stage < 2; stage += 1) {
+      run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+      run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
+    }
+    const input = contestSceneInput(run, run.activeEncounter!.id);
+    const result = resolveContest(input.build, input.ghost, input.lapCount);
+    const continued = continueRunFromResult(run, input.encounterId, result, () => 0);
+
+    expect(input).toMatchObject({ encounterId: run.activeEncounter!.id, lapCount: 10 });
+    expect(result.lapCount).toBe(10);
+    expect(raceLapLabel("PLAYER", { lapIndex: 9, lapProgress: 0.5, finished: false }, 10))
+      .toBe("PLAYER · LAP 10/10");
+    expect(raceLapLabel("GHOST", { lapIndex: 11, lapProgress: 0.5, finished: false }, 12))
+      .toBe("GHOST · LAP 12/12");
+    expect(continued.stageIndex).toBe(3);
+    expect(continued.history).toHaveLength(3);
+    expect(() => continueRunFromResult(continued, input.encounterId, result, () => 0))
+      .toThrowError(RunTransitionError);
+  });
+
+  it("keeps encounter selection separate from acquisition and exposes Supplier economy state", () => {
+    const run = createRun({
+      runId: "supplier-run",
+      seed: 17,
+      identityTag: "performance",
+      identity: runIdentityForEntrant("evelyn-mercer")!,
+      build: vehicleBuild(),
+      rng: () => 0,
+    });
+    const active = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+    const payload = active.activeEncounter!.payload as PartsSupplierPayload;
+    const before = activeEncounterPresentation(active);
+
+    expect(active.build).toEqual(run.build);
+    expect(active.creditTransactions).toEqual([]);
+    expect(before).toMatchObject({
+      type: "parts-supplier",
+      credits: 5,
+      restockCost: 1,
+      restockAvailable: true,
+    });
+    expect(before?.stock).toHaveLength(3);
+    expect(before?.stock?.[0]).toMatchObject({
+      id: payload.stock[0].id,
+      price: payload.stock[0].item.price,
+      affordable: true,
+      purchased: false,
+    });
+
+    const purchased = purchaseStock(active, active.activeEncounter!.id, payload.stock[0].id, {
+      area: "vehicle",
+      slotId: active.build.slots[0].slotId,
+    });
+    expect(activeEncounterPresentation(purchased)?.stock?.[0].purchased).toBe(true);
+    expect(purchased.build.slots[0].item).toEqual(payload.stock[0].item);
+    expect(purchased.creditTransactions).toHaveLength(1);
+  });
+
+  it("exposes exact Sponsor payouts, targets, and tagged requirements", () => {
+    const run = createRun({
+      runId: "sponsor-run",
+      seed: 17,
+      identityTag: "performance",
+      identity: runIdentityForEntrant("evelyn-mercer")!,
+      build: vehicleBuild(),
+      rng: () => 0.99,
+    });
+    const active = chooseEncounter(run, run.availableChoices[0].id, () => 0.5, ITEM_POOL);
+    const model = activeEncounterPresentation(active);
+
+    expect(model).toMatchObject({ type: "sponsor-meeting", credits: 5 });
+    expect(model?.sponsorOptions?.[0]).toMatchObject({ payout: 2, kind: "immediate" });
+    expect(model?.sponsorOptions?.slice(1).every(({ payout }) => payout === 7)).toBe(true);
+    expect(model?.sponsorOptions?.some(({ targetSeconds }) => Number.isInteger(targetSeconds))).toBe(true);
+    expect(model?.sponsorOptions?.some(({ requiredEvents }) => requiredEvents === 10)).toBe(true);
+
+    const payload = active.activeEncounter!.payload as SponsorMeetingPayload;
+    const conditional = selectSponsorOption(
+      active,
+      active.activeEncounter!.id,
+      payload.options[1].id,
+    );
+    expect(runPresentation(conditional).pendingSponsorLabel).toContain("7 credits");
+    expect(runPresentation(conditional).pendingSponsorLabel).toContain("next race");
+  });
+
+  it("presents available, active, completed, and unavailable states without silent regeneration", () => {
+    const available = create();
+    const active = chooseEncounter(available, available.availableChoices[0].id, () => 0, ITEM_POOL);
+    const completed = {
+      ...available,
+      status: "completed" as const,
+      stageIndex: 6,
+      availableChoices: [],
+      activeEncounter: null,
+      stages: available.stages.map((stage) => ({ ...stage, state: "completed" as const })),
+    };
+    const unavailable = createUnavailableRun({
+      runId: "missing-context",
+      seed: 0,
+      identityTag: "performance",
+      identity: runIdentityForEntrant("evelyn-mercer")!,
+      build: available.build,
+    });
+
+    expect(runPresentation(available).statusLabel).toBe("Available");
+    expect(runPresentation(active).statusLabel).toBe("Active");
+    expect(runPresentation(completed).statusLabel).toBe("Completed");
+    expect(runPresentation(unavailable)).toMatchObject({
+      statusLabel: "Unavailable",
+      choices: [],
+      history: [],
+    });
+    expect(unavailable.availableChoices).toEqual([]);
+  });
+});

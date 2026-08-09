@@ -1,6 +1,6 @@
 import Phaser from "phaser";
-import { SAMPLE_GHOST } from "../content/sample-data";
 import { resolveContest } from "../simulation/contest";
+import { installedItems } from "../simulation/slots";
 import {
   buildPlaybackSchedule,
   frameStateAt,
@@ -8,13 +8,15 @@ import {
   type PlaybackSchedule,
 } from "../simulation/playback";
 import {
-  LAP_COUNT,
   SLOT_CAPACITY,
-  type Build,
   type ContestResult,
   type OfferedItem,
 } from "../simulation/types";
+import type { Run } from "../simulation/run";
 import { leaderLabel } from "./contestFormatting";
+import { createItemCard, enableItemTooltip } from "./itemVisuals";
+import { contestSceneInput, raceLapLabel } from "./runPresentation";
+import { addDemoBackdrop, addRunStamp, DISPLAY_FONT, UI_FONT } from "./demoTheme";
 
 const TRACK_CENTER_X = 400;
 const TRACK_CENTER_Y = 205;
@@ -33,34 +35,40 @@ export class ContestScene extends Phaser.Scene {
   private result?: ContestResult;
   private schedule?: PlaybackSchedule;
   private elapsedSeconds = 0;
-  private playerMarker?: Phaser.GameObjects.Arc;
-  private ghostMarker?: Phaser.GameObjects.Arc;
+  private playerMarker?: Phaser.GameObjects.Image;
+  private ghostMarker?: Phaser.GameObjects.Image;
   private playerLapLabel?: Phaser.GameObjects.Text;
   private ghostLapLabel?: Phaser.GameObjects.Text;
   private leaderText?: Phaser.GameObjects.Text;
   private boardHighlights = new Map<string, Phaser.GameObjects.Rectangle>();
   private lastRenderedPlayerLapIndex = -1;
+  private run?: Run;
+  private encounterId?: string;
 
   constructor() {
     super("ContestScene");
   }
 
-  create(data: { build?: Build }): void {
-    // Defensive guard: this scene should only ever be reached from
-    // PrepareScene with a build already chosen. If it's reached without one
-    // (e.g. during development, navigating scenes directly), send the
-    // player back to the prepare phase rather than crash on an undefined
-    // build (Polish, T020).
-    if (!data.build) {
-      this.scene.start("PrepareScene");
+  create(data: { run?: Run; encounterId?: string }): void {
+    if (!data.run || !data.encounterId) {
+      this.scene.start("RunScene", { unavailable: true });
+      return;
+    }
+    let input;
+    try {
+      input = contestSceneInput(data.run, data.encounterId);
+    } catch {
+      this.scene.start("RunScene", { unavailable: true });
       return;
     }
 
-    this.result = resolveContest(data.build, SAMPLE_GHOST);
+    this.run = input.run;
+    this.encounterId = input.encounterId;
+    this.result = resolveContest(input.build, input.ghost, input.lapCount);
     this.schedule = buildPlaybackSchedule(this.result);
     this.elapsedSeconds = 0;
     this.lastRenderedPlayerLapIndex = -1;
-    this.renderTrack(data.build.board);
+    this.renderTrack(installedItems(input.build), input.lapCount);
   }
 
   update(_time: number, delta: number): void {
@@ -77,8 +85,8 @@ export class ContestScene extends Phaser.Scene {
     );
     this.positionMarker(this.playerMarker, frame.player);
     this.positionMarker(this.ghostMarker, frame.ghost);
-    this.playerLapLabel?.setText(this.lapLabel("PLAYER", frame.player));
-    this.ghostLapLabel?.setText(this.lapLabel("GHOST", frame.ghost));
+    this.playerLapLabel?.setText(raceLapLabel("PLAYER", frame.player, this.result.lapCount));
+    this.ghostLapLabel?.setText(raceLapLabel("GHOST", frame.ghost, this.result.lapCount));
     this.leaderText
       ?.setText(leaderLabel(frame.liveGap))
       .setColor(frame.liveGap < 0 ? "#ffd447" : frame.liveGap > 0 ? "#65c7f7" : "#ffffff");
@@ -90,21 +98,31 @@ export class ContestScene extends Phaser.Scene {
     if (frame.player.finished && frame.ghost.finished) {
       const result = this.result;
       this.result = undefined;
-      this.scene.start("ResultScene", { result });
+      this.scene.start("ResultScene", {
+        result,
+        run: this.run,
+        encounterId: this.encounterId,
+      });
     }
   }
 
-  private renderTrack(board: (OfferedItem | null)[]): void {
+  private renderTrack(board: (OfferedItem | null)[], lapCount: number): void {
     const { width } = this.scale;
+    addDemoBackdrop(this, "race-day", 0.28);
+    addRunStamp(this, this.run!);
     this.add
       .text(width / 2, 34, "CONTEST", {
         fontSize: "28px",
-        color: "#ffffff",
+        fontFamily: DISPLAY_FONT,
+        fontStyle: "bold",
+        color: "#f3e5bd",
       })
       .setOrigin(0.5);
     this.leaderText = this.add
       .text(width / 2, 78, leaderLabel(0), {
         fontSize: "18px",
+        fontFamily: UI_FONT,
+        fontStyle: "bold",
         color: "#ffffff",
       })
       .setOrigin(0.5);
@@ -122,15 +140,19 @@ export class ContestScene extends Phaser.Scene {
       TRACK_RADIUS_Y * 2 - 36,
     );
 
-    this.playerMarker = this.add.circle(0, 0, 10, 0xffd447).setStrokeStyle(2, 0x1d1d1d);
-    this.ghostMarker = this.add.circle(0, 0, 10, 0x65c7f7).setStrokeStyle(2, 0x1d1d1d);
-    this.playerLapLabel = this.add.text(105, 325, "PLAYER · LAP 1/10", {
+    this.playerMarker = this.add.image(0, 0, "player-vehicle").setDisplaySize(46, 23).setDepth(5);
+    this.ghostMarker = this.add.image(0, 0, "rival-vehicle").setDisplaySize(46, 23).setDepth(4);
+    this.playerLapLabel = this.add.text(105, 325, `PLAYER · LAP 1/${lapCount}`, {
       fontSize: "16px",
+      fontFamily: UI_FONT,
+      fontStyle: "bold",
       color: "#ffd447",
     });
     this.ghostLapLabel = this.add
-      .text(width - 105, 325, "GHOST · LAP 1/10", {
+      .text(width - 105, 325, `GHOST · LAP 1/${lapCount}`, {
         fontSize: "16px",
+        fontFamily: UI_FONT,
+        fontStyle: "bold",
         color: "#65c7f7",
       })
       .setOrigin(1, 0);
@@ -141,18 +163,13 @@ export class ContestScene extends Phaser.Scene {
     this.positionMarker(this.ghostMarker, start);
   }
 
-  private positionMarker(marker: Phaser.GameObjects.Arc, progress: CarProgress): void {
+  private positionMarker(marker: Phaser.GameObjects.Image, progress: CarProgress): void {
     const angle = progress.lapProgress * Math.PI * 2 - Math.PI / 2;
     marker.setPosition(
       TRACK_CENTER_X + Math.cos(angle) * TRACK_RADIUS_X,
       TRACK_CENTER_Y + Math.sin(angle) * TRACK_RADIUS_Y,
     );
-  }
-
-  private lapLabel(name: string, progress: CarProgress): string {
-    return progress.finished
-      ? `${name} · FINISHED`
-      : `${name} · LAP ${Math.min(progress.lapIndex + 1, LAP_COUNT)}/${LAP_COUNT}`;
+    marker.setRotation(angle + Math.PI / 2);
   }
 
   private renderBoard(board: (OfferedItem | null)[]): void {
@@ -161,9 +178,11 @@ export class ContestScene extends Phaser.Scene {
       SLOT_CAPACITY * BOARD_SLOT_WIDTH + (SLOT_CAPACITY - 1) * BOARD_SLOT_GAP;
     const startX = (this.scale.width - totalWidth) / 2 + BOARD_SLOT_WIDTH / 2;
 
-    this.add.text((this.scale.width - totalWidth) / 2, 365, "PLAYER BOARD", {
+    this.add.text((this.scale.width - totalWidth) / 2, 365, "THE HIGHWHEEL · INSTALLED", {
       fontSize: "12px",
-      color: "#9da8ae",
+      fontFamily: UI_FONT,
+      fontStyle: "bold",
+      color: "#d8b45a",
     });
 
     Array.from({ length: SLOT_CAPACITY }, (_, index) => board[index] ?? null).forEach(
@@ -177,7 +196,8 @@ export class ContestScene extends Phaser.Scene {
           this.add
             .text(x, BOARD_Y, `EMPTY SLOT ${index + 1}`, {
               fontSize: "11px",
-              color: "#71808a",
+              fontFamily: UI_FONT,
+              color: "#839b98",
             })
             .setOrigin(0.5);
           return;
@@ -187,14 +207,14 @@ export class ContestScene extends Phaser.Scene {
           .rectangle(x, BOARD_Y, BOARD_SLOT_WIDTH, BOARD_SLOT_HEIGHT, 0xffd447, 0)
           .setStrokeStyle(3, 0xffe98a, 0);
         this.boardHighlights.set(item.id, highlight);
-        this.add
-          .text(x, BOARD_Y, item.name, {
-            fontSize: "11px",
-            color: "#ffffff",
-            align: "center",
-            wordWrap: { width: BOARD_SLOT_WIDTH - 16 },
-          })
-          .setOrigin(0.5);
+        const card = createItemCard(this, x, BOARD_Y, item, {
+          width: BOARD_SLOT_WIDTH - 16,
+          height: BOARD_SLOT_HEIGHT - 8,
+          iconSize: 42,
+        }).setInteractive({
+          useHandCursor: true,
+        });
+        enableItemTooltip(this, card, item);
       },
     );
   }

@@ -1,32 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { BASELINE_CAR, ITEM_POOL } from "../../src/content/sample-data";
-import { addItem, evictAndAdd, hasOpenSlot } from "../../src/simulation/slots";
-import { SLOT_CAPACITY, STORAGE_CAPACITY, type Build } from "../../src/simulation/types";
+import { ITEM_POOL } from "../../src/content/sample-data";
+import { addItem, evictAndAdd, hasOpenSlot, installedItems } from "../../src/simulation/slots";
+import { type Build } from "../../src/simulation/types";
+import { TEST_SLOT_COUNT, vehicleBuild } from "../fixtures/vehicle-build-fixtures";
 
 function emptyBuild(): Build {
-  return {
-    car: BASELINE_CAR,
-    board: Array(SLOT_CAPACITY).fill(null),
-    storage: Array(STORAGE_CAPACITY).fill(null),
-  };
+  return vehicleBuild();
 }
 
 describe("hasOpenSlot", () => {
-  it("reports open capacity until the flat cap is reached", () => {
+  it("reports open capacity until the vehicle's slot count is reached", () => {
     let build = emptyBuild();
 
-    for (let index = 0; index < SLOT_CAPACITY; index += 1) {
+    for (let index = 0; index < TEST_SLOT_COUNT; index += 1) {
       expect(hasOpenSlot(build)).toBe(true);
       build = addItem(build, ITEM_POOL[index], index);
     }
 
-    expect(build.board).toEqual(ITEM_POOL.slice(0, SLOT_CAPACITY));
+    expect(installedItems(build)).toEqual(ITEM_POOL.slice(0, TEST_SLOT_COUNT));
     expect(hasOpenSlot(build)).toBe(false);
   });
 });
 
 describe("addItem", () => {
-  it("returns a new build with the item appended without mutating its inputs", () => {
+  it("returns a new build with the item installed without mutating its inputs", () => {
     const build = emptyBuild();
     const item = ITEM_POOL[0];
     const buildSnapshot = structuredClone(build);
@@ -35,11 +32,19 @@ describe("addItem", () => {
     const result = addItem(build, item, 1);
 
     expect(result).not.toBe(build);
-    expect(result.board).not.toBe(build.board);
-    expect(result.board).toEqual([null, item, null]);
+    expect(result.slots).not.toBe(build.slots);
+    expect(installedItems(result)).toEqual([null, item, ...Array(TEST_SLOT_COUNT - 2).fill(null)]);
     expect(result.storage).toBe(build.storage);
     expect(build).toEqual(buildSnapshot);
     expect(item).toEqual(itemSnapshot);
+  });
+
+  it("preserves the authored slot ID and type of the slot it fills", () => {
+    const build = emptyBuild();
+    const result = addItem(build, ITEM_POOL[0], 1);
+
+    expect(result.slots[1].slotId).toBe(build.slots[1].slotId);
+    expect(result.slots[1].slotType).toBe(build.slots[1].slotType);
   });
 
   it("leaves the same build reference untouched when an offer is declined", () => {
@@ -47,44 +52,38 @@ describe("addItem", () => {
     const afterDecline = build;
 
     expect(afterDecline).toBe(build);
-    expect(afterDecline.board).toEqual([null, null, null]);
+    expect(installedItems(afterDecline)).toEqual(Array(TEST_SLOT_COUNT).fill(null));
   });
 });
 
 describe("evictAndAdd", () => {
-  it("allows every held item to be replaced without changing build size", () => {
-    const fullBuild: Build = {
-      car: BASELINE_CAR,
-      board: ITEM_POOL.slice(0, SLOT_CAPACITY),
-      storage: Array(STORAGE_CAPACITY).fill(null),
-    };
-    const offeredItem = ITEM_POOL[SLOT_CAPACITY];
+  it("allows every installed item to be replaced without changing build size", () => {
+    const fullBuild = vehicleBuild(ITEM_POOL.slice(0, TEST_SLOT_COUNT));
+    const offeredItem = ITEM_POOL[TEST_SLOT_COUNT];
 
-    fullBuild.board.forEach((_, evictIndex) => {
+    fullBuild.slots.forEach((_slot, evictIndex) => {
       const result = evictAndAdd(fullBuild, evictIndex, offeredItem);
+      const resultItems = installedItems(result);
+      const originalItems = installedItems(fullBuild);
 
-      expect(result.board).toHaveLength(SLOT_CAPACITY);
-      expect(result.board[evictIndex]).toBe(offeredItem);
-      expect(result.board.filter((item) => item && !fullBuild.board.includes(item))).toEqual([
+      expect(result.slots).toHaveLength(TEST_SLOT_COUNT);
+      expect(resultItems[evictIndex]).toBe(offeredItem);
+      expect(resultItems.filter((item) => item && !originalItems.includes(item))).toEqual([
         offeredItem,
       ]);
     });
   });
 
   it("returns a new build and does not mutate the build or offered item", () => {
-    const build: Build = {
-      car: BASELINE_CAR,
-      board: ITEM_POOL.slice(0, SLOT_CAPACITY),
-      storage: Array(STORAGE_CAPACITY).fill(null),
-    };
-    const item = ITEM_POOL[SLOT_CAPACITY];
+    const build = vehicleBuild(ITEM_POOL.slice(0, TEST_SLOT_COUNT));
+    const item = ITEM_POOL[TEST_SLOT_COUNT];
     const buildSnapshot = structuredClone(build);
     const itemSnapshot = structuredClone(item);
 
     const result = evictAndAdd(build, 1, item);
 
     expect(result).not.toBe(build);
-    expect(result.board).not.toBe(build.board);
+    expect(result.slots).not.toBe(build.slots);
     expect(build).toEqual(buildSnapshot);
     expect(item).toEqual(itemSnapshot);
   });

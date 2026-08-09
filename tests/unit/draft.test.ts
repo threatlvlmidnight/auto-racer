@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { drawItem } from "../../src/simulation/draft";
 import type { OfferedItem } from "../../src/simulation/types";
+import { testItem } from "../fixtures/vehicle-build-fixtures";
 
 const POOL: OfferedItem[] = [
-  { id: "tagged-a", name: "Tagged A", timeModifier: -1, identityTag: "performance" },
-  { id: "tagged-b", name: "Tagged B", timeModifier: -2, identityTag: "performance" },
-  { id: "neutral-a", name: "Neutral A", timeModifier: -3 },
-  { id: "neutral-b", name: "Neutral B", timeModifier: -4 },
+  testItem({ id: "tagged-a", name: "Tagged A", price: 2, timeModifier: -1, identityTag: "performance" }),
+  testItem({ id: "tagged-b", name: "Tagged B", price: 2, timeModifier: -2, identityTag: "performance" }),
+  testItem({ id: "neutral-a", name: "Neutral A", price: 2, timeModifier: -3 }),
+  testItem({ id: "neutral-b", name: "Neutral B", price: 2, timeModifier: -4 }),
 ];
 
 function scriptedRng(...values: number[]): () => number {
