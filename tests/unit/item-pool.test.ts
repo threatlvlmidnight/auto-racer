@@ -34,8 +34,8 @@ const SHIPPED_BASE_VALUES: ReadonlyArray<{
 ];
 
 describe("ITEM_POOL", () => {
-  it("contains exactly 15 items with authored integer prices from 2 through 5", () => {
-    expect(ITEM_POOL).toHaveLength(15);
+  it("contains exactly 20 items with authored integer prices from 2 through 5", () => {
+    expect(ITEM_POOL).toHaveLength(20);
     ITEM_POOL.forEach((item) => {
       expect(Number.isInteger(item.price)).toBe(true);
       expect(item.price).toBeGreaterThanOrEqual(2);
@@ -93,7 +93,10 @@ describe("ITEM_POOL", () => {
 
 describe("ITEM_POOL feature-010 migration", () => {
   it("preserves every shipped ID, price, cooldown, buff link, storage flag, and base effect", () => {
-    expect(ITEM_POOL.map((item) => item.id)).toEqual(SHIPPED_BASE_VALUES.map((entry) => entry.id));
+    // Pins the original 15 in their shipped order; items added afterward
+    // (the demo-depth expansion) are exercised by the tests below instead.
+    expect(ITEM_POOL.slice(0, SHIPPED_BASE_VALUES.length).map((item) => item.id))
+      .toEqual(SHIPPED_BASE_VALUES.map((entry) => entry.id));
     SHIPPED_BASE_VALUES.forEach((expected) => {
       const item = ITEM_POOL.find((candidate) => candidate.id === expected.id)!;
       expect(item.price).toBe(expected.price);

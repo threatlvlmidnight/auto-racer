@@ -324,6 +324,112 @@ export const ITEM_POOL: ItemDefinition[] = [
       description: "Improvised: no additional consequence — it simply loses its Fitted clarity.",
     },
   },
+
+  // Items 016-020: demo-depth expansion (post-010), authored under the same
+  // 10-20 item ceiling as 003-item-pool-draft FR-001. Brings every origin to
+  // 5 items and Power/Chassis to an even 10/10 split.
+  {
+    id: "item-016",
+    name: "Ported Intake Manifold",
+    price: 3,
+    timeModifier: -1.5,
+    identityTag: "performance",
+    cooldown: 2,
+    origin: "backroads",
+    installationCategory: "power",
+    synergyTags: ["airflow", "gearing"],
+    fittedBehavior: {
+      kind: "time-modifier",
+      timeModifier: -0.3,
+      description: "Fitted: cast for the driveline it feeds — a further 0.30s per firing.",
+    },
+    improvisedBehavior: {
+      kind: "time-modifier",
+      timeModifier: 0.25,
+      description: "Improvised: choking a mismatched bore — 0.25s lost to turbulence.",
+    },
+  },
+  {
+    id: "item-017",
+    name: "Trail-Braking Pedal Box",
+    price: 2,
+    timeModifier: 0.55,
+    cooldown: 2,
+    origin: "backroads",
+    installationCategory: "chassis",
+    synergyTags: ["control", "pressure"],
+    fittedBehavior: {
+      kind: "time-modifier",
+      timeModifier: -0.25,
+      description: "Fitted: modulation reaches the chassis it was set for — recovers 0.25s of its own penalty.",
+    },
+    improvisedBehavior: {
+      kind: "none",
+      description: "Improvised: no additional consequence — it simply loses its Fitted modulation.",
+    },
+  },
+  {
+    id: "item-018",
+    name: "Twin-Choke Carburetor",
+    price: 4,
+    timeModifier: -2.35,
+    identityTag: "performance",
+    cooldown: 3,
+    origin: "coachworks",
+    installationCategory: "power",
+    synergyTags: ["gearing", "heat"],
+    fittedBehavior: {
+      kind: "time-modifier",
+      timeModifier: -0.4,
+      description: "Fitted: jetted for this exact intake — a further 0.40s per firing.",
+    },
+    improvisedBehavior: {
+      kind: "time-modifier",
+      timeModifier: 0.3,
+      description: "Improvised: choked by a mismatched manifold — 0.30s lost to a rich mixture.",
+    },
+  },
+  {
+    id: "item-019",
+    name: "Banked Velodrome Wheels",
+    price: 2,
+    timeModifier: -0.8,
+    cooldown: 1,
+    origin: "velodrome",
+    installationCategory: "power",
+    synergyTags: ["momentum", "lightweight"],
+    fittedBehavior: {
+      kind: "time-modifier",
+      timeModifier: -0.15,
+      description: "Fitted: true to the hub they were balanced for — a further 0.15s per firing.",
+    },
+    improvisedBehavior: {
+      kind: "time-modifier",
+      timeModifier: 0.15,
+      description: "Improvised: fighting an unfamiliar offset — 0.15s lost to vibration.",
+    },
+  },
+  {
+    id: "item-020",
+    name: "Reinforced Axle Housing",
+    price: 5,
+    timeModifier: -1.95,
+    identityTag: "performance",
+    cooldown: 4,
+    origin: "fieldworks",
+    installationCategory: "power",
+    synergyTags: ["traction", "material"],
+    fittedBehavior: {
+      kind: "time-modifier",
+      timeModifier: -0.45,
+      description: "Fitted: sized for the hub it was forged for — a further 0.45s per firing.",
+    },
+    improvisedBehavior: {
+      kind: "time-modifier",
+      timeModifier: 0.35,
+      description: "Improvised: shimmed to fit — 0.35s lost to play in the mount.",
+    },
+  },
 ];
 
 export const SAMPLE_GHOST: SampleGhost = {
