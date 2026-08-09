@@ -57,8 +57,9 @@ tuned duration with no speed or skip control present.
 
 ### User Story 2 - Understand why a car is winning or losing while watching (Priority: P1)
 
-While watching, a player wants to know *why* a car is pulling ahead or
-falling back — because a race that's watchable but unexplainable doesn't
+While watching, a player wants to know *why* their own car is pulling ahead
+or falling back, and wants a readable account of what the field around them
+is doing — because a race that's watchable but unexplainable doesn't
 satisfy this project's transparency bar any better than a results table
 would.
 
@@ -68,24 +69,30 @@ would.
 established for the 1v1 case).
 
 **Independent Test**: Resolve a contest containing at least one direct item
-firing and one buff firing; confirm a visible motion/flash cue and a
-matching commentary ticker line appear at the exact moment each fires, and
-confirm no cue or ticker line ever appears for an event that isn't in the
-underlying precomputed result.
+firing and one buff firing on the player's own car; confirm a visible
+board-flash cue and a matching commentary ticker line appear at the exact
+moment each fires, confirm rival firings never produce a dedicated visual
+cue of their own (only the player's board flashes), and confirm no cue or
+ticker line ever appears for an event that isn't in the underlying
+precomputed result.
 
 **Acceptance Scenarios**:
 
-1. **Given** a car's item fires on a given lap (per its precomputed lap
-   breakdown), **When** that lap plays, **Then** a visible cue (at minimum,
-   the existing board-flash pattern extended per car) appears at that exact
+1. **Given** the player's own item fires on a given lap (per its
+   precomputed lap breakdown), **When** that lap plays, **Then** the
+   existing board-flash cue appears on the player's own board at that exact
    moment, and a commentary ticker line names the event in the game's own
    voice (its item, its effect) — not Alex's POC copy, not a generic
    placeholder.
-2. **Given** the watched presentation is playing, **When** any visible cue,
-   ticker line, or motion effect appears, **Then** it can be traced back to
-   a fact already present in the precomputed contest result — nothing is
-   invented at render time from randomness (Constitution Principle III).
-3. **Given** a car with no discrete firing on a given lap (e.g. only a flat,
+2. **Given** a rival's item fires, **When** that lap plays, **Then** no
+   dedicated visual cue appears for it (the player's board-flash pattern is
+   not extended to rivals); the event is narrated through the commentary
+   ticker only, per the ticker's curation rule (FR-006).
+3. **Given** the watched presentation is playing, **When** any visible cue
+   or ticker line appears, **Then** it can be traced back to a fact already
+   present in the precomputed contest result — nothing is invented at
+   render time from randomness (Constitution Principle III).
+4. **Given** a car with no discrete firing on a given lap (e.g. only a flat,
    always-on buff), **When** that lap plays, **Then** no false firing cue
    or ticker line is generated for it — matching the existing flat-buff
    no-flash rule from `006-race-visualizer`.
@@ -137,15 +144,17 @@ underlying precomputed result.
 - **FR-004**: The system MUST show a live standings view reflecting every
   car's position at the current moment of playback, updating continuously
   as the presentation plays — not only a value revealed at the end.
-- **FR-005**: The system MUST show a visible cue at the exact moment a
-  car's item fires (per that lap's precomputed firing record), extending
-  the existing per-lap flash pattern to every car in the field, not only
-  the player.
+- **FR-005**: The system MUST show the existing per-lap board-flash cue only
+  for the player's own item firings. This cue is NOT extended to rivals —
+  rivals have no dedicated visual firing cue; their events are narrated
+  through the commentary ticker only (FR-006).
 - **FR-006**: The system MUST show a live commentary ticker narrating
-  precomputed events (firings, finishes, and any position changes derived
-  from comparing precomputed per-car progress across time) in the game's
-  own voice and mechanics — never copy ported from the Skribidi Skids POC,
-  never inventing an event absent from the underlying result.
+  precomputed events in the game's own voice and mechanics — never copy
+  ported from the Skribidi Skids POC, never inventing an event absent from
+  the underlying result. The ticker MUST be curated, not exhaustive: the
+  player's own events are always narrated; a rival's events are narrated
+  only for notable moments (at minimum: taking the lead, and finishing) —
+  not every rival firing.
 - **FR-007**: The system MUST NOT introduce any live or non-deterministic
   randomness into the presentation. Every visible cue, ticker line, or
   motion effect MUST be derivable from the precomputed result and,
@@ -181,13 +190,16 @@ underlying precomputed result.
   ellipse. Selection is presentation-only; it never affects lap times,
   standings, or any value already fixed by `012-multi-ghost-contest`'s
   result.
-- **Playback Cue**: A visible, per-car, per-moment event (a firing flash,
-  a motion/trail effect) derived from that car's precomputed lap
-  breakdown. Never authored or randomized independently of the result it
-  renders.
+- **Playback Cue**: A visible, per-moment event derived from a precomputed
+  lap breakdown. The player's own board-flash cue is the only dedicated
+  Playback Cue in this feature; rivals have none — their events surface
+  only as Ticker Lines. Never authored or randomized independently of the
+  result it renders.
 - **Ticker Line**: A single commentary entry, timestamped to a moment in
   the precomputed playback schedule, describing a firing, a finish, or a
-  derived position change. Purely a text/voice layer over facts that
+  derived position change. Curated, not exhaustive: always present for the
+  player's own events; present for a rival only at notable moments (taking
+  the lead, finishing). Purely a text/voice layer over facts that
   already exist elsewhere in the result — carries no simulation authority
   of its own.
 
