@@ -118,22 +118,22 @@ src/
 │   └── tracks.ts                    (NEW) - 3 hand-authored fixed track
 │                                       shapes (closed-loop point paths)
 ├── simulation/
-│   └── tracks.ts                    (NEW) - selectTrack(runSeed,
-│                                       pvpStageOrdinal) -> Track, pure
-│                                       and deterministic
-├── scenes/
-│   ├── playback.ts                  (MODIFIED) - PlaybackSchedule/
-│   │                                   frameStateAt extended to
-│   │                                   cars: CarSchedule[]; new
-│   │                                   standingsAt shared derivation
-│   ├── ContestScene.ts              (MODIFIED) - render the selected
-│   │                                   track shape, N car markers with
-│   │                                   trail/heading, live standings
-│   │                                   sidebar, curated ticker; only the
-│   │                                   player's board still flashes
-│   └── contestFormatting.ts         (MODIFIED) - N-car standings/ticker
-│                                       label formatting, replacing
-│                                       leaderLabel's 2-car-only shape
+│   ├── tracks.ts                    (NEW) - selectTrack(runSeed,
+│   │                                   pvpStageOrdinal) -> Track, pure
+│   │                                   and deterministic
+│   └── playback.ts                  (MODIFIED) - PlaybackSchedule/
+│                                       frameStateAt extended to
+│                                       cars: CarSchedule[]; new
+│                                       standingsAt shared derivation
+└── scenes/
+    ├── ContestScene.ts              (MODIFIED) - render the selected
+    │                                   track shape, N car markers with
+    │                                   trail/heading, live standings
+    │                                   sidebar, curated ticker; only the
+    │                                   player's board still flashes
+    └── contestFormatting.ts         (MODIFIED) - N-car standings/ticker
+                                        label formatting, replacing
+                                        leaderLabel's 2-car-only shape
 
 tests/
 ├── unit/
