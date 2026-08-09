@@ -7,15 +7,23 @@ import {
   purchaseStock,
   restockSupplier,
   type PartsSupplierPayload,
-  type PlacementCommand,
   type RewardDraftPayload,
 } from "../simulation/encounters";
-import type { Run } from "../simulation/run";
-import { moveToBoard, moveToStorage, swapBoardStorage } from "../simulation/storage";
+import { RunTransitionError, type Run } from "../simulation/run";
+import {
+  commitGarageCommand,
+  previewGarageCommand,
+  type GarageDestination,
+  type GarageReplacement,
+  type GarageSource,
+} from "../simulation/garage";
 import type { OfferedItem } from "../simulation/types";
 import type { PracticeOriginInput, ProtectedPreparationOrigin } from "../simulation/practice";
-import { installedItems, storedItems } from "../simulation/slots";
-import { vehicleById } from "../content/entrants";
+import {
+  garageSlotModels,
+  garageStorageModels,
+  garageVehicleHeader,
+} from "./garagePresentation";
 import { createItemCard, enableItemTooltip } from "./itemVisuals";
 import {
   addDemoBackdrop,
@@ -36,6 +44,7 @@ export class PrepareScene extends Phaser.Scene {
   private run?: Run;
   private objects: Phaser.GameObjects.GameObject[] = [];
   private selectedOfferId: string | null = null;
+  private statusMessage: string | null = null;
 
   constructor() {
     super("PrepareScene");
@@ -49,13 +58,14 @@ export class PrepareScene extends Phaser.Scene {
     }
     this.run = run;
     this.selectedOfferId = data.originState?.selection ?? null;
+    this.statusMessage = null;
     if (run.activeEncounter.type !== "reward-draft" && run.activeEncounter.type !== "parts-supplier") {
       this.scene.start("RunScene", { run });
       return;
     }
     addDemoBackdrop(this, "workshop", 0.7);
     addHeaderBand(this);
-    this.add.image(400, 303, "player-vehicle").setDisplaySize(360, 180).setAlpha(0.08);
+    this.add.image(400, 303, `vehicle-${run.identity.vehicleId}`).setDisplaySize(360, 180).setAlpha(0.1);
     this.render();
   }
 
@@ -65,6 +75,7 @@ export class PrepareScene extends Phaser.Scene {
     const run = this.run!;
     const encounter = run.activeEncounter!;
     const supplier = encounter.type === "parts-supplier";
+    const header = garageVehicleHeader(run.identity);
     // Purchases and restocks mutate credits in place and then re-render, so the
     // stamp is tracked here rather than drawn once in create() — otherwise the
     // header keeps the credit count the scene was entered with.
@@ -79,8 +90,18 @@ export class PrepareScene extends Phaser.Scene {
     if (supplier) this.renderSupplier(encounter.payload as PartsSupplierPayload);
     else this.renderReward(encounter.payload as RewardDraftPayload);
     this.createControl(680, 170, "TEST DAY", () => this.openTestDay());
-    this.renderSlotRow(installedRowLabel(run), installedItems(run.build), BOARD_Y, "board");
-    this.renderSlotRow("WORKSHOP STORAGE · INERT BY DEFAULT", storedItems(run.build), STORAGE_Y, "storage");
+    this.renderSlots(header.label, header.topologyLabel);
+    this.renderStorage(header.storageLabel);
+
+    if (this.statusMessage) {
+      this.track(this.add.text(this.scale.width / 2, STORAGE_Y + SLOT_HEIGHT / 2 + 22, this.statusMessage, {
+        fontSize: "12px",
+        fontFamily: UI_FONT,
+        color: "#d9a7a7",
+        align: "center",
+        wordWrap: { width: this.scale.width - 80 },
+      }).setOrigin(0.5));
+    }
   }
 
   private renderReward(payload: RewardDraftPayload): void {
@@ -140,31 +161,39 @@ export class PrepareScene extends Phaser.Scene {
     this.input.setDraggable(card);
     card.on("drag", (_pointer: Phaser.Input.Pointer, dragX: number, dragY: number) => card.setPosition(dragX, dragY));
     card.on("drop", (_pointer: Phaser.Input.Pointer, zone: Phaser.GameObjects.Zone) => {
-      // Drop zones still carry the legacy area/index pair; translate it into the
-      // garage's stable slot-id destination. The full garage rewrite is US2
-      // T028/T030 — this keeps acquisition working against the new contract.
-      const zoneArea = zone.getData("area") as "board" | "storage";
-      const zoneIndex = zone.getData("index") as number;
-      const placement: PlacementCommand = zoneArea === "storage"
-        ? { area: "storage", index: zoneIndex }
-        : { area: "vehicle", slotId: this.run!.build.slots[zoneIndex]?.slotId ?? "" };
-      const encounter = this.run!.activeEncounter!;
-      if (encounter.type === "reward-draft") {
-        const next = acceptReward(this.run!, encounter.id, offerId, placement, Math.random);
-        this.scene.start("RunScene", { run: next });
-      } else {
-        this.run = purchaseStock(this.run!, encounter.id, offerId, placement);
-        this.render();
-      }
+      const destination = zone.getData("destination") as GarageDestination;
+      this.acquireOffer(offerId, destination);
     });
     card.on("dragend", () => {
       if (card.active) card.setPosition(x, y);
     });
   }
 
-  private renderSlotRow(label: string, slots: (OfferedItem | null)[], y: number, area: "board" | "storage"): void {
-    // The vehicle row now holds four slots (feature 010), which no longer fit at
-    // the original fixed width. Size slots to the available canvas so no slot is
+  /** Acquisition only targets an open destination; a full replace/evict flow for
+   *  offers is not yet implemented, so an occupied target is reported, not silently
+   *  dropped. */
+  private acquireOffer(offerId: string, destination: GarageDestination): void {
+    const encounter = this.run!.activeEncounter!;
+    try {
+      if (encounter.type === "reward-draft") {
+        const next = acceptReward(this.run!, encounter.id, offerId, destination, Math.random);
+        this.scene.start("RunScene", { run: next });
+        return;
+      }
+      this.run = purchaseStock(this.run!, encounter.id, offerId, destination);
+      this.statusMessage = null;
+      this.render();
+    } catch (error) {
+      if (!(error instanceof RunTransitionError)) throw error;
+      this.statusMessage = "That position is occupied — move or store the current item first.";
+      this.render();
+    }
+  }
+
+  private renderSlots(label: string, topologyLabel: string): void {
+    const slots = garageSlotModels(this.run!.build);
+    // The vehicle row holds four slots (feature 010), which no longer fit at the
+    // original fixed width. Size slots to the available canvas so no slot is
     // clipped at either edge, capped so the three-slot storage row is unchanged.
     const margin = 24;
     const available = this.scale.width - margin * 2;
@@ -174,25 +203,80 @@ export class PrepareScene extends Phaser.Scene {
     );
     const totalWidth = slots.length * slotWidth + (slots.length - 1) * SLOT_GAP;
     const startX = (this.scale.width - totalWidth) / 2 + slotWidth / 2;
-    this.track(this.add.text(startX - slotWidth / 2, y - SLOT_HEIGHT / 2 - 24, label, {
+    this.track(this.add.text(startX - slotWidth / 2, BOARD_Y - SLOT_HEIGHT / 2 - 24, `${label} · ${topologyLabel}`, {
       fontSize: "13px",
       fontFamily: UI_FONT,
       fontStyle: "bold",
-      color: area === "board" ? "#ffdd77" : "#9eb5c9",
+      color: "#ffdd77",
     }));
-    slots.forEach((item, index) => {
+    slots.forEach((slot, index) => {
       const x = startX + index * (slotWidth + SLOT_GAP);
-      const zone = this.add.zone(x, y, slotWidth, SLOT_HEIGHT).setRectangleDropZone(slotWidth, SLOT_HEIGHT);
-      zone.setData("area", area).setData("index", index);
+      const destination: GarageDestination = { area: "vehicle", slotId: slot.slotId };
+      const zone = this.add.zone(x, BOARD_Y, slotWidth, SLOT_HEIGHT).setRectangleDropZone(slotWidth, SLOT_HEIGHT);
+      zone.setData("destination", destination);
       this.track(zone);
-      this.track(this.add.rectangle(x, y, slotWidth, SLOT_HEIGHT, item ? 0x263640 : 0x171d21)
-        .setStrokeStyle(2, item ? 0x6f91a8 : 0x45515a));
-      if (item) this.createHeldItem(x, y, item, area, index, slotWidth);
-      else this.track(this.add.text(x, y, `Empty ${area === "board" ? "vehicle" : "storage"} slot ${index + 1}`, {
-        fontSize: "11px",
+      this.track(this.add.rectangle(x, BOARD_Y, slotWidth, SLOT_HEIGHT, slot.occupied ? 0x263640 : 0x171d21)
+        .setStrokeStyle(2, slot.occupied ? 0x6f91a8 : 0x45515a));
+      this.track(this.add.text(x - slotWidth / 2 + 6, BOARD_Y - SLOT_HEIGHT / 2 - 9, slot.typeLabel, {
+        fontSize: "9px",
         fontFamily: UI_FONT,
-        color: "#839b98",
-      }).setOrigin(0.5));
+        fontStyle: "bold",
+        color: "#9eb5c9",
+      }));
+      const item = this.run!.build.slots[index].item;
+      if (item) {
+        this.createHeldItem(x, BOARD_Y, item, { area: "vehicle", slotId: slot.slotId }, slotWidth, slot.installationLabel);
+      } else {
+        this.track(this.add.text(x, BOARD_Y, `Empty ${slot.typeLabel.toLowerCase()} slot`, {
+          fontSize: "11px",
+          fontFamily: UI_FONT,
+          color: "#839b98",
+        }).setOrigin(0.5));
+      }
+    });
+  }
+
+  private renderStorage(label: string): void {
+    const positions = garageStorageModels(this.run!.build);
+    const margin = 24;
+    const available = this.scale.width - margin * 2;
+    const slotWidth = Math.min(
+      SLOT_WIDTH,
+      Math.floor((available - (positions.length - 1) * SLOT_GAP) / positions.length),
+    );
+    const totalWidth = positions.length * slotWidth + (positions.length - 1) * SLOT_GAP;
+    const startX = (this.scale.width - totalWidth) / 2 + slotWidth / 2;
+    this.track(this.add.text(startX - slotWidth / 2, STORAGE_Y - SLOT_HEIGHT / 2 - 24, label, {
+      fontSize: "13px",
+      fontFamily: UI_FONT,
+      fontStyle: "bold",
+      color: "#9eb5c9",
+    }));
+    positions.forEach((position, index) => {
+      const x = startX + index * (slotWidth + SLOT_GAP);
+      const destination: GarageDestination = { area: "storage", index: position.index };
+      const zone = this.add.zone(x, STORAGE_Y, slotWidth, SLOT_HEIGHT).setRectangleDropZone(slotWidth, SLOT_HEIGHT);
+      zone.setData("destination", destination);
+      this.track(zone);
+      this.track(this.add.rectangle(x, STORAGE_Y, slotWidth, SLOT_HEIGHT, position.occupied ? 0x263640 : 0x171d21)
+        .setStrokeStyle(2, position.occupied ? 0x6f91a8 : 0x45515a));
+      const item = this.run!.build.storage[index].item;
+      if (item) {
+        this.createHeldItem(
+          x,
+          STORAGE_Y,
+          item,
+          { area: "storage", index: position.index },
+          slotWidth,
+          position.storageActive ? "Active while stored" : null,
+        );
+      } else {
+        this.track(this.add.text(x, STORAGE_Y, `Empty storage ${index + 1}`, {
+          fontSize: "11px",
+          fontFamily: UI_FONT,
+          color: "#839b98",
+        }).setOrigin(0.5));
+      }
     });
   }
 
@@ -200,35 +284,44 @@ export class PrepareScene extends Phaser.Scene {
     x: number,
     y: number,
     item: OfferedItem,
-    sourceArea: "board" | "storage",
-    sourceIndex: number,
-    slotWidth: number = SLOT_WIDTH,
+    source: GarageSource,
+    slotWidth: number,
+    stateLabel: string | null,
   ): void {
     const card = createItemCard(this, x, y, item, { width: slotWidth - 16, height: SLOT_HEIGHT - 8 })
       .setInteractive({ useHandCursor: true });
     this.track(card);
     enableItemTooltip(this, card, item);
+    if (stateLabel) {
+      this.track(this.add.text(x, y + SLOT_HEIGHT / 2 - 3, stateLabel, {
+        fontSize: "9px",
+        fontFamily: UI_FONT,
+        color: "#9eb5c9",
+      }).setOrigin(0.5, 1));
+    }
     this.input.setDraggable(card);
     card.on("drag", (_pointer: Phaser.Input.Pointer, dragX: number, dragY: number) => card.setPosition(dragX, dragY));
     card.on("drop", (_pointer: Phaser.Input.Pointer, zone: Phaser.GameObjects.Zone) => {
-      const targetArea = zone.getData("area") as "board" | "storage";
-      const targetIndex = zone.getData("index") as number;
-      if (sourceArea === targetArea) return;
-      let build = this.run!.build;
-      if (sourceArea === "board") {
-        if (build.storage[targetIndex]?.item != null) return;
-        build = moveToStorage(build, sourceIndex, targetIndex);
-      } else if (build.slots[targetIndex]?.item == null) {
-        build = moveToBoard(build, sourceIndex, targetIndex);
-      } else {
-        build = swapBoardStorage(build, targetIndex, sourceIndex);
-      }
-      this.run = { ...this.run!, build };
-      this.render();
+      const destination = zone.getData("destination") as GarageDestination;
+      this.moveHeldItem(source, destination);
     });
     card.on("dragend", () => {
       if (card.active) card.setPosition(x, y);
     });
+  }
+
+  /** Rearranging items already on the vehicle or in storage never loses one —
+   *  an occupied destination swaps rather than requiring a replace/evict choice. */
+  private moveHeldItem(source: GarageSource, destination: GarageDestination): void {
+    const build = this.run!.build;
+    const preview = previewGarageCommand({ build }, { source, destination, replacement: "none" });
+    if (preview.reason && preview.reason !== "requires-confirmation") return;
+    const replacement: GarageReplacement = preview.occupant ? "swap" : "none";
+    const result = commitGarageCommand({ build }, { source, destination, replacement });
+    if (result.kind !== "committed") return;
+    this.run = { ...this.run!, build: result.build };
+    this.statusMessage = null;
+    this.render();
   }
 
   private createControl(x: number, y: number, label: string, action: () => void, options: { enabled?: boolean } = {}): void {
@@ -256,14 +349,4 @@ export class PrepareScene extends Phaser.Scene {
     this.objects.push(object);
     return object;
   }
-}
-
-/**
- * Names the active-build row after the run's actual named vehicle. The full
- * garage surface is feature 010 US2 (Phase 4); this keeps the label truthful
- * for whichever entrant is running rather than hardcoding one vehicle.
- */
-function installedRowLabel(run: Run): string {
-  const vehicle = vehicleById(run.identity.vehicleId);
-  return `${(vehicle?.name ?? "VEHICLE").toUpperCase()} · INSTALLED`;
 }
