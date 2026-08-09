@@ -169,18 +169,58 @@ variety is a separate future feature.
 
 ---
 
-## 8. Pre-race intel
+## 8. Pre-race screen (expanded, post-decision addition — 2026-08-09)
 
-**Decision**: Adopt a Rival Intel panel shown before racing. Resolves the
-already-anticipated "Rival Scouting" encounter from `009-run-progression`'s
-Phase-two catalog (`specs/DEFERRED.md`).
+*Originally scoped as "Pre-race intel" (a read-only Rival Intel panel).
+Expanded the same day, after re-reading this document, into a second
+candidate for the "add a dimension outside the car" depth request from the
+demo — see "On the depth question" below.*
 
-**Adjustments**: Exact numbers, no fuzzing or approximation. Alex's
-"rumored to run dirty" hint is replaced with full precision — consistent
-with Constitution Principle III (Transparency & Legibility). If a value is
-shown, it is true, not a hint.
+**Decision**: Adopt a real pre-race screen, not just a stats panel:
 
-**Owner**: `009-run-progression`'s Phase-two catalog.
+- **Rival Intel** (the original scope): exact, non-fuzzed opponent stats
+  shown before the race. Resolves the already-anticipated "Rival Scouting"
+  encounter from `009-run-progression`'s Phase-two catalog
+  (`specs/DEFERRED.md`). Alex's "rumored to run dirty" hint is replaced
+  with full precision — consistent with Constitution Principle III
+  (Transparency & Legibility). If a value is shown, it is true, not a hint.
+- **Track preview**: the player sees the actual track for the upcoming
+  race before it starts. This is the same track that actually races —
+  reinforces §2's direction toward a small, pre-authored track catalog
+  with deterministic selection, since the previewed track and the raced
+  track (and what every other viewer of an async multiplayer race sees)
+  must all be identical.
+- **Item-driven pre-race controls**: for builds holding an item authored as
+  "configurable," the screen exposes a small, simple control tied to that
+  item — e.g. a build around an adaptive-brakes-style item gets a brake-bias
+  slider, tuned against that specific track. A build with no configurable
+  items sees no controls; this rewards a specific build choice, it isn't a
+  mandatory extra step for everyone.
+
+**Explicit scope guardrail** (owner's words: *"we wouldn't want to go
+overboard here"*): this stays a small number of simple controls — order of
+magnitude 1-3 configurable dimensions across the whole item pool at
+launch — not a full tuning/setup simulation. Whatever the player sets is
+locked in before the contest starts and becomes part of that race's
+precomputed input, consistent with Principle I (no live input once the
+contest starts) and Principle III (the setting and its effect on the
+outcome must be inspectable after the fact, same as any other
+outcome-determining value).
+
+**Open — for `/speckit.clarify`, not decided here**:
+- What "configurable" looks like as an authored field on `ItemDefinition`
+  (a new optional field, shaped like the existing `fittedBehavior`/
+  `improvisedBehavior` pattern, seems like the natural fit — not decided).
+- What track "characteristics" a control can actually tune against — this
+  depends on §2's track model landing first (today's track has no real
+  geometry to tune brake bias against).
+- How many configurable dimensions ship at launch, and which items get them.
+- Whether this is its own scene or an extension of an existing prepare-
+  adjacent flow.
+
+**Owner**: new feature, working title `pre-race-setup`. Depends on §2
+(`race-spectacle`) for a real track to preview and tune against — cannot
+be specified in detail before that track model exists.
 
 ---
 
@@ -199,6 +239,27 @@ is proven out.
 
 ---
 
+## On the depth question
+
+The demo feedback that started this whole review ("the run feels short, we
+need another dimension outside the car") now has two complementary
+candidate answers on record, not competing ones:
+
+1. **Season length/structure** (§7) — more encounters, more of the run
+   itself, extending `009-run-progression`'s already-planned Phase-two
+   catalog.
+2. **The pre-race screen** (§8) — a lighter-weight, per-race dimension:
+   most of the time it's just Rival Intel and a track preview, but a build
+   that leans into configurable items gets a genuine extra decision point
+   every race, without becoming mandatory busywork for builds that don't.
+
+Neither replaces the slot-capacity question already logged in
+`specs/DEFERRED.md` ("Expand active slot capacity... toward ~10") — that
+one is still explicitly waiting on this demo's own playtest data, per that
+row's own text, and stays open regardless of how §7/§8 land.
+
+---
+
 ## Summary
 
 | # | System | Decision | Owner |
@@ -210,7 +271,7 @@ is proven out.
 | 5 | Duplicate items | Adopt (tiering to ★3) | folded into acquisition work |
 | 6 | Economy | Adopt (in full) | `economy-depth` (new) |
 | 7 | Season structure | Adopt (length first, variety later) | extends `009-run-progression` |
-| 8 | Pre-race intel | Adopt (exact numbers) | `009-run-progression` Phase-two |
+| 8 | Pre-race screen | Adopt + expand (rival intel + track preview + item-driven controls) | `pre-race-setup` (new, depends on §2) |
 | 9 | Sabotage / inspection | Reject (for now) | none — `DEFERRED.md` |
 
 ## Next steps
@@ -222,6 +283,9 @@ is proven out.
   dedicated `/speckit.clarify` pass before `/speckit.plan` starts on
   `race-spectacle` — do not let an implementation detail get decided by
   default inside an unrelated plan.
+- `pre-race-setup` (§8) cannot be meaningfully specified until
+  `race-spectacle` (§2) has landed a real track model — sequence it after,
+  not alongside.
 - §4 (synergy), §5 (duplicates), and §6 (economy) have no cross-dependency
   on §1/§2 and can be sequenced independently, per the constitution's
   Development Workflow preference for small, vertically-sliced features.
