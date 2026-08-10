@@ -151,9 +151,12 @@ only their authored base description.
   `boostPercent × matching count`, per `007-count-synergy-buff`) MUST
   remain authorable against a `synergyTags`/`installationCategory` target,
   not only the identity tag.
-- **FR-004**: An exact-count condition (e.g. "only if exactly 1 matching
-  item is held") MUST be authorable as an alternative to linear scaling —
-  tag-conditional effects are not limited to "more is better."
+- **FR-004**: An exact-count condition on the number of *other* matching
+  items held (e.g. "only if zero other matching items are held" — the
+  "lone Power item" case) MUST be authorable as an alternative to linear
+  scaling, for any count N, not just zero — tag-conditional effects are
+  not limited to "more is better." Counts in this condition always
+  exclude the source item itself (FR-006).
 - **FR-005**: Counting toward a tag/category target counts only actively
   installed items (on the vehicle's active slots) — a stored item does
   NOT count, regardless of how many other items share its target. This is
@@ -186,6 +189,18 @@ only their authored base description.
 - **FR-011**: Tag/category targeting and conditional-effect authoring
   MUST NOT vary by player entrant or by any purchasable content or
   currency (Constitution Principle II, Fairness).
+- **FR-012**: The condition vocabulary (linear per-count scaling,
+  exact-other-count) MUST be structured so a new condition shape can be
+  added later — by planning and authoring a new condition, not by
+  reworking existing items, their tests, or already-shipped Boost-Others/
+  Self-Conditional effects. This feature ships only the two shapes above;
+  extensibility is a structural property of how they're represented, not
+  a promise to build additional shapes now.
+- **FR-013**: This feature explicitly does NOT include a build-wide
+  "active synergies" overview panel. Live values are surfaced per item,
+  through each item's own inspector (extending `010-entrant-vehicle-
+  garage`'s `garageItemInspector` pattern) — a summary view remains a
+  possible later addition, not a gap in this pass.
 
 ### Key Entities
 
