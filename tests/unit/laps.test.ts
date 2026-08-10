@@ -409,3 +409,246 @@ describe("firesOnLap", () => {
     expect(firesOnLap(3, 4)).toBe(firesOnLap(3, 4));
   });
 });
+
+describe("simulatePlayerLaps — synergy fold (014-item-synergy-tags, Foundational)", () => {
+  it("folds a Boost-Others effect into the target direct item's own contribution, attributed to the source", () => {
+    const source = testItem({
+      id: "boost-source",
+      name: "Boost Source",
+      price: 1,
+      timeModifier: 0,
+      synergyEffects: [
+        {
+          target: { kind: "tag", tag: "gearing" },
+          appliesTo: "others",
+          condition: { kind: "linear-per-count", percentPerMatch: 10 },
+          description: "Boosts gearing items by 10% per matching item.",
+        },
+      ],
+    });
+    const target = testItem({
+      id: "boost-target",
+      name: "Boost Target",
+      price: 1,
+      timeModifier: -10,
+      cooldown: 1,
+      synergyTags: ["gearing"],
+    });
+    const lap = simulatePlayerLaps(vehicleBuild([source, target]))[0];
+    const targetContribution = lap.contributions.find((entry) => entry.sourceItemId === "boost-target")!;
+
+    expect(targetContribution.resultingContribution).toBeCloseTo(-11);
+    expect(targetContribution.synergy).toEqual([
+      {
+        sourceItemId: "boost-source",
+        target: { kind: "tag", tag: "gearing" },
+        conditionKind: "linear-per-count",
+        appliedPercent: 10,
+        description: source.synergyEffects![0].description,
+      },
+    ]);
+  });
+
+  it("leaves a target item's contribution unchanged and synergy undefined when nothing shares its target tag", () => {
+    const source = testItem({
+      id: "boost-source",
+      name: "Boost Source",
+      price: 1,
+      timeModifier: 0,
+      synergyEffects: [
+        {
+          target: { kind: "tag", tag: "gearing" },
+          appliesTo: "others",
+          condition: { kind: "linear-per-count", percentPerMatch: 10 },
+          description: "Boosts gearing items by 10% per matching item.",
+        },
+      ],
+    });
+    const unrelated = testItem({
+      id: "unrelated",
+      name: "Unrelated",
+      price: 1,
+      timeModifier: -10,
+      cooldown: 1,
+      synergyTags: ["momentum"],
+    });
+    const lap = simulatePlayerLaps(vehicleBuild([source, unrelated]))[0];
+    const contribution = lap.contributions.find((entry) => entry.sourceItemId === "unrelated")!;
+
+    expect(contribution.resultingContribution).toBe(-10);
+    expect(contribution.synergy).toBeUndefined();
+  });
+
+  it("folds a Self-Conditional bonus into the item's own contribution when its lone-item condition is met", () => {
+    const loneItem = testItem({
+      id: "lone-power",
+      name: "Lone Power",
+      price: 1,
+      timeModifier: -4,
+      cooldown: 1,
+      installationCategory: "power",
+      synergyEffects: [
+        {
+          target: { kind: "category", category: "power" },
+          appliesTo: "self",
+          condition: { kind: "exact-other-count", count: 0, bonusPercent: 50 },
+          description: "+50% if the only Power item held.",
+        },
+      ],
+    });
+    const alone = simulatePlayerLaps(vehicleBuild([loneItem]))[0];
+    const aloneContribution = alone.contributions.find((entry) => entry.sourceItemId === "lone-power")!;
+
+    expect(aloneContribution.resultingContribution).toBeCloseTo(-6);
+    expect(aloneContribution.synergy).toEqual([
+      {
+        sourceItemId: "lone-power",
+        target: { kind: "category", category: "power" },
+        conditionKind: "exact-other-count",
+        appliedPercent: 50,
+        description: loneItem.synergyEffects![0].description,
+      },
+    ]);
+  });
+
+  it("stops applying the Self-Conditional bonus once a second matching item is held, keeping the base effect", () => {
+    const loneItem = testItem({
+      id: "lone-power",
+      name: "Lone Power",
+      price: 1,
+      timeModifier: -4,
+      cooldown: 1,
+      installationCategory: "power",
+      synergyEffects: [
+        {
+          target: { kind: "category", category: "power" },
+          appliesTo: "self",
+          condition: { kind: "exact-other-count", count: 0, bonusPercent: 50 },
+          description: "+50% if the only Power item held.",
+        },
+      ],
+    });
+    const otherPower = testItem({
+      id: "other-power",
+      name: "Other Power",
+      price: 1,
+      timeModifier: -2,
+      cooldown: 1,
+      installationCategory: "power",
+    });
+    const paired = simulatePlayerLaps(vehicleBuild([loneItem, otherPower]))[0];
+    const pairedContribution = paired.contributions.find((entry) => entry.sourceItemId === "lone-power")!;
+
+    expect(pairedContribution.resultingContribution).toBe(-4);
+    expect(pairedContribution.synergy).toBeUndefined();
+  });
+
+  it("folds a Boost-Others effect into a buff item's boostPercent, changing what it grants downstream", () => {
+    const source = testItem({
+      id: "boost-source",
+      name: "Boost Source",
+      price: 1,
+      timeModifier: 0,
+      synergyEffects: [
+        {
+          target: { kind: "tag", tag: "avionics" },
+          appliesTo: "others",
+          condition: { kind: "linear-per-count", percentPerMatch: 10 },
+          description: "Boosts avionics items by 10% per matching item.",
+        },
+      ],
+    });
+    const flatBuff = testItem({
+      id: "flat-buff",
+      name: "Flat Buff",
+      price: 1,
+      timeModifier: 0,
+      identityTag: "performance",
+      buff: { boostPercent: 5 },
+      synergyTags: ["avionics"],
+    });
+    const directRecipient = testItem({
+      id: "direct-recipient",
+      name: "Direct Recipient",
+      price: 1,
+      timeModifier: -10,
+      cooldown: 1,
+      identityTag: "performance",
+    });
+    const lap = simulatePlayerLaps(vehicleBuild([source, flatBuff, directRecipient]))[0];
+    const buffContribution = lap.contributions.find((entry) => entry.sourceItemId === "flat-buff")!;
+    const recipientContribution = lap.contributions.find((entry) => entry.sourceItemId === "direct-recipient")!;
+
+    expect(buffContribution.synergy).toEqual([
+      {
+        sourceItemId: "boost-source",
+        target: { kind: "tag", tag: "avionics" },
+        conditionKind: "linear-per-count",
+        appliedPercent: 10,
+        description: source.synergyEffects![0].description,
+      },
+    ]);
+    // boostPercent 5 + 10 synergy points = 15% applied to the recipient's -10s base.
+    expect(recipientContribution.resultingContribution).toBeCloseTo(-11.5);
+  });
+
+  it("is pure — identical builds always produce identical synergy-folded contributions", () => {
+    const source = testItem({
+      id: "boost-source",
+      name: "Boost Source",
+      price: 1,
+      timeModifier: 0,
+      synergyEffects: [
+        {
+          target: { kind: "tag", tag: "gearing" },
+          appliesTo: "others",
+          condition: { kind: "linear-per-count", percentPerMatch: 10 },
+          description: "Boosts gearing items by 10% per matching item.",
+        },
+      ],
+    });
+    const target = testItem({
+      id: "boost-target",
+      name: "Boost Target",
+      price: 1,
+      timeModifier: -10,
+      cooldown: 1,
+      synergyTags: ["gearing"],
+    });
+    const build = vehicleBuild([source, target]);
+
+    expect(simulatePlayerLaps(build)).toEqual(simulatePlayerLaps(build));
+  });
+});
+
+describe("authored synergy example items (014 US1/US2, sample-data.ts)", () => {
+  it("US1: item-011 (Compact Data Logger) boosts other held gearing items, attributed to it", () => {
+    const dataLogger = catalogItem("item-011");
+    const gearingItem = catalogItem("item-001"); // Close-Ratio Gearset: synergyTags ["gearing", "momentum"]
+    const withLogger = simulatePlayerLaps(vehicleBuild([dataLogger, gearingItem]))[0];
+    const withoutLogger = simulatePlayerLaps(vehicleBuild([null, gearingItem]))[0];
+    const boostedContribution = withLogger.contributions.find((entry) => entry.sourceItemId === "item-001")!;
+    const baseContribution = withoutLogger.contributions.find((entry) => entry.sourceItemId === "item-001")!;
+
+    expect(dataLogger.synergyEffects).toBeDefined();
+    expect(boostedContribution.synergy?.[0]).toMatchObject({ sourceItemId: "item-011" });
+    expect(Math.abs(boostedContribution.resultingContribution)).toBeGreaterThan(
+      Math.abs(baseContribution.resultingContribution),
+    );
+  });
+
+  it("US2: item-002 (Lightweight Flywheel) gains its lone-Power bonus alone, loses it with a second Power item", () => {
+    const flywheel = catalogItem("item-002");
+    const otherPower = catalogItem("item-005"); // Blueprinted Engine: installationCategory "power"
+    const alone = simulatePlayerLaps(vehicleBuild([flywheel]))[0];
+    const paired = simulatePlayerLaps(vehicleBuild([flywheel, otherPower]))[0];
+    const aloneContribution = alone.contributions.find((entry) => entry.sourceItemId === "item-002")!;
+    const pairedContribution = paired.contributions.find((entry) => entry.sourceItemId === "item-002")!;
+
+    expect(flywheel.synergyEffects).toBeDefined();
+    expect(aloneContribution.synergy?.[0]).toMatchObject({ sourceItemId: "item-002" });
+    expect(pairedContribution.synergy).toBeUndefined();
+    // The unconditional base effect (Fitted -0.25s, on lap 1 of a Fitted power slot) survives either way.
+    expect(pairedContribution.resultingContribution).toBeLessThan(0);
+  });
+});

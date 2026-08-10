@@ -84,6 +84,52 @@ export interface ItemDefinition {
   fittedBehavior: ItemBehavior;
   /** Applied additionally in a conflicting typed slot, or an explicit `none`. */
   improvisedBehavior: ItemBehavior;
+
+  // --- Feature 014: tag-targeted synergy behavior ---
+  /** Optional, defaults to empty. Independent of `buff` — the two never interact. */
+  synergyEffects?: readonly SynergyEffect[];
+}
+
+// --- Feature 014: tag-targeted synergy behavior --------------------------
+
+/** What a synergy effect matches against (data-model.md "Synergy Target"). */
+export type SynergyTarget =
+  | { kind: "tag"; tag: string }
+  | { kind: "category"; category: InstallationCategory };
+
+/**
+ * How many matches are required and what shape of bonus results. A
+ * discriminated union, open to a third `kind` later (FR-012) without
+ * touching the first two.
+ */
+export type SynergyCondition =
+  | { kind: "linear-per-count"; percentPerMatch: number }
+  | { kind: "exact-other-count"; count: number; bonusPercent: number };
+
+/** One authored effect on an item (data-model.md "Synergy Effect"). */
+export interface SynergyEffect {
+  target: SynergyTarget;
+  /** "others": Boost-Others. "self": Self-Conditional. */
+  appliesTo: "others" | "self";
+  condition: SynergyCondition;
+  /** Exact inspector text, same convention as ItemBehavior.description. */
+  description: string;
+}
+
+/** One contributing effect, for attribution (parallel to installation's attribution shape). */
+export interface SynergyApplication {
+  sourceItemId: string;
+  target: SynergyTarget;
+  conditionKind: SynergyCondition["kind"];
+  appliedPercent: number;
+  description: string;
+}
+
+/** Per-slot synergy resolution, keyed by VehicleSlotState.slotId. */
+export interface SynergyResolution {
+  /** Net effect on this slot's item, folded into effectiveItem. */
+  appliedDeltaPercent: number;
+  applications: SynergyApplication[];
 }
 
 /**
@@ -239,6 +285,8 @@ export interface ContributionEvidence {
   };
   /** The stable slot id the item occupied, present only for vehicle-slot items. */
   slotId?: string;
+  /** Feature 014: present only when at least one synergy effect contributed. */
+  synergy?: SynergyApplication[];
 }
 
 export interface LapBreakdown {

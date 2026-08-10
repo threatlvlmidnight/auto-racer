@@ -7,11 +7,14 @@ import {
   type GarageFailureCode,
 } from "../simulation/garage";
 import { resolveInstallation } from "../simulation/slots";
+import { matchesTarget, resolveConditionPercent } from "../simulation/synergy";
 import type {
   InstallationState,
   ItemDefinition,
   RunIdentity,
   SlotType,
+  SynergyEffect,
+  SynergyTarget,
   VehicleBuild,
 } from "../simulation/types";
 import { itemVisualDescriptor } from "./itemVisualDescriptor";
@@ -158,6 +161,46 @@ function cooldownLabel(item: ItemDefinition): string {
   return descriptor.cooldown === 1 ? "Fires every lap" : `Fires every ${descriptor.cooldown} laps`;
 }
 
+/** One authored effect's live, build-aware value (014-item-synergy-tags contract §4). */
+export interface SynergyEffectDisplay {
+  target: SynergyTarget;
+  targetLabel: string;
+  currentMatchCount: number;
+  applies: boolean;
+  currentValueLabel: string;
+}
+
+function targetLabel(target: SynergyTarget): string {
+  const word = target.kind === "tag" ? target.tag : target.category;
+  return `${word.charAt(0).toUpperCase()}${word.slice(1)} items`;
+}
+
+function synergyEffectDisplay(
+  item: ItemDefinition,
+  effect: SynergyEffect,
+  build: VehicleBuild,
+): SynergyEffectDisplay {
+  const others = build.slots.flatMap((slot) => (slot.item && slot.item !== item ? [slot.item] : []));
+  const currentMatchCount = others.filter((candidate) => matchesTarget(candidate, effect.target)).length;
+  const appliedPercent = resolveConditionPercent(effect.condition, currentMatchCount);
+  const applies = appliedPercent !== null;
+  const label = targetLabel(effect.target);
+  const heldNote = `${currentMatchCount} matching ${label.toLowerCase()} held`;
+  const currentValueLabel = applies
+    ? `${appliedPercent! >= 0 ? "+" : ""}${appliedPercent}% active now (${heldNote})`
+    : effect.condition.kind === "exact-other-count"
+      ? `Inactive — needs exactly ${effect.condition.count}, currently ${currentMatchCount}`
+      : `Inactive — ${heldNote}`;
+
+  return {
+    target: effect.target,
+    targetLabel: label,
+    currentMatchCount,
+    applies,
+    currentValueLabel,
+  };
+}
+
 export interface GarageItemInspector extends GarageItemSummary {
   synergyTags: readonly string[];
   priceLabel: string;
@@ -172,6 +215,8 @@ export interface GarageItemInspector extends GarageItemSummary {
   lostBehaviorLabel: string | null;
   /** Set only for an Improvised placement that adds no consequence. */
   noAdditionalConsequenceLabel: string | null;
+  /** Feature 014: one entry per authored synergy effect, with its live current value. */
+  synergyEffects: SynergyEffectDisplay[];
 }
 
 /**
@@ -179,12 +224,14 @@ export interface GarageItemInspector extends GarageItemSummary {
  * installation, price, affordability, and storage-behavior fact needed to
  * decide a placement without hovering. `slotType` is the destination under
  * consideration — `null` for a storage destination, which has no
- * installation state of its own.
+ * installation state of its own. `build` is the current build, needed for
+ * live synergy match counts (014-item-synergy-tags contract §4).
  */
 export function garageItemInspector(
   item: ItemDefinition,
   slotType: SlotType | null,
   credits: number,
+  build: VehicleBuild,
 ): GarageItemInspector {
   const summary = itemSummary(item);
   const resolution = slotType ? resolveInstallation(item, slotType) : null;
@@ -202,6 +249,7 @@ export function garageItemInspector(
     noAdditionalConsequenceLabel: resolution?.noAdditionalImprovisedConsequence
       ? item.improvisedBehavior.description
       : null,
+    synergyEffects: (item.synergyEffects ?? []).map((effect) => synergyEffectDisplay(item, effect, build)),
   };
 }
 

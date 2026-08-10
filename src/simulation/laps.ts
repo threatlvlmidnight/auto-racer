@@ -5,6 +5,7 @@ import {
   type StackingState,
 } from "./buffs";
 import { resolveInstallation } from "./slots";
+import { resolveSynergyEffects } from "./synergy";
 import {
   LAP_COUNT,
   MIN_LAP_TIME,
@@ -15,6 +16,7 @@ import {
   type FiredItem,
   type InstallationResolution,
   type OfferedItem,
+  type SynergyResolution,
 } from "./types";
 
 export interface PlayerLap {
@@ -31,6 +33,8 @@ interface LocatedItem {
   active: boolean;
   slotId?: string;
   installation?: InstallationResolution;
+  /** Feature 014: synergy effects contributing to this slot's item, for attribution. */
+  synergy?: SynergyResolution;
 }
 
 export function firesOnLap(cooldown: number, lap: number): boolean {
@@ -38,21 +42,45 @@ export function firesOnLap(cooldown: number, lap: number): boolean {
 }
 
 /**
- * Folds an item's authored Fitted/Improvised behavior into its own numeric
- * fields so every downstream calculation (buffs, direct effects) reads one
- * effective item without duplicating the truth table (010 US3, contract §4).
- * Storage items and Flex placements have no additional behavior to fold in.
+ * Adds a percent delta to an item's own numeric effect: percentage points
+ * directly onto a buff's boostPercent (matching Fitted/Improvised's
+ * buffBoostPercent convention), or a proportional scale of a direct item's
+ * own timeModifier (014-item-synergy-tags contract §3).
  */
-function effectiveItem(item: OfferedItem, installation: InstallationResolution): OfferedItem {
+function foldPercentDelta(item: OfferedItem, percent: number): OfferedItem {
+  if (percent === 0) return item;
+  if (item.buff) {
+    return { ...item, buff: { ...item.buff, boostPercent: item.buff.boostPercent + percent } };
+  }
+  return { ...item, timeModifier: item.timeModifier + item.timeModifier * (percent / 100) };
+}
+
+/**
+ * Folds an item's authored Fitted/Improvised behavior, then any resolved
+ * synergy delta, into its own numeric fields so every downstream
+ * calculation (buffs, direct effects) reads one effective item without
+ * duplicating the truth table (010 US3, contract §4; 014 contract §3).
+ * Storage items and Flex placements have no Fitted/Improvised behavior to
+ * fold in, but may still carry a synergy delta.
+ */
+function effectiveItem(
+  item: OfferedItem,
+  installation: InstallationResolution,
+  synergy?: SynergyResolution,
+): OfferedItem {
   const behavior = installation.appliedInstallationBehavior;
-  if (!behavior) return item;
-  if (behavior.kind === "time-modifier") {
-    return { ...item, timeModifier: item.timeModifier + (behavior.timeModifier ?? 0) };
+  let result = item;
+  if (behavior) {
+    if (behavior.kind === "time-modifier") {
+      result = { ...result, timeModifier: result.timeModifier + (behavior.timeModifier ?? 0) };
+    } else if (behavior.kind === "buff-boost" && result.buff) {
+      result = { ...result, buff: { ...result.buff, boostPercent: result.buff.boostPercent + (behavior.buffBoostPercent ?? 0) } };
+    }
   }
-  if (behavior.kind === "buff-boost" && item.buff) {
-    return { ...item, buff: { ...item.buff, boostPercent: item.buff.boostPercent + (behavior.buffBoostPercent ?? 0) } };
+  if (synergy) {
+    result = foldPercentDelta(result, synergy.appliedDeltaPercent);
   }
-  return item;
+  return result;
 }
 
 function installationBehaviorSource(installation: InstallationResolution): string {
@@ -60,17 +88,22 @@ function installationBehaviorSource(installation: InstallationResolution): strin
 }
 
 export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT): PlayerLap[] {
+  // Computed once per build, before the per-lap loop — composition doesn't
+  // vary lap to lap (014-item-synergy-tags research.md Decision 3).
+  const synergyResolution = resolveSynergyEffects(build);
   const locatedItems: LocatedItem[] = [
     ...build.slots.flatMap((slot, index) => {
       if (!slot.item) return [];
       const installation = resolveInstallation(slot.item, slot.slotType);
+      const synergy = synergyResolution.get(slot.slotId);
       return [{
-        item: effectiveItem(slot.item, installation),
+        item: effectiveItem(slot.item, installation, synergy),
         area: "board" as const,
         index,
         active: true,
         slotId: slot.slotId,
         installation,
+        synergy: synergy && synergy.applications.length > 0 ? synergy : undefined,
       }];
     }),
     ...build.storage.flatMap((position, index) => position.item
@@ -191,6 +224,7 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT): PlayerLa
         installation: located.installation
           ? { state: located.installation.state, behavior: installationBehaviorSource(located.installation) }
           : undefined,
+        synergy: located.synergy?.applications,
         reason,
       });
     });

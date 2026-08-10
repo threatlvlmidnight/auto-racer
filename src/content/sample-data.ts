@@ -60,6 +60,15 @@ export const ITEM_POOL: ItemDefinition[] = [
       timeModifier: 0.2,
       description: "Improvised: carried as ballast rather than driven — 0.20s lost.",
     },
+    // 014-item-synergy-tags US2 example: Self-Conditional (appliesTo "self").
+    synergyEffects: [
+      {
+        target: { kind: "category", category: "power" },
+        appliesTo: "self",
+        condition: { kind: "exact-other-count", count: 0, bonusPercent: 50 },
+        description: "Synergy: spins freest with the whole power budget to itself — +50% effect if this is the only Power item held.",
+      },
+    ],
   },
   {
     id: "item-003",
@@ -240,6 +249,15 @@ export const ITEM_POOL: ItemDefinition[] = [
       kind: "none",
       description: "Improvised: no additional consequence — it simply loses its Fitted sensor run.",
     },
+    // 014-item-synergy-tags US1 example: Boost-Others (appliesTo "others").
+    synergyEffects: [
+      {
+        target: { kind: "tag", tag: "gearing" },
+        appliesTo: "others",
+        condition: { kind: "linear-per-count", percentPerMatch: 5 },
+        description: "Synergy: telemetry sharpens the driveline — boosts other gearing items by 5% per matching item held.",
+      },
+    ],
   },
   {
     id: "item-012",

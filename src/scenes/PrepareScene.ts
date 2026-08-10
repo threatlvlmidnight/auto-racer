@@ -295,7 +295,7 @@ export class PrepareScene extends Phaser.Scene {
     const card = createItemCard(this, x, y, item, { width: slotWidth - 16, height: SLOT_HEIGHT - 8 })
       .setInteractive({ useHandCursor: true });
     this.track(card);
-    enableItemTooltip(this, card, item, this.inspectorText(garageItemInspector(item, slotType, this.run!.credits)));
+    enableItemTooltip(this, card, item, this.inspectorText(garageItemInspector(item, slotType, this.run!.credits, this.run!.build)));
     if (stateLabel) {
       this.track(this.add.text(x, y + SLOT_HEIGHT / 2 - 3, stateLabel, {
         fontSize: "9px",
@@ -362,13 +362,16 @@ export class PrepareScene extends Phaser.Scene {
       if (inspector.lostBehaviorLabel) lines.push(`Loses: ${inspector.lostBehaviorLabel}`);
       if (inspector.noAdditionalConsequenceLabel) lines.push(inspector.noAdditionalConsequenceLabel);
     }
+    inspector.synergyEffects.forEach((effect) => {
+      lines.push(`${effect.targetLabel} synergy: ${effect.currentValueLabel}`);
+    });
     return lines.join("\n");
   }
 
   /** An offer has no destination yet, so both possible installation outcomes
    *  are disclosed up front instead of resolving just one. */
   private offerInspectorText(item: OfferedItem): string {
-    const base = this.inspectorText(garageItemInspector(item, null, this.run!.credits));
+    const base = this.inspectorText(garageItemInspector(item, null, this.run!.credits, this.run!.build));
     return `${base}\n${item.fittedBehavior.description}\n${item.improvisedBehavior.description}`;
   }
 
