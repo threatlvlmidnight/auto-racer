@@ -156,7 +156,11 @@ the locked offer is unchanged while every other offer is replaced.
 - **FR-002**: Reputation MUST decrease on either of the two existing
   outcome shapes that already represent "this went badly": a lost
   scheduled PvP contest, or a failed/unmet sponsor objective. Both
-  trigger reputation loss — reputation is not tied to PvP alone.
+  trigger reputation loss — reputation is not tied to PvP alone. A tied
+  PvP contest does NOT count as a loss for this purpose — reputation only
+  decreases on an outright loss, treating a tie as neutral, matching how
+  a tie already doesn't count as a win for champ points elsewhere in the
+  game.
 - **FR-003**: When reputation reaches zero, the run MUST end immediately
   via a new, distinct `RunStatus` value (not a reuse of today's
   `"completed"` status) — the same way `"unavailable"` already drives its
@@ -168,28 +172,32 @@ the locked offer is unchanged while every other offer is replaced.
   exactly zero, never a worse or different one.
 - **FR-005**: Reputation loss and its exact thresholds are a balance/
   tuning decision, not fixed by this specification — see Assumptions.
-- **FR-006**: The system MUST apply an interest credit, derived from the
+- **FR-006**: The player's current reputation MUST be visible during an
+  active run, the same way credits are already always visible — a value
+  that can end the run early is not something the player discovers only
+  after the fact (Constitution Principle III).
+- **FR-007**: The system MUST apply an interest credit, derived from the
   player's currently banked (unspent) credits, at a regular point in run
   progression — recorded as its own credit-transaction kind, distinct
   from purchase, restock, or prize transactions.
-- **FR-007**: Interest MUST NOT apply (produce a zero-amount or absent
+- **FR-008**: Interest MUST NOT apply (produce a zero-amount or absent
   transaction) when the player holds zero banked credits.
-- **FR-008**: The system MUST allow the player to sell any held item
+- **FR-009**: The system MUST allow the player to sell any held item
   (active or stored) for credits equal to half its authored price
   (rounded down), recorded as its own credit-transaction kind, removing
   the item from the build immediately and irreversibly within that
   encounter.
-- **FR-009**: The system MUST allow the player to lock a specific Parts
+- **FR-010**: The system MUST allow the player to lock a specific Parts
   Supplier offer so that a subsequent reroll leaves it unchanged while
   replacing every unlocked offer, exactly as reroll already replaces
   every offer today.
-- **FR-010**: A lock MUST be reversible (the player can unlock a
+- **FR-011**: A lock MUST be reversible (the player can unlock a
   previously locked offer) and MUST NOT persist beyond the single Parts
   Supplier encounter instance it was set in.
-- **FR-011**: None of reputation triggers, interest, sell-back value, or
+- **FR-012**: None of reputation triggers, interest, sell-back value, or
   card-locking availability MAY vary by player entrant or by any
   purchasable content or currency (Constitution Principle II, Fairness).
-- **FR-012**: Every credit-transaction kind introduced by this feature
+- **FR-013**: Every credit-transaction kind introduced by this feature
   (interest, sell-back) MUST be inspectable in run history the same way
   existing transaction kinds already are — no new value MAY be added to a
   player's credit total without a corresponding, attributable transaction
@@ -214,22 +222,25 @@ the locked offer is unchanged while every other offer is replaced.
 
 ### Measurable Outcomes
 
-- **SC-001**: A run can end before Stage 6 due to reputation loss, with
+- **SC-001**: The player's current reputation is visible at every point
+  during an active run, with zero states where it must be inferred rather
+  than read directly.
+- **SC-002**: A run can end before Stage 6 due to reputation loss, with
   an outcome distinguishable from normal completion in 100% of cases
   where reputation reaches zero.
-- **SC-002**: A run's full history up to an early reputation-driven end
+- **SC-003**: A run's full history up to an early reputation-driven end
   remains inspectable — zero data loss compared to a normally-completed
   run's history.
-- **SC-003**: Interest is applied only when banked credits are greater
+- **SC-004**: Interest is applied only when banked credits are greater
   than zero, and the applied amount is deterministically derived from the
   banked amount, with zero exceptions across a sample of resolved runs.
-- **SC-004**: Selling any held item always returns exactly half its
+- **SC-005**: Selling any held item always returns exactly half its
   authored price (rounded down) and always removes it from the build,
   with zero exceptions.
-- **SC-005**: A locked Parts Supplier offer survives 100% of subsequent
+- **SC-006**: A locked Parts Supplier offer survives 100% of subsequent
   rerolls within its encounter unchanged; every unlocked offer is
   replaced exactly as it already is today.
-- **SC-006**: Every credit change introduced by this feature (interest,
+- **SC-007**: Every credit change introduced by this feature (interest,
   sell-back) is attributable to a specific, inspectable transaction
   record — zero silent credit changes.
 

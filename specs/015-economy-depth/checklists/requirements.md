@@ -39,5 +39,10 @@
   win/loss streak bonuses are dropped from this feature entirely (not
   narrowed), deferred until `009-run-progression`'s season-length growth
   makes them meaningful — User Story 3 and its FRs/SC were removed and
-  the remaining stories/requirements renumbered accordingly. All items
-  pass.
+  the remaining stories/requirements renumbered accordingly.
+- `/speckit.clarify` found and fixed a self-evident gap without asking
+  (reputation visibility during the run was never required, despite
+  credits always being visible — added as FR-006/SC-001, matching
+  Principle III precedent), then asked and resolved one genuine
+  ambiguity: a tied PvP contest does NOT count as a loss for reputation
+  purposes (FR-002) — only an outright loss does. All items pass.
