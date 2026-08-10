@@ -42,4 +42,10 @@
   was resolved as a reasonable default rather than a clarify question:
   `015-economy-depth`'s sell-back formula is left unchanged (FR-008,
   Assumptions) — tier only affects the item's own in-race effect, not
-  its resale value. All items pass.
+  its resale value.
+- `/speckit.clarify` asked and resolved one genuine ambiguity: whether a
+  player can tell what acquiring an already-held item will actually do
+  before committing. Resolved as "shown before committing" — every
+  offer of an already-held item is labeled with its real outcome (tier
+  upgrade or exact credit conversion) ahead of time, added as FR-011 and
+  reflected in US1/US3 acceptance scenarios and SC-004. All items pass.

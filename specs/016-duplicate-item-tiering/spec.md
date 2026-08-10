@@ -8,6 +8,19 @@
 
 **Input**: User description: "Duplicate-item tiering: acquiring a second or third copy of a held item upgrades its tier (up to three stars) instead of occupying another slot, with each tier adding a flat percentage bonus to the item's own effect; a copy acquired while already at max tier auto-converts to credits via the existing sell-back math. Decided direction recorded in specs/skribidi-gap-decisions.md §5 following the Skribidi Skids POC gap analysis, resolving the open 'Duplicate-item rules' item in specs/DEFERRED.md."
 
+## Clarifications
+
+### Session 2026-08-09
+
+- Q: If a player already holds an item at ★2 or ★3, should the offer
+  itself (a Parts Supplier stock entry, a Reward Draft option) show what
+  buying/accepting it will actually result in — a tier upgrade or a
+  credit conversion — before they confirm, or is that only revealed
+  after? → A: Shown before committing — the offer is labeled with its
+  real outcome ahead of time (e.g. "Buy → upgrades to ★3" or, at max
+  tier, "Buy → sells for N credits instead"), so the player never
+  confirms an action blind to what it does.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A second copy upgrades what you already have (Priority: P1)
@@ -33,13 +46,17 @@ increases by exactly one, up to a maximum of ★3.
    held copy becomes ★2, no new board slot or storage position is used,
    and the acquisition is otherwise resolved exactly as it already is
    today (credits spent for a purchase, offer consumed for a reward).
-2. **Given** a held item at ★2, **When** the player acquires another
+2. **Given** a held item at ★1 or ★2, **When** the player is offered
+   another copy of it (before committing to acquire it), **Then** the
+   offer itself shows that acquiring it will upgrade it to the next
+   tier, not just present a generic "buy"/"accept" action.
+3. **Given** a held item at ★2, **When** the player acquires another
    copy, **Then** it becomes ★3.
-3. **Given** an item not currently held anywhere, **When** the player
+4. **Given** an item not currently held anywhere, **When** the player
    acquires it, **Then** it is placed as a new ★1 held item exactly as
    acquisition already works today — tiering never changes the
    first-copy acquisition flow.
-4. **Given** a held item, **When** the player sells it (per
+5. **Given** a held item, **When** the player sells it (per
    `015-economy-depth`), **Then** its tier is gone along with it — a
    later re-acquired copy of the same item starts fresh at ★1, not at
    whatever tier the sold copy had reached.
@@ -105,6 +122,10 @@ blocked, silently discarded, or creating a fourth tier.
    history, **Then** the conversion is distinguishable from a deliberate
    player-initiated sale — it is system-triggered, not a sell action the
    player chose.
+3. **Given** a held item at ★3, **When** the player is offered another
+   copy of it (before committing to acquire it), **Then** the offer
+   itself shows the exact credit amount it will convert to, not a
+   generic "buy"/"accept" action that turns out to do something else.
 
 ---
 
@@ -174,6 +195,12 @@ blocked, silently discarded, or creating a fourth tier.
 - **FR-010**: Duplicate detection MUST apply uniformly to every
   acquisition path that can grant a held item today (Parts Supplier
   purchase, Reward Draft acceptance) — no acquisition path is exempt.
+- **FR-011**: Every offer of an item the player already holds (a Parts
+  Supplier stock entry, a Reward Draft option) MUST show its actual
+  resolution — a tier upgrade to a specific tier, or a credit conversion
+  and its exact amount — before the player commits to acquiring it,
+  never only after (Constitution Principle III, Clarifications Session
+  2026-08-09).
 
 ### Key Entities
 
@@ -202,7 +229,9 @@ blocked, silently discarded, or creating a fourth tier.
   acquisition, a silently discarded copy, or a fourth tier.
 - **SC-004**: A held item's tier is visible at every point the item
   itself is already shown, with zero states requiring the player to
-  infer it.
+  infer it; every offer of an item already held shows its real
+  acquisition outcome before the player commits, with zero cases of a
+  surprise tier upgrade or credit conversion discovered only afterward.
 - **SC-005**: Every credit change introduced by this feature (max-tier
   conversion) is attributable to a specific, inspectable transaction
   record — zero silent credit changes.
