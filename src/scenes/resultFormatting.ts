@@ -1,25 +1,41 @@
 import { isCountSynergyBuff } from "../simulation/buffs";
-import type { ContestResult, OfferedItem } from "../simulation/types";
+import type { CarResult, NCarContestResult, OfferedItem } from "../simulation/types";
 
 // Pure formatting helpers for ResultScene (User Story 1's outcome banner,
-// User Story 2's legibility data — FR-006/FR-007). Extracted from the scene
+// User Story 2's legibility data — FR-006/FR-007; extended by
+// 012-multi-ghost-contest to full N-car standings). Extracted from the scene
 // class itself so this content is testable without instantiating Phaser,
 // which needs a canvas/WebGL context. Presentation-layer code, so this is
 // tested lightly (tests/integration/result-scene.test.ts) rather than under
 // strict TDD — only src/simulation is held to that standard.
 
-export function outcomeLabel(result: ContestResult): string {
+function ordinal(n: number): string {
+  const remainder100 = n % 100;
+  if (remainder100 >= 11 && remainder100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
+}
+
+export function playerCar(result: NCarContestResult): CarResult {
+  return result.cars.find((car) => car.role === "player")!;
+}
+
+export function outcomeLabel(result: NCarContestResult): string {
   switch (result.outcome) {
     case "win":
       return "You Win!";
     case "loss":
       return "You Lose";
     case "tie":
-      return "Tie — Win for Both!"; // FR-011
+      return "Tie — Win for Both!"; // FR-011 heritage
   }
 }
 
-export function outcomeColor(result: ContestResult): string {
+export function outcomeColor(result: NCarContestResult): string {
   switch (result.outcome) {
     case "win":
       return "#7CFC00";
@@ -30,14 +46,28 @@ export function outcomeColor(result: ContestResult): string {
   }
 }
 
-export function timesLabel(result: ContestResult): string {
-  return `You: ${result.playerTime.toFixed(1)}s   Ghost: ${result.ghostTime.toFixed(1)}s`;
+export function positionLabel(result: NCarContestResult): string {
+  const player = playerCar(result);
+  return `${ordinal(player.position)} of ${result.cars.length}`;
 }
 
-export function gapLabel(result: ContestResult): string {
-  const magnitude = Math.abs(result.gap).toFixed(1);
-  if (result.gap === 0) return "Exact tie";
-  return result.gap < 0 ? `${magnitude}s ahead of the ghost` : `${magnitude}s behind the ghost`;
+export function timesLabel(result: NCarContestResult): string {
+  const player = playerCar(result);
+  return `You: ${player.time.toFixed(1)}s (${positionLabel(result)})`;
+}
+
+export function gapLabel(result: NCarContestResult): string {
+  const player = playerCar(result);
+  const magnitude = Math.abs(player.gapToLeader).toFixed(1);
+  if (player.gapToLeader === 0) return "Leading the field";
+  return `${magnitude}s behind the leader`;
+}
+
+/** One line of the ranked standings list (SC-003). */
+export function standingsRow(car: CarResult): string {
+  const magnitude = Math.abs(car.gapToLeader).toFixed(1);
+  const gap = car.gapToLeader === 0 ? "Leader" : `+${magnitude}s`;
+  return `${car.position}. ${car.name} — ${car.time.toFixed(1)}s (${gap})`;
 }
 
 export function itemIdentityLabel(item: OfferedItem): string {
@@ -83,10 +113,10 @@ function itemSectionLabel(title: string, items: OfferedItem[]): string {
   return `${title} (${items.length}):\n${details}`;
 }
 
-export function boardItemsLabel(result: ContestResult): string {
+export function boardItemsLabel(result: NCarContestResult): string {
   return itemSectionLabel("Board", result.board);
 }
 
-export function storageItemsLabel(result: ContestResult): string {
+export function storageItemsLabel(result: NCarContestResult): string {
   return itemSectionLabel("Storage", result.storage);
 }

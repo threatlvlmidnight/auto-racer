@@ -2,20 +2,34 @@ import { describe, expect, it } from "vitest";
 import {
   MIN_VISUAL_LAP_SECONDS,
   RACE_ANIMATION_SECONDS,
+  buildNCarPlaybackSchedule,
   buildPlaybackSchedule,
   calloutEventsForLap,
   carProgressAt,
   cumulativeSimulatedTimeAt,
   frameStateAt,
   liveGapAt,
+  nCarFrameStateAt,
+  standingsAt,
+  type TickerLine,
 } from "../../src/simulation/playback";
 import { ITEM_POOL } from "../../src/content/sample-data";
+import { RIVAL_PROFILES } from "../../src/content/rivals";
+import { TRACKS } from "../../src/content/tracks";
+import { resolveContest } from "../../src/simulation/contest";
+import { selectTrack } from "../../src/simulation/tracks";
 import {
   LAP_COUNT,
   MIN_LAP_TIME,
   type ContestResult,
   type LapBreakdown,
+  type NCarContestResult,
+  type RivalProfile,
 } from "../../src/simulation/types";
+import { vehicleBuild } from "../fixtures/vehicle-build-fixtures";
+
+const TEST_TRACK = TRACKS[0];
+type TickerLineList = TickerLine[];
 
 function resultWithLapTimes(playerLapTimes: number[], ghostLapTimes: number[]): ContestResult {
   const laps = playerLapTimes.map((playerLapTime, index) => ({
@@ -262,5 +276,259 @@ describe("live gap", () => {
     expect(result).toStrictEqual(before);
     expect(buildPlaybackSchedule(result)).toStrictEqual(schedule);
     expect(frameStateAt(schedule, result, 100, LAP_COUNT).liveGap).toBe(result.gap);
+  });
+});
+
+// 012-multi-ghost-contest: additive N-car playback (FR-008), alongside the
+// 2-car functions above which Test Day/Practice keeps using unchanged.
+const tieRoster: readonly RivalProfile[] = RIVAL_PROFILES.map((profile) => ({
+  ...profile,
+  levelScaling: () => ({ slotsToFill: 0, priceBias: "low" as const }),
+}));
+
+describe("buildNCarPlaybackSchedule", () => {
+  it("builds one CarPlaybackSchedule per car, sharing a single scale factor", () => {
+    const result = resolveContest(vehicleBuild(), tieRoster, 1, 42);
+    const schedule = buildNCarPlaybackSchedule(result, TEST_TRACK);
+
+    expect(schedule.cars).toHaveLength(8);
+    expect(schedule.cars.map((car) => car.id)).toEqual(result.cars.map((car) => car.id));
+    schedule.cars.forEach((car) => {
+      expect(car.schedule.visualLapBoundaries[car.schedule.visualLapBoundaries.length - 1]).toBe(
+        RACE_ANIMATION_SECONDS,
+      );
+    });
+  });
+
+  it("attaches the selected track once per schedule (013-race-spectacle, data-model.md)", () => {
+    const result = resolveContest(vehicleBuild(), tieRoster, 1, 42);
+    const track = selectTrack(42, 1);
+    const schedule = buildNCarPlaybackSchedule(result, track);
+
+    expect(schedule.track).toEqual(track);
+  });
+
+  it("derives scaleFactor from the slowest of all 8 cars, not just two", () => {
+    const result = resolveContest(vehicleBuild(), tieRoster, 1, 42);
+    const schedule = buildNCarPlaybackSchedule(result, TEST_TRACK);
+    const maxTime = Math.max(...result.cars.map((car) => car.time));
+
+    expect(schedule.scaleFactor).toBeCloseTo(RACE_ANIMATION_SECONDS / maxTime);
+  });
+});
+
+describe("standingsAt (013-race-spectacle, shared standings/ticker derivation)", () => {
+  it("returns a contiguous 1..8 position permutation with no duplicates at any sampled time", () => {
+    const result = resolveContest(vehicleBuild(), tieRoster, 1, 42);
+    const schedule = buildNCarPlaybackSchedule(result, TEST_TRACK);
+
+    [0, 3, 8, 15, 1000].forEach((t) => {
+      const ranked = standingsAt(schedule, t);
+      expect(ranked).toHaveLength(8);
+      expect(ranked.map((car) => car.position).sort((a, b) => a - b)).toEqual([
+        1, 2, 3, 4, 5, 6, 7, 8,
+      ]);
+    });
+  });
+
+  it("matches a direct comparison of cumulativeSimulatedTimeAt across all cars (SC-003)", () => {
+    const result = resolveContest(vehicleBuild(), RIVAL_PROFILES, 1, 42);
+    const schedule = buildNCarPlaybackSchedule(result, TEST_TRACK);
+    const t = 6;
+    const ranked = standingsAt(schedule, t);
+    // Direct comparison, broken by the same declared tie-break policy
+    // (player first, then id) as standingsAt itself — real per-car pace
+    // differences frequently coincide exactly at a shared price tier, so an
+    // un-tie-broken "direct" order isn't well-defined on its own.
+    const directTimes = new Map(
+      schedule.cars.map((car) => [car.id, cumulativeSimulatedTimeAt(car.schedule, t)]),
+    );
+    const directOrder = schedule.cars
+      .map((car) => ({ id: car.id, role: car.role, time: directTimes.get(car.id)! }))
+      .sort((a, b) =>
+        a.time - b.time
+        || (a.role === "player" ? 0 : 1) - (b.role === "player" ? 0 : 1)
+        || a.id.localeCompare(b.id)
+      )
+      .map((car) => car.id);
+
+    expect(ranked.map((car) => car.id)).toEqual(directOrder);
+    ranked.forEach((car) => {
+      expect(car.cumulativeTime).toBeCloseTo(directTimes.get(car.id)!);
+    });
+  });
+
+  it("breaks live ties by fixed roster order, same as the final result (player first)", () => {
+    const result = resolveContest(vehicleBuild(), tieRoster, 1, 42);
+    const schedule = buildNCarPlaybackSchedule(result, TEST_TRACK);
+
+    expect(standingsAt(schedule, 0)[0].id).toBe("player");
+  });
+
+  it("is pure — identical (schedule, t) always returns an identical ranking", () => {
+    const result = resolveContest(vehicleBuild(), tieRoster, 1, 42);
+    const schedule = buildNCarPlaybackSchedule(result, TEST_TRACK);
+
+    expect(standingsAt(schedule, 4.5)).toEqual(standingsAt(schedule, 4.5));
+  });
+});
+
+describe("nCarFrameStateAt", () => {
+  it("reports the same live rank as the final standings once every car finishes", () => {
+    const result = resolveContest(vehicleBuild(), tieRoster, 1, 42);
+    const schedule = buildNCarPlaybackSchedule(result, TEST_TRACK);
+    const frame = nCarFrameStateAt(schedule, result, 1000, -1);
+
+    expect(frame.allFinished).toBe(true);
+    const playerFinalPosition = result.cars.find((car) => car.role === "player")!.position;
+    expect(frame.playerRank).toBe(playerFinalPosition);
+    expect(frame.cars.every((car) => car.progress.finished)).toBe(true);
+  });
+
+  it("is not finished at time zero and reports a defined leader", () => {
+    const result = resolveContest(vehicleBuild(), tieRoster, 1, 42);
+    const schedule = buildNCarPlaybackSchedule(result, TEST_TRACK);
+    const frame = nCarFrameStateAt(schedule, result, 0, -1);
+
+    expect(frame.allFinished).toBe(false);
+    expect(frame.leaderName).toBeTruthy();
+    expect(frame.playerRank).toBeGreaterThanOrEqual(1);
+    expect(frame.playerRank).toBeLessThanOrEqual(8);
+  });
+
+  it("keeps authoritative result facts invariant across presentation-only reads", () => {
+    const result = resolveContest(vehicleBuild(), tieRoster, 1, 42);
+    const before = structuredClone(result);
+    const schedule = buildNCarPlaybackSchedule(result, TEST_TRACK);
+
+    nCarFrameStateAt(schedule, result, 5, -1);
+    nCarFrameStateAt(schedule, result, 1000, -1);
+
+    expect(result).toStrictEqual(before);
+  });
+
+  it("exposes the same standings ranking standingsAt would produce at that moment (013-race-spectacle)", () => {
+    const result = resolveContest(vehicleBuild(), tieRoster, 1, 42);
+    const schedule = buildNCarPlaybackSchedule(result, TEST_TRACK);
+
+    expect(nCarFrameStateAt(schedule, result, 6, -1).standings).toEqual(standingsAt(schedule, 6));
+  });
+
+  it("never populates newCallouts for any car other than the player's own (013-race-spectacle FR-005)", () => {
+    const result = resolveContest(vehicleBuild(), RIVAL_PROFILES, 1, 42);
+    const schedule = buildNCarPlaybackSchedule(result, TEST_TRACK);
+
+    for (let t = 0; t <= 20; t += 0.5) {
+      // newCallouts has no carId field at all — its very shape makes a rival
+      // callout structurally impossible; this pins that it stays that way.
+      nCarFrameStateAt(schedule, result, t, -1).newCallouts.forEach((event) => {
+        expect(event).toHaveProperty("item");
+        expect(event).toHaveProperty("contribution");
+        expect(event).not.toHaveProperty("carId");
+      });
+    }
+  });
+});
+
+describe("newTickerLines curation (013-race-spectacle US2, FR-006)", () => {
+  // Positive timeModifier, cooldown 1 (fires every lap) — a deterministic
+  // per-lap player firing to assert on.
+  const handicapItem = ITEM_POOL.find((item) => item.id === "item-010")!;
+
+  function handicappedSchedule() {
+    const result = resolveContest(vehicleBuild([handicapItem]), tieRoster, 1, 42);
+    return { result, schedule: buildNCarPlaybackSchedule(result, TEST_TRACK) };
+  }
+
+  // Real rivals (seed 42, level 1) against an unmodified player: confirmed by
+  // direct computation to separate cleanly (rival-colt leads outright from
+  // early on and finishes well ahead of the field) — avoids the exact,
+  // floating-point-fragile ties that identically-built cars would produce.
+  function realSchedule() {
+    const result = resolveContest(vehicleBuild(), RIVAL_PROFILES, 1, 42);
+    return { result, schedule: buildNCarPlaybackSchedule(result, TEST_TRACK) };
+  }
+
+  function playAllFrames(
+    result: NCarContestResult,
+    schedule: ReturnType<typeof buildNCarPlaybackSchedule>,
+    step = 0.25,
+  ): TickerLineList {
+    let previousStandings: ReturnType<typeof standingsAt> | null = null;
+    let previousFinishedCarIds: string[] = [];
+    let previousLapIndex = -1;
+    const lines: TickerLineList = [];
+    for (let t = 0; t <= 20; t += step) {
+      const frame = nCarFrameStateAt(
+        schedule,
+        result,
+        t,
+        previousLapIndex,
+        previousStandings,
+        previousFinishedCarIds,
+      );
+      lines.push(...frame.newTickerLines);
+      previousStandings = frame.standings;
+      previousFinishedCarIds = frame.cars.filter((car) => car.progress.finished).map((car) => car.id);
+      previousLapIndex = frame.cars.find((car) => car.role === "player")!.progress.lapIndex;
+    }
+    return lines;
+  }
+
+  it("emits a player-fired line for every one of the player's own firings (reusing calloutEventsForLap)", () => {
+    const { result, schedule } = handicappedSchedule();
+    const frame = nCarFrameStateAt(schedule, result, 0, -1);
+
+    const fired = frame.newTickerLines.filter((line) => line.kind === "player-fired");
+    expect(fired).toHaveLength(1);
+    expect(fired[0].carId).toBe("player");
+    expect(fired[0].text).toContain(handicapItem.name);
+  });
+
+  it("emits a took-lead line only when standingsAt shows the leader actually changing", () => {
+    const { result, schedule } = realSchedule();
+    const lines = playAllFrames(result, schedule);
+    const leadLines = lines.filter((line) => line.kind === "took-lead");
+
+    expect(leadLines.length).toBeGreaterThan(0);
+    expect(leadLines[0].carId).toBe("rival-colt");
+  });
+
+  it("emits a finished line the frame a car first finishes, and never repeats it for the same car", () => {
+    const { result, schedule } = realSchedule();
+    const lines = playAllFrames(result, schedule);
+    const finishLines = lines.filter((line) => line.kind === "finished");
+
+    expect(finishLines.length).toBeGreaterThan(0);
+    const finishedIds = finishLines.map((line) => line.carId);
+    expect(new Set(finishedIds).size).toBe(finishedIds.length);
+  });
+
+  it("emits at most one finished line and never a took-lead or player-fired line for a rival that never leads", () => {
+    const { result, schedule } = realSchedule();
+    const lines = playAllFrames(result, schedule);
+    // rival-kestrel finishes mid-pack and never leads (confirmed by direct
+    // computation) — it should surface only its own single finish line.
+    const kestrelLines = lines.filter((line) => line.carId === "rival-kestrel");
+
+    expect(kestrelLines.every((line) => line.kind === "finished")).toBe(true);
+    expect(kestrelLines.length).toBeLessThanOrEqual(1);
+  });
+
+  it("never emits a player-fired-kind line for a rival's ordinary firing", () => {
+    const { result, schedule } = realSchedule();
+    const lines = playAllFrames(result, schedule);
+
+    lines
+      .filter((line) => line.kind === "player-fired")
+      .forEach((line) => expect(line.carId).toBe("player"));
+  });
+
+  it("is pure — identical arguments always produce an identical set of ticker lines", () => {
+    const { result, schedule } = handicappedSchedule();
+    const a = nCarFrameStateAt(schedule, result, 5, -1, null);
+    const b = nCarFrameStateAt(schedule, result, 5, -1, null);
+
+    expect(b.newTickerLines).toEqual(a.newTickerLines);
   });
 });

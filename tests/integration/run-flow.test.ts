@@ -85,11 +85,13 @@ describe("run scene boundary", () => {
       run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
     }
     const input = contestSceneInput(run, run.activeEncounter!.id);
-    const result = resolveContest(input.build, input.ghost, input.lapCount);
+    const result = resolveContest(input.build, input.rivalRoster, input.level, input.seed, input.lapCount);
     const continued = continueRunFromResult(run, input.encounterId, result, () => 0);
 
-    expect(input).toMatchObject({ encounterId: run.activeEncounter!.id, lapCount: 10 });
+    expect(input).toMatchObject({ encounterId: run.activeEncounter!.id, lapCount: 10, level: 1 });
+    expect(input.rivalRoster).toHaveLength(7);
     expect(result.lapCount).toBe(10);
+    expect(result.cars).toHaveLength(8);
     expect(raceLapLabel("PLAYER", { lapIndex: 9, lapProgress: 0.5, finished: false }, 10))
       .toBe("PLAYER · LAP 10/10");
     expect(raceLapLabel("GHOST", { lapIndex: 11, lapProgress: 0.5, finished: false }, 12))
@@ -98,6 +100,32 @@ describe("run scene boundary", () => {
     expect(continued.history).toHaveLength(3);
     expect(() => continueRunFromResult(continued, input.encounterId, result, () => 0))
       .toThrowError(RunTransitionError);
+  });
+
+  it("wires the current PvP stage's ordinal through to contestSceneInput's level (US3, FR-004)", () => {
+    let run = create();
+    const advanceThroughTwoChoices = () => {
+      for (let stage = 0; stage < 2; stage += 1) {
+        run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+        run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
+      }
+    };
+
+    advanceThroughTwoChoices();
+    const firstInput = contestSceneInput(run, run.activeEncounter!.id);
+    expect(firstInput.level).toBe(1);
+    const firstResult = resolveContest(
+      firstInput.build,
+      firstInput.rivalRoster,
+      firstInput.level,
+      firstInput.seed,
+      firstInput.lapCount,
+    );
+    run = continueRunFromResult(run, firstInput.encounterId, firstResult, () => 0);
+
+    advanceThroughTwoChoices();
+    const secondInput = contestSceneInput(run, run.activeEncounter!.id);
+    expect(secondInput.level).toBe(2);
   });
 
   it("keeps encounter selection separate from acquisition and exposes Supplier economy state", () => {

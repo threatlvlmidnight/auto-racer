@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { BASELINE_CAR, SAMPLE_GHOST } from "../../src/content/sample-data";
-import { ghostLapTimes, resolveContest } from "../../src/simulation/contest";
+import { RIVAL_PROFILES } from "../../src/content/rivals";
+import { ContestResolutionError, ghostLapTimes, resolveContest } from "../../src/simulation/contest";
 import {
   LAP_COUNT,
   type Build,
   type OfferedItem,
+  type RivalProfile,
   type SampleGhost,
 } from "../../src/simulation/types";
 import { testItem, vehicleBuild } from "../fixtures/vehicle-build-fixtures";
@@ -232,5 +234,117 @@ describe("lap simulation order independence", () => {
     expect(second.laps.map((lap) => lap.playerLapTime)).toEqual(
       first.laps.map((lap) => lap.playerLapTime)
     );
+  });
+});
+
+// Every rival draws real items via resolveRivalBuild's own RNG, so these
+// tests use a "tie roster" (zero slots filled) whenever exact-time
+// assertions are needed, and the real RIVAL_PROFILES catalog otherwise.
+const tieRoster: readonly RivalProfile[] = RIVAL_PROFILES.map((profile) => ({
+  ...profile,
+  levelScaling: () => ({ slotsToFill: 0, priceBias: "low" as const }),
+}));
+
+describe("resolveContest (N-car, US1/US2)", () => {
+  it("resolves exactly 8 cars — the player plus every one of the 7 rivals", () => {
+    const result = resolveContest(emptyBuild(), RIVAL_PROFILES, 1, 42);
+
+    expect(result.cars).toHaveLength(8);
+    expect(result.cars.filter((car) => car.role === "player")).toHaveLength(1);
+    expect(result.cars.filter((car) => car.role === "rival")).toHaveLength(7);
+    const rivalIds = result.cars.filter((car) => car.role === "rival").map((car) => car.id);
+    expect(new Set(rivalIds)).toEqual(new Set(RIVAL_PROFILES.map((profile) => profile.id)));
+  });
+
+  it("assigns a contiguous 1..8 position permutation with no gaps or duplicates", () => {
+    const result = resolveContest(emptyBuild(), RIVAL_PROFILES, 1, 42);
+    const positions = result.cars.map((car) => car.position).sort((a, b) => a - b);
+
+    expect(positions).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(result.cars.map((car) => car.position)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it("is deterministic — identical (build, roster, level, seed, lapCount) always resolves identically", () => {
+    const first = resolveContest(emptyBuild(), RIVAL_PROFILES, 2, 7, 12);
+    const second = resolveContest(emptyBuild(), RIVAL_PROFILES, 2, 7, 12);
+
+    expect(second).toEqual(first);
+  });
+
+  it("does not mutate the player build or the rival roster", () => {
+    const build = emptyBuild();
+    const buildSnapshot = structuredClone(build);
+    const rosterSnapshot = structuredClone(RIVAL_PROFILES.map(({ id, name, color, vehicleId }) => ({
+      id,
+      name,
+      color,
+      vehicleId,
+    })));
+    resolveContest(build, RIVAL_PROFILES, 1, 42);
+
+    expect(build).toEqual(buildSnapshot);
+    expect(RIVAL_PROFILES.map(({ id, name, color, vehicleId }) => ({ id, name, color, vehicleId })))
+      .toEqual(rosterSnapshot);
+  });
+
+  it("rejects a roster that is not exactly 7 rivals with a typed, inspectable failure", () => {
+    expect(() => resolveContest(emptyBuild(), RIVAL_PROFILES.slice(0, 6), 1, 42)).toThrow(
+      ContestResolutionError,
+    );
+    try {
+      resolveContest(emptyBuild(), RIVAL_PROFILES.slice(0, 6), 1, 42);
+      throw new Error("expected resolveContest to throw");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ContestResolutionError);
+      expect((error as ContestResolutionError).code).toBe("invalid-roster-size");
+    }
+  });
+
+  it("breaks exact ties by fixed roster order — player first, then rivals in catalog order", () => {
+    const result = resolveContest(emptyBuild(), tieRoster, 1, 42);
+
+    expect(result.cars.every((car) => car.time === result.cars[0].time)).toBe(true);
+    expect(result.cars.map((car) => car.id)).toEqual([
+      "player",
+      ...tieRoster.map((profile) => profile.id),
+    ]);
+    expect(result.cars.map((car) => car.position)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(result.cars.every((car) => car.gapToLeader === 0)).toBe(true);
+  });
+
+  it("derives outcome as win when the player finishes at position 1", () => {
+    const result = resolveContest(emptyBuild(), tieRoster, 1, 42);
+
+    expect(result.cars.find((car) => car.role === "player")?.position).toBe(1);
+    expect(result.outcome).toBe("win");
+  });
+
+  it("keeps board/storage as the player's own items, unchanged meaning", () => {
+    const directItem: OfferedItem = testItem({
+      id: "n-car-direct",
+      name: "N-Car Direct",
+      price: 2,
+      timeModifier: -1,
+    });
+    const result = resolveContest(vehicleBuild([directItem]), tieRoster, 1, 42);
+
+    expect(result.board.map((item) => item.id)).toEqual([directItem.id]);
+    expect(result.storage).toEqual([]);
+  });
+
+  it("gives every car a full per-lap breakdown, not just the player", () => {
+    const result = resolveContest(emptyBuild(), RIVAL_PROFILES, 1, 42, 10);
+
+    result.cars.forEach((car) => {
+      expect(car.laps).toHaveLength(10);
+      expect(car.time).toBeCloseTo(car.laps.reduce((sum, lap) => sum + lap.time, 0));
+    });
+  });
+
+  it("still races against the existing single-SampleGhost path unchanged (FR-011 — Test Day/Practice)", () => {
+    const legacy = resolveContest(emptyBuild(), SAMPLE_GHOST, 10);
+
+    expect(legacy.playerTime).toBe(BASELINE_CAR.baseLapTime * 10);
+    expect(legacy.ghostTime).toBeCloseTo(SAMPLE_GHOST.lapTime * 10);
   });
 });

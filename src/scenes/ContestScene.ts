@@ -2,46 +2,58 @@ import Phaser from "phaser";
 import { resolveContest } from "../simulation/contest";
 import { installedItems } from "../simulation/slots";
 import {
-  buildPlaybackSchedule,
-  frameStateAt,
+  buildNCarPlaybackSchedule,
+  nCarFrameStateAt,
   type CarProgress,
-  type PlaybackSchedule,
+  type NCarPlaybackSchedule,
+  type RankedCar,
 } from "../simulation/playback";
+import { pointAtProgress, selectTrack } from "../simulation/tracks";
 import {
   SLOT_CAPACITY,
-  type ContestResult,
+  type NCarContestResult,
   type OfferedItem,
 } from "../simulation/types";
 import type { Run } from "../simulation/run";
-import { leaderLabel } from "./contestFormatting";
+import { standingsRows } from "./contestFormatting";
 import { createItemCard, enableItemTooltip } from "./itemVisuals";
 import { contestSceneInput, raceLapLabel } from "./runPresentation";
 import { addDemoBackdrop, addRunStamp, DISPLAY_FONT, UI_FONT } from "./demoTheme";
 
-const TRACK_CENTER_X = 400;
-const TRACK_CENTER_Y = 205;
-const TRACK_RADIUS_X = 270;
-const TRACK_RADIUS_Y = 90;
 const BOARD_SLOT_WIDTH = 190;
 const BOARD_SLOT_HEIGHT = 58;
 const BOARD_SLOT_GAP = 18;
 const BOARD_Y = 406;
+const SIDEBAR_X = 686;
+const SIDEBAR_TOP_Y = 70;
+const SIDEBAR_ROW_HEIGHT = 22;
+const TRAIL_LENGTH = 6;
+
+function tintFromHex(color: string): number {
+  return parseInt(color.replace("#", ""), 16);
+}
 
 /**
  * Contest phase: resolves once, then presents the immutable result as a
  * schedule-driven watched race before handing off to ResultScene.
+ * 013-race-spectacle replaces the bare-oval 2-marker presentation with a
+ * real track shape, all 8 cars with a fading trail, and a live standings
+ * sidebar — no playback-speed or skip control exists anywhere here (FR-009).
  */
 export class ContestScene extends Phaser.Scene {
-  private result?: ContestResult;
-  private schedule?: PlaybackSchedule;
+  private result?: NCarContestResult;
+  private schedule?: NCarPlaybackSchedule;
   private elapsedSeconds = 0;
-  private playerMarker?: Phaser.GameObjects.Image;
-  private ghostMarker?: Phaser.GameObjects.Image;
+  private markers = new Map<string, Phaser.GameObjects.Image>();
+  private trails = new Map<string, { x: number; y: number }[]>();
+  private trailGraphics?: Phaser.GameObjects.Graphics;
   private playerLapLabel?: Phaser.GameObjects.Text;
-  private ghostLapLabel?: Phaser.GameObjects.Text;
-  private leaderText?: Phaser.GameObjects.Text;
+  private standingsTexts: Phaser.GameObjects.Text[] = [];
+  private tickerText?: Phaser.GameObjects.Text;
   private boardHighlights = new Map<string, Phaser.GameObjects.Rectangle>();
   private lastRenderedPlayerLapIndex = -1;
+  private previousStandings: RankedCar[] | null = null;
+  private previousFinishedCarIds: string[] = [];
   private run?: Run;
   private encounterId?: string;
 
@@ -64,38 +76,51 @@ export class ContestScene extends Phaser.Scene {
 
     this.run = input.run;
     this.encounterId = input.encounterId;
-    this.result = resolveContest(input.build, input.ghost, input.lapCount);
-    this.schedule = buildPlaybackSchedule(this.result);
+    this.result = resolveContest(input.build, input.rivalRoster, input.level, input.seed, input.lapCount);
+    const track = selectTrack(input.seed, input.level);
+    this.schedule = buildNCarPlaybackSchedule(this.result, track);
     this.elapsedSeconds = 0;
     this.lastRenderedPlayerLapIndex = -1;
+    this.previousStandings = null;
+    this.previousFinishedCarIds = [];
+    this.trails.clear();
     this.renderTrack(installedItems(input.build), input.lapCount);
   }
 
   update(_time: number, delta: number): void {
-    if (!this.result || !this.schedule || !this.playerMarker || !this.ghostMarker) {
+    if (!this.result || !this.schedule || this.markers.size === 0) {
       return;
     }
 
     this.elapsedSeconds += delta / 1000;
-    const frame = frameStateAt(
+    const frame = nCarFrameStateAt(
       this.schedule,
       this.result,
       this.elapsedSeconds,
       this.lastRenderedPlayerLapIndex,
+      this.previousStandings,
+      this.previousFinishedCarIds,
     );
-    this.positionMarker(this.playerMarker, frame.player);
-    this.positionMarker(this.ghostMarker, frame.ghost);
-    this.playerLapLabel?.setText(raceLapLabel("PLAYER", frame.player, this.result.lapCount));
-    this.ghostLapLabel?.setText(raceLapLabel("GHOST", frame.ghost, this.result.lapCount));
-    this.leaderText
-      ?.setText(leaderLabel(frame.liveGap))
-      .setColor(frame.liveGap < 0 ? "#ffd447" : frame.liveGap > 0 ? "#65c7f7" : "#ffffff");
-    if (frame.player.lapIndex !== this.lastRenderedPlayerLapIndex) {
-      this.lastRenderedPlayerLapIndex = frame.player.lapIndex;
+    frame.cars.forEach((car) => {
+      const marker = this.markers.get(car.id);
+      if (marker) this.positionMarker(car.id, marker, car.progress);
+    });
+    this.renderTrails();
+    const player = frame.cars.find((car) => car.role === "player")!;
+    this.playerLapLabel?.setText(raceLapLabel("YOU", player.progress, this.result.lapCount));
+    this.renderStandings(frame.standings);
+    if (frame.newTickerLines.length > 0) {
+      const latest = frame.newTickerLines[frame.newTickerLines.length - 1];
+      this.tickerText?.setText(latest.text);
+    }
+    this.previousStandings = frame.standings;
+    this.previousFinishedCarIds = frame.cars.filter((car) => car.progress.finished).map((car) => car.id);
+    if (player.progress.lapIndex !== this.lastRenderedPlayerLapIndex) {
+      this.lastRenderedPlayerLapIndex = player.progress.lapIndex;
       frame.newCallouts.forEach((event) => this.flashBoardItem(event.item.id));
     }
 
-    if (frame.player.finished && frame.ghost.finished) {
+    if (frame.allFinished) {
       const result = this.result;
       this.result = undefined;
       this.scene.start("ResultScene", {
@@ -108,6 +133,7 @@ export class ContestScene extends Phaser.Scene {
 
   private renderTrack(board: (OfferedItem | null)[], lapCount: number): void {
     const { width } = this.scale;
+    const track = this.schedule!.track;
     addDemoBackdrop(this, "race-day", 0.28);
     addRunStamp(this, this.run!);
     this.add
@@ -118,58 +144,109 @@ export class ContestScene extends Phaser.Scene {
         color: "#f3e5bd",
       })
       .setOrigin(0.5);
-    this.leaderText = this.add
-      .text(width / 2, 78, leaderLabel(0), {
-        fontSize: "18px",
+    this.add
+      .text(SIDEBAR_X, SIDEBAR_TOP_Y - 22, "STANDINGS", {
+        fontSize: "12px",
         fontFamily: UI_FONT,
         fontStyle: "bold",
-        color: "#ffffff",
+        color: "#d8b45a",
       })
       .setOrigin(0.5);
 
-    const track = this.add.graphics();
-    track.lineStyle(36, 0x30353a, 1);
-    track.strokeEllipse(TRACK_CENTER_X, TRACK_CENTER_Y, TRACK_RADIUS_X * 2, TRACK_RADIUS_Y * 2);
-    track.lineStyle(2, 0xd5d8da, 0.8);
-    track.strokeEllipse(TRACK_CENTER_X, TRACK_CENTER_Y, TRACK_RADIUS_X * 2, TRACK_RADIUS_Y * 2);
-    track.lineStyle(2, 0xffffff, 0.25);
-    track.strokeEllipse(
-      TRACK_CENTER_X,
-      TRACK_CENTER_Y,
-      TRACK_RADIUS_X * 2 - 36,
-      TRACK_RADIUS_Y * 2 - 36,
+    const points = track.points;
+    const trackGraphics = this.add.graphics();
+    trackGraphics.lineStyle(30, 0x30353a, 1);
+    this.strokeClosedPath(trackGraphics, points);
+    trackGraphics.lineStyle(2, 0xd5d8da, 0.8);
+    this.strokeClosedPath(trackGraphics, points);
+    this.add
+      .text(60, 60, track.name.toUpperCase(), {
+        fontSize: "11px",
+        fontFamily: UI_FONT,
+        color: "#839b98",
+      });
+
+    this.trailGraphics = this.add.graphics().setDepth(3);
+
+    this.schedule!.cars.forEach((car) => {
+      const marker = this.add
+        .image(0, 0, car.role === "player" ? "player-vehicle" : "rival-vehicle")
+        .setDisplaySize(32, 16)
+        .setDepth(car.role === "player" ? 6 : 4);
+      if (car.role === "rival") marker.setTint(tintFromHex(car.color));
+      this.markers.set(car.id, marker);
+      this.trails.set(car.id, []);
+      const start: CarProgress = { lapIndex: 0, lapProgress: 0, finished: false };
+      this.positionMarker(car.id, marker, start);
+    });
+
+    this.standingsTexts = this.schedule!.cars.map((_car, index) =>
+      this.add.text(SIDEBAR_X, SIDEBAR_TOP_Y + index * SIDEBAR_ROW_HEIGHT, "", {
+        fontSize: "12px",
+        fontFamily: UI_FONT,
+      }).setOrigin(0.5),
     );
 
-    this.playerMarker = this.add.image(0, 0, "player-vehicle").setDisplaySize(46, 23).setDepth(5);
-    this.ghostMarker = this.add.image(0, 0, "rival-vehicle").setDisplaySize(46, 23).setDepth(4);
-    this.playerLapLabel = this.add.text(105, 325, `PLAYER · LAP 1/${lapCount}`, {
-      fontSize: "16px",
+    this.playerLapLabel = this.add.text(60, 336, `YOU · LAP 1/${lapCount}`, {
+      fontSize: "14px",
       fontFamily: UI_FONT,
       fontStyle: "bold",
       color: "#ffd447",
     });
-    this.ghostLapLabel = this.add
-      .text(width - 105, 325, `GHOST · LAP 1/${lapCount}`, {
-        fontSize: "16px",
-        fontFamily: UI_FONT,
-        fontStyle: "bold",
-        color: "#65c7f7",
-      })
-      .setOrigin(1, 0);
+    this.tickerText = this.add.text(width / 2, 352, "The field is underway.", {
+      fontSize: "12px",
+      fontFamily: UI_FONT,
+      fontStyle: "italic",
+      color: "#cfd8d6",
+    }).setOrigin(0.5);
     this.renderBoard(board);
-
-    const start: CarProgress = { lapIndex: 0, lapProgress: 0, finished: false };
-    this.positionMarker(this.playerMarker, start);
-    this.positionMarker(this.ghostMarker, start);
   }
 
-  private positionMarker(marker: Phaser.GameObjects.Image, progress: CarProgress): void {
-    const angle = progress.lapProgress * Math.PI * 2 - Math.PI / 2;
-    marker.setPosition(
-      TRACK_CENTER_X + Math.cos(angle) * TRACK_RADIUS_X,
-      TRACK_CENTER_Y + Math.sin(angle) * TRACK_RADIUS_Y,
-    );
-    marker.setRotation(angle + Math.PI / 2);
+  private positionMarker(carId: string, marker: Phaser.GameObjects.Image, progress: CarProgress): void {
+    const point = pointAtProgress(this.schedule!.track, progress.lapProgress);
+    marker.setPosition(point.x, point.y);
+    marker.setRotation(point.headingRadians);
+
+    const trail = this.trails.get(carId);
+    if (!trail) return;
+    trail.push({ x: point.x, y: point.y });
+    if (trail.length > TRAIL_LENGTH) trail.shift();
+  }
+
+  private renderTrails(): void {
+    const graphics = this.trailGraphics;
+    if (!graphics) return;
+    graphics.clear();
+    this.schedule!.cars.forEach((car) => {
+      const trail = this.trails.get(car.id);
+      if (!trail || trail.length < 2) return;
+      const color = tintFromHex(car.color);
+      trail.forEach((point, index) => {
+        const alpha = ((index + 1) / trail.length) * 0.35;
+        graphics.fillStyle(color, alpha);
+        graphics.fillCircle(point.x, point.y, 3);
+      });
+    });
+  }
+
+  private renderStandings(standings: Parameters<typeof standingsRows>[0]): void {
+    const rows = standingsRows(standings, this.schedule!.cars);
+    rows.forEach((row, index) => {
+      const text = this.standingsTexts[index];
+      if (!text) return;
+      text
+        .setText(row.label)
+        .setColor(row.isPlayer ? "#ffd447" : row.color)
+        .setFontStyle(row.isPlayer ? "bold" : "normal");
+    });
+  }
+
+  private strokeClosedPath(graphics: Phaser.GameObjects.Graphics, points: readonly { x: number; y: number }[]): void {
+    graphics.beginPath();
+    graphics.moveTo(points[0].x, points[0].y);
+    points.slice(1).forEach((point) => graphics.lineTo(point.x, point.y));
+    graphics.closePath();
+    graphics.strokePath();
   }
 
   private renderBoard(board: (OfferedItem | null)[]): void {

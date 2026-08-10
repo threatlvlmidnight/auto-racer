@@ -1,3 +1,5 @@
+import type { PlayerLap } from "./laps";
+
 // Shared simulation types (data-model.md). Deliberately minimal/illustrative —
 // the real item/component taxonomy is a later feature's responsibility
 // (spec.md Assumptions).
@@ -264,4 +266,47 @@ export interface ContestResult {
   laps: LapBreakdown[];
   /** Resolver-emitted facts used by scored and practice presentation alike. */
   contributions?: ContributionEvidence[];
+}
+
+// --- Feature 012: multi-ghost contest --------------------------------------
+
+/** Authored per-level rule: how many positions to fill, and which price tier to favor. */
+export type RivalLevelScaling = (level: number) => {
+  slotsToFill: number;
+  priceBias: "low" | "mid" | "high";
+};
+
+/** Immutable authored content (data-model.md, Rival Profile). Exactly 7 exist. */
+export interface RivalProfile {
+  id: string;
+  name: string;
+  color: string;
+  vehicleId: VehicleId;
+  levelScaling: RivalLevelScaling;
+}
+
+export type CarRole = "player" | "rival";
+
+/** One car's resolved result within an N-car contest (data-model.md, Car Result). */
+export interface CarResult {
+  id: string;
+  role: CarRole;
+  name: string;
+  color: string;
+  time: number;
+  laps: PlayerLap[];
+  /** 1-indexed finishing rank; unique across the result, no gaps. */
+  position: number;
+  /** time - (position 1's time); 0 for the leader. */
+  gapToLeader: number;
+}
+
+/** Extends ContestResult to a ranked N-car field (data-model.md, N-Car Contest Result). */
+export interface NCarContestResult {
+  lapCount: number;
+  /** Exactly 8 entries (player + 7 rivals), ordered by position ascending. */
+  cars: CarResult[];
+  outcome: ContestOutcome;
+  board: OfferedItem[];
+  storage: OfferedItem[];
 }

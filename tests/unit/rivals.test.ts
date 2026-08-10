@@ -1,0 +1,117 @@
+import { describe, expect, it } from "vitest";
+import { vehicleById } from "../../src/content/entrants";
+import { RIVAL_PROFILES, validateRivalCatalog } from "../../src/content/rivals";
+import { resolveRivalBuild } from "../../src/simulation/rivals";
+import { installedItems, storedItems } from "../../src/simulation/slots";
+
+describe("RIVAL_PROFILES catalog (FR-004)", () => {
+  it("authors exactly 7 profiles", () => {
+    expect(RIVAL_PROFILES).toHaveLength(7);
+  });
+
+  it("gives every profile a unique id", () => {
+    const ids = RIVAL_PROFILES.map((profile) => profile.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("resolves every profile's vehicleId to an existing vehicle definition", () => {
+    RIVAL_PROFILES.forEach((profile) => {
+      expect(vehicleById(profile.vehicleId)).toBeDefined();
+    });
+  });
+
+  it("validates as a valid catalog", () => {
+    expect(validateRivalCatalog(RIVAL_PROFILES)).toEqual({ kind: "valid" });
+  });
+
+  it("fails loudly on a duplicate id", () => {
+    const broken = [...RIVAL_PROFILES.slice(0, 6), { ...RIVAL_PROFILES[6], id: RIVAL_PROFILES[0].id }];
+    expect(validateRivalCatalog(broken)).toEqual({ kind: "invalid", code: "duplicate-id" });
+  });
+
+  it("fails loudly on an unresolvable vehicleId", () => {
+    const broken = [
+      ...RIVAL_PROFILES.slice(0, 6),
+      { ...RIVAL_PROFILES[6], vehicleId: "not-a-real-vehicle" as never },
+    ];
+    expect(validateRivalCatalog(broken)).toEqual({ kind: "invalid", code: "unknown-vehicle" });
+  });
+
+  it("fails loudly on a catalog that is not exactly 7 profiles", () => {
+    expect(validateRivalCatalog(RIVAL_PROFILES.slice(0, 6))).toEqual({
+      kind: "invalid",
+      code: "wrong-count",
+    });
+  });
+});
+
+describe("resolveRivalBuild determinism (FR-005)", () => {
+  const profile = RIVAL_PROFILES[0];
+
+  it("produces a deeply equal build across repeated calls with identical arguments", () => {
+    const first = resolveRivalBuild(profile, 1, 42);
+    const second = resolveRivalBuild(profile, 1, 42);
+    expect(second).toEqual(first);
+  });
+
+  it("resolves into the profile's own named vehicle topology", () => {
+    const build = resolveRivalBuild(profile, 1, 42);
+    const vehicle = vehicleById(profile.vehicleId)!;
+    expect(build.vehicleId).toBe(profile.vehicleId);
+    expect(build.slots).toHaveLength(vehicle.slots.length);
+    build.slots.forEach((slot, index) => {
+      expect(slot.slotId).toBe(vehicle.slots[index].id);
+      expect(slot.slotType).toBe(vehicle.slots[index].type);
+    });
+  });
+
+  it("installs real catalog items reusing the existing deterministic draw — no second selection mechanism", () => {
+    const build = resolveRivalBuild(profile, 2, 7);
+    const installed = [...installedItems(build), ...storedItems(build)].filter(
+      (item): item is NonNullable<typeof item> => item !== null,
+    );
+    expect(installed.length).toBeGreaterThan(0);
+    installed.forEach((item) => {
+      expect(item.id).toMatch(/^item-\d{3}$/);
+    });
+  });
+
+  it("produces different builds for different seeds at the same level", () => {
+    const a = resolveRivalBuild(profile, 1, 1);
+    const b = resolveRivalBuild(profile, 1, 2);
+    expect(a).not.toEqual(b);
+  });
+
+  it("never reads unseeded randomness (two independent resolutions of every profile agree)", () => {
+    RIVAL_PROFILES.forEach((candidate) => {
+      const first = resolveRivalBuild(candidate, 2, 99);
+      const second = resolveRivalBuild(candidate, 2, 99);
+      expect(second).toEqual(first);
+    });
+  });
+});
+
+describe("resolveRivalBuild level-scaling (US3, FR-004)", () => {
+  const profile = RIVAL_PROFILES[0];
+
+  it("fills strictly more of the vehicle at a higher level than a lower one", () => {
+    const low = resolveRivalBuild(profile, 1, 5);
+    const high = resolveRivalBuild(profile, 2, 5);
+    const countFilled = (build: typeof low) =>
+      [...installedItems(build), ...storedItems(build)].filter((item) => item !== null).length;
+
+    expect(countFilled(high)).toBeGreaterThan(countFilled(low));
+  });
+
+  it("produces a defined, bounded result below the authored level range", () => {
+    expect(() => resolveRivalBuild(profile, 0, 5)).not.toThrow();
+    expect(() => resolveRivalBuild(profile, -5, 5)).not.toThrow();
+  });
+
+  it("produces a defined, bounded result above the authored level range", () => {
+    expect(() => resolveRivalBuild(profile, 99, 5)).not.toThrow();
+    const build = resolveRivalBuild(profile, 99, 5);
+    const filled = [...installedItems(build), ...storedItems(build)].filter((item) => item !== null);
+    expect(filled.length).toBeLessThanOrEqual(build.slots.length + build.storage.length);
+  });
+});

@@ -10,9 +10,9 @@ import {
   RunTransitionError,
   summarizeRunHistory,
 } from "../simulation/run";
-import { SAMPLE_GHOST } from "../content/sample-data";
+import { RIVAL_PROFILES } from "../content/rivals";
 import type { CarProgress } from "../simulation/playback";
-import type { ContestResult, SampleGhost } from "../simulation/types";
+import type { ContestResult, NCarContestResult, RivalProfile } from "../simulation/types";
 import type { RandomSource } from "../simulation/encounters";
 import type {
   PartsSupplierPayload,
@@ -152,7 +152,11 @@ export interface ContestSceneInput {
   encounterId: string;
   lapCount: 10 | 12;
   build: Run["build"];
-  ghost: SampleGhost;
+  /** Exactly 7 rival profiles; identical for every entrant (FR-010). */
+  rivalRoster: readonly RivalProfile[];
+  /** The current scheduled PvP stage's ordinal (data-model.md "in-run level"). */
+  level: number;
+  seed: number;
 }
 
 export function contestSceneInput(run: Run, encounterId: string): ContestSceneInput {
@@ -166,22 +170,58 @@ export function contestSceneInput(run: Run, encounterId: string): ContestSceneIn
   ) {
     throw new RunTransitionError("encounter-id-mismatch", `${encounterId} is not active PvP`);
   }
+  const stage = run.stages.find((candidate) => candidate.id === encounter.stageId);
   return {
     run,
     encounterId,
     lapCount: encounter.payload.lapCount,
     build: encounter.payload.buildSnapshot,
-    ghost: SAMPLE_GHOST,
+    rivalRoster: RIVAL_PROFILES,
+    level: stage?.pvpOrdinal ?? 1,
+    seed: run.seed,
+  };
+}
+
+/**
+ * Bridges the rich N-car result back to the legacy two-sided ContestResult
+ * that completePvpEncounter/resolvePendingSponsor still expect
+ * (012-multi-ghost-contest deliberately leaves run.ts/encounters.ts
+ * untouched — see specs/012-multi-ghost-contest/plan.md's file list and
+ * research.md Decision 6). "ghost"/"gap" become the player's gap to their
+ * nearest competitor: the car one rank above the player, or one rank below
+ * if the player is already leading.
+ */
+function toLegacyContestResult(result: NCarContestResult): ContestResult {
+  const player = result.cars.find((car) => car.role === "player")!;
+  const nearestRank = player.position === 1 ? 2 : player.position - 1;
+  const nearest = result.cars.find((car) => car.position === nearestRank) ?? player;
+
+  return {
+    lapCount: result.lapCount,
+    playerTime: player.time,
+    ghostTime: nearest.time,
+    gap: player.time - nearest.time,
+    outcome: result.outcome,
+    board: result.board,
+    storage: result.storage,
+    laps: player.laps.map((lap, index) => ({
+      lap: index + 1,
+      playerLapTime: lap.time,
+      ghostLapTime: nearest.laps[index]?.time ?? lap.time,
+      firedItems: lap.firedItems,
+      contributions: lap.contributions,
+    })),
+    contributions: player.laps.flatMap((lap) => lap.contributions),
   };
 }
 
 export function continueRunFromResult(
   run: Run,
   encounterId: string,
-  result: ContestResult,
+  result: NCarContestResult,
   rng: RandomSource = Math.random,
 ): Run {
-  return completePvpEncounter(run, encounterId, result, rng);
+  return completePvpEncounter(run, encounterId, toLegacyContestResult(result), rng);
 }
 
 export function raceLapLabel(name: string, progress: CarProgress, lapCount: number): string {

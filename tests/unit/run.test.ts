@@ -12,7 +12,7 @@ import {
   summarizeRunHistory,
   type Run,
 } from "../../src/simulation/run";
-import type { EntrantId, RunIdentity, VehicleBuild } from "../../src/simulation/types";
+import type { ContestResult, EntrantId, RunIdentity, VehicleBuild } from "../../src/simulation/types";
 import { createEmptyVehicleBuild } from "../../src/simulation/build";
 import {
   canEnterEntrantSelection,
@@ -193,9 +193,9 @@ describe("PvP run transitions", () => {
   });
 
   it.each([
-    ["lap count", (result: ReturnType<typeof resolveContest>) => ({ ...result, lapCount: 12 })],
-    ["board IDs", (result: ReturnType<typeof resolveContest>) => ({ ...result, board: [ITEM_POOL[0]] })],
-    ["storage IDs", (result: ReturnType<typeof resolveContest>) => ({ ...result, storage: [ITEM_POOL[0]] })],
+    ["lap count", (result: ContestResult) => ({ ...result, lapCount: 12 })],
+    ["board IDs", (result: ContestResult) => ({ ...result, board: [ITEM_POOL[0]] })],
+    ["storage IDs", (result: ContestResult) => ({ ...result, storage: [ITEM_POOL[0]] })],
   ])("rejects mismatched %s before any mutation", (_label, mutate) => {
     const active = advanceToFirstPvp();
     const snapshot = structuredClone(active);

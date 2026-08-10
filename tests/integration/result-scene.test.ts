@@ -6,47 +6,80 @@ import {
   itemDependencyNote,
   itemDetailsLabel,
   outcomeLabel,
+  positionLabel,
+  standingsRow,
   storageItemsLabel,
   timesLabel,
 } from "../../src/scenes/resultFormatting";
 import { ITEM_POOL } from "../../src/content/sample-data";
-import type { ContestResult } from "../../src/simulation/types";
+import type { CarResult, NCarContestResult } from "../../src/simulation/types";
 
 // Lighter check (not strict TDD, per constitution's presentation-layer
 // decision) confirming ResultScene's required fields (FR-006, FR-007) are
-// all produced from a given ContestResult. tasks.md T018.
+// all produced from a given NCarContestResult. tasks.md T018 (012-multi-
+// ghost-contest T014/T020).
 
-function result(overrides: Partial<ContestResult>): ContestResult {
+function car(overrides: Partial<CarResult>): CarResult {
+  return {
+    id: "player",
+    role: "player",
+    name: "Player",
+    color: "#ffd447",
+    time: 57,
+    laps: [],
+    position: 1,
+    gapToLeader: 0,
+    ...overrides,
+  };
+}
+
+function result(overrides: Partial<NCarContestResult>): NCarContestResult {
   return {
     lapCount: 10,
-    playerTime: 57,
-    ghostTime: 58.5,
-    gap: -1.5,
+    cars: [car({})],
     outcome: "win",
     board: [],
     storage: [],
-    laps: [],
     ...overrides,
   };
 }
 
 describe("ResultScene required fields (FR-006, FR-007)", () => {
-  it("shows both times and a signed gap (FR-006)", () => {
-    const r = result({ playerTime: 57, ghostTime: 58.5, gap: -1.5 });
+  it("shows the player's position and a signed gap to the leader (FR-006)", () => {
+    const player = car({ id: "player", role: "player", time: 57, position: 1, gapToLeader: 0 });
+    const rival = car({ id: "rival-torres", role: "rival", name: "Torres", time: 58.5, position: 2, gapToLeader: 1.5 });
+    const r = result({ cars: [player, rival], outcome: "win" });
+
     expect(timesLabel(r)).toContain("57.0s");
-    expect(timesLabel(r)).toContain("58.5s");
-    expect(gapLabel(r)).toBe("1.5s ahead of the ghost");
+    expect(positionLabel(r)).toBe("1st of 2");
+    expect(gapLabel(r)).toBe("Leading the field");
   });
 
-  it("labels a loss as behind the ghost", () => {
-    const r = result({ playerTime: 60, ghostTime: 58.5, gap: 1.5, outcome: "loss" });
-    expect(gapLabel(r)).toBe("1.5s behind the ghost");
+  it("labels a loss as behind the leader, with the player's own gap", () => {
+    const player = car({ id: "player", role: "player", time: 60, position: 2, gapToLeader: 1.5 });
+    const leader = car({ id: "rival-torres", role: "rival", name: "Torres", time: 58.5, position: 1, gapToLeader: 0 });
+    const r = result({ cars: [leader, player], outcome: "loss" });
+
+    expect(gapLabel(r)).toBe("1.5s behind the leader");
+    expect(positionLabel(r)).toBe("2nd of 2");
   });
 
-  it("labels an exact tie distinctly, not as a 0.0s gap either direction", () => {
-    const r = result({ playerTime: 58.5, ghostTime: 58.5, gap: 0, outcome: "tie" });
-    expect(gapLabel(r)).toBe("Exact tie");
-    expect(outcomeLabel(r)).toBe("Tie — Win for Both!"); // FR-011
+  it("labels a tie distinctly (FR-011 heritage)", () => {
+    const player = car({ id: "player", role: "player", time: 58.5, position: 2, gapToLeader: 0 });
+    const leader = car({ id: "rival-torres", role: "rival", name: "Torres", time: 58.5, position: 1, gapToLeader: 0 });
+    const r = result({ cars: [leader, player], outcome: "tie" });
+
+    expect(outcomeLabel(r)).toBe("Tie — Win for Both!");
+  });
+
+  it("renders every car in fixed finishing order via standingsRow", () => {
+    const player = car({ id: "player", role: "player", name: "Player", time: 57, position: 1, gapToLeader: 0 });
+    const rival = car({ id: "rival-torres", role: "rival", name: "Torres", time: 58.5, position: 2, gapToLeader: 1.5 });
+
+    expect(standingsRow(player)).toContain("Player");
+    expect(standingsRow(player)).toContain("57.0s");
+    expect(standingsRow(rival)).toContain("Torres");
+    expect(standingsRow(rival)).toContain("+1.5s");
   });
 
   it("renders empty board and storage sections", () => {
