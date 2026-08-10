@@ -43,4 +43,12 @@
 - Rival Scouting's exclusion from this feature's scope was resolved as a
   reasonable default from already-recorded decisions, not a new
   question: `specs/skribidi-gap-decisions.md` §8 already fully claims
-  it for the (blocked) `pre-race-setup` feature. All items pass.
+  it for the (blocked) `pre-race-setup` feature.
+- `/speckit.clarify`'s taxonomy scan found no further genuine ambiguity
+  requiring a user question — the three highest-impact decisions were
+  already resolved before drafting. It did surface one concrete grounding
+  fact carried into `plan.md`/`tasks.md` rather than asked about: a
+  hardcoded `run.stages.length === 6` runtime shape-guard exists at
+  `src/scenes/RunScene.ts:76` and must be updated to the new schedule
+  length as part of implementation, not left as a silent latent bug. All
+  items pass.
