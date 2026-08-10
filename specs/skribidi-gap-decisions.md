@@ -268,7 +268,7 @@ row's own text, and stays open regardless of how §7/§8 land.
 | 2 | Race presentation / track | Adopt (rebuilt, deterministic) | `race-spectacle` (new) |
 | 3 | Garage slots | Reject | — |
 | 4 | Item synergy tags | Adopt (own tag set) | `item-synergy-tags` (new) |
-| 5 | Duplicate items | Adopt (tiering to ★3) | folded into acquisition work |
+| 5 | Duplicate items | Adopt (tiering to ★3) | `duplicate-item-tiering` (new) |
 | 6 | Economy | Adopt (in full) | `economy-depth` (new) |
 | 7 | Season structure | Adopt (length first, variety later) | extends `009-run-progression` |
 | 8 | Pre-race screen | Adopt + expand (rival intel + track preview + item-driven controls) | `pre-race-setup` (new, depends on §2) |
