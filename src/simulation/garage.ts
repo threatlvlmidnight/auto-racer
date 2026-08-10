@@ -245,3 +245,37 @@ export function commitGarageCommand(context: GarageContext, command: GarageComma
     preview,
   };
 }
+
+export type SellItemResult =
+  | { kind: "sold"; build: VehicleBuild; item: ItemDefinition; creditsGained: number }
+  | { kind: "failure"; code: "missing-source" };
+
+/**
+ * Sell any held item (active or stored) for half its authored price,
+ * rounded down (015-economy-depth contract §3). Not a GarageCommand
+ * variant — selling has no destination, unlike every movement this
+ * contract otherwise governs (research.md Decision 4).
+ */
+export function sellItem(
+  build: VehicleBuild,
+  source: Extract<GarageSource, { area: "vehicle" | "storage" }>,
+): SellItemResult {
+  const item = source.area === "vehicle"
+    ? build.slots.find((slot) => slot.slotId === source.slotId)?.item ?? null
+    : build.storage[source.index]?.item ?? null;
+  if (!item) return { kind: "failure", code: "missing-source" };
+
+  const slots = source.area === "vehicle"
+    ? build.slots.map((slot) => (slot.slotId === source.slotId ? { ...slot, item: null } : slot))
+    : build.slots;
+  const storage = source.area === "storage"
+    ? build.storage.map((position, index) => (index === source.index ? { ...position, item: null } : position))
+    : build.storage;
+
+  return {
+    kind: "sold",
+    build: { ...build, slots, storage },
+    item,
+    creditsGained: Math.floor(item.price / 2),
+  };
+}

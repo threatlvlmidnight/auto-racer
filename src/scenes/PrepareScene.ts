@@ -6,8 +6,11 @@ import {
   leaveSupplier,
   purchaseStock,
   restockSupplier,
+  sellHeldItem,
+  toggleLock,
   type PartsSupplierPayload,
   type RewardDraftPayload,
+  type StockEntry,
 } from "../simulation/encounters";
 import { RunTransitionError, type Run } from "../simulation/run";
 import {
@@ -124,8 +127,10 @@ export class PrepareScene extends Phaser.Scene {
       }).setOrigin(0.5));
     }
     payload.stock.forEach((entry, index) => {
+      const x = 170 + index * 230;
       const affordable = entry.item.price <= this.run!.credits;
-      this.createDraggableOffer(170 + index * 230, 95, entry.id, entry.item, entry.state === "available" && affordable, entry.state === "purchased");
+      this.createDraggableOffer(x, 95, entry.id, entry.item, entry.state === "available" && affordable, entry.state === "purchased");
+      if (entry.state === "available") this.createLockToggle(x, entry);
     });
     this.createControl(300, 170, payload.restockUsed ? "Restock used" : "Restock · 1 credit", () => {
       this.run = restockSupplier(this.run!, this.run!.activeEncounter!.id, Math.random, ITEM_POOL);
@@ -168,6 +173,28 @@ export class PrepareScene extends Phaser.Scene {
     });
     card.on("dragend", () => {
       if (card.active) card.setPosition(x, y);
+    });
+  }
+
+  /** Reroll-scoping toggle (015-economy-depth US4) — only meaningful for a
+   *  still-available offer; a purchased one is already reroll-exempt. */
+  private createLockToggle(x: number, entry: StockEntry): void {
+    const label = this.add
+      .text(x + SLOT_WIDTH / 2 - 4, 95 - 42 + 3, entry.locked ? "LOCKED" : "LOCK", {
+        fontSize: "8px",
+        fontFamily: UI_FONT,
+        fontStyle: "bold",
+        color: entry.locked ? "#7cfc00" : "#d8b45a",
+        backgroundColor: "#171d21",
+        padding: { x: 3, y: 1 },
+      })
+      .setOrigin(1, 0)
+      .setInteractive({ useHandCursor: true });
+    this.track(label);
+    label.on("pointerdown", (_pointer: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
+      event.stopPropagation();
+      this.run = toggleLock(this.run!, this.run!.activeEncounter!.id, entry.id);
+      this.render();
     });
   }
 
@@ -312,6 +339,37 @@ export class PrepareScene extends Phaser.Scene {
     card.on("dragend", () => {
       if (card.active) card.setPosition(x, y);
     });
+
+    if (source.area === "vehicle" || source.area === "storage") {
+      const sellLabel = this.add
+        .text(x + slotWidth / 2 - 4, y - SLOT_HEIGHT / 2 + 3, `SELL +${Math.floor(item.price / 2)}`, {
+          fontSize: "8px",
+          fontFamily: UI_FONT,
+          fontStyle: "bold",
+          color: "#d8b45a",
+          backgroundColor: "#171d21",
+          padding: { x: 3, y: 1 },
+        })
+        .setOrigin(1, 0)
+        .setInteractive({ useHandCursor: true });
+      this.track(sellLabel);
+      sellLabel.on("pointerdown", (_pointer: Phaser.Input.Pointer, _lx: number, _ly: number, event: Phaser.Types.Input.EventData) => {
+        event.stopPropagation();
+        this.sellHeldItemAt(source);
+      });
+    }
+  }
+
+  private sellHeldItemAt(source: Extract<GarageSource, { area: "vehicle" | "storage" }>): void {
+    try {
+      this.run = sellHeldItem(this.run!, this.run!.activeEncounter!.id, source);
+      this.statusMessage = null;
+      this.render();
+    } catch (error) {
+      if (!(error instanceof RunTransitionError)) throw error;
+      this.statusMessage = "That item could not be sold.";
+      this.render();
+    }
   }
 
   /** Rearranging items already on the vehicle or in storage never loses one —

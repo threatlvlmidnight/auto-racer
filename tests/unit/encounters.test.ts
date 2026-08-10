@@ -10,7 +10,9 @@ import {
   resolvePendingSponsor,
   restockSupplier,
   seededTargetSeconds,
+  sellHeldItem,
   selectSponsorOption,
+  toggleLock,
   type PartsSupplierPayload,
   type RewardDraftPayload,
   type SponsorMeetingPayload,
@@ -550,5 +552,129 @@ describe("atomic acquisition through garage commands", () => {
 
     expect(active).toStrictEqual(snapshot);
     expect(active.history).toHaveLength(snapshot.history.length);
+  });
+});
+
+describe("sellHeldItem (015-economy-depth US3)", () => {
+  it("appends exactly one sell-back transaction and replaces run.build with the sale's result", () => {
+    const active = activate(0);
+    const payload = active.activeEncounter!.payload as PartsSupplierPayload;
+    const affordable = payload.stock.find(({ item }) => item.price <= active.credits)!;
+    const purchased = purchaseStock(active, active.activeEncounter!.id, affordable.id, {
+      area: "vehicle",
+      slotId: active.build.slots[0].slotId,
+    });
+
+    const sold = sellHeldItem(purchased, purchased.activeEncounter!.id, {
+      area: "vehicle",
+      slotId: purchased.build.slots[0].slotId,
+    });
+
+    expect(sold.build.slots[0].item).toBeNull();
+    const sellTx = sold.creditTransactions.find((tx) => tx.kind === "sell-back");
+    expect(sellTx).toBeDefined();
+    expect(sellTx!.amount).toBe(Math.floor(affordable.item.price / 2));
+    expect(sold.credits).toBe(purchased.credits + Math.floor(affordable.item.price / 2));
+  });
+
+  it("throws a typed invalid-action error rather than silently no-op when there is nothing to sell", () => {
+    const active = activate(0);
+    expect(() =>
+      sellHeldItem(active, active.activeEncounter!.id, { area: "vehicle", slotId: active.build.slots[0].slotId }),
+    ).toThrowError(expect.objectContaining({ code: "invalid-action" }));
+  });
+
+  it("throws the same encounter-id-mismatch code as other Parts Supplier actions when misapplied", () => {
+    const active = activate(0);
+    expect(() =>
+      sellHeldItem(active, "wrong-id", { area: "vehicle", slotId: active.build.slots[0].slotId }),
+    ).toThrowError(expect.objectContaining({ code: "encounter-id-mismatch" }));
+  });
+
+  it("sells a stored item too, granting credits without touching any other position", () => {
+    const active = activate(0);
+    const payload = active.activeEncounter!.payload as PartsSupplierPayload;
+    const affordable = payload.stock.find(({ item }) => item.price <= active.credits)!;
+    const purchased = purchaseStock(active, active.activeEncounter!.id, affordable.id, {
+      area: "storage",
+      index: 0,
+    });
+
+    const sold = sellHeldItem(purchased, purchased.activeEncounter!.id, { area: "storage", index: 0 });
+
+    expect(sold.build.storage[0].item).toBeNull();
+    expect(sold.credits).toBe(purchased.credits + Math.floor(affordable.item.price / 2));
+  });
+});
+
+describe("card locking (015-economy-depth US4)", () => {
+  it("defaults every newly-generated stock entry to unlocked", () => {
+    const active = activate(0);
+    const payload = active.activeEncounter!.payload as PartsSupplierPayload;
+    expect(payload.stock.every((entry) => entry.locked === false)).toBe(true);
+  });
+
+  it("flips exactly one entry's locked flag, appending no credit transaction", () => {
+    const active = activate(0);
+    const payload = active.activeEncounter!.payload as PartsSupplierPayload;
+    const target = payload.stock[0];
+
+    const locked = toggleLock(active, active.activeEncounter!.id, target.id);
+    const lockedPayload = locked.activeEncounter!.payload as PartsSupplierPayload;
+
+    expect(lockedPayload.stock.find(({ id }) => id === target.id)?.locked).toBe(true);
+    expect(lockedPayload.stock.filter((entry) => entry.locked)).toHaveLength(1);
+    expect(locked.creditTransactions).toEqual(active.creditTransactions);
+    expect(locked.credits).toBe(active.credits);
+
+    const unlocked = toggleLock(locked, locked.activeEncounter!.id, target.id);
+    expect((unlocked.activeEncounter!.payload as PartsSupplierPayload).stock.find(({ id }) => id === target.id)?.locked)
+      .toBe(false);
+  });
+
+  it("throws the same encounter-id-mismatch/invalid-encounter-type codes other Parts Supplier actions throw", () => {
+    const active = activate(0);
+    const payload = active.activeEncounter!.payload as PartsSupplierPayload;
+
+    expect(() => toggleLock(active, "wrong-id", payload.stock[0].id)).toThrowError(
+      expect.objectContaining({ code: "encounter-id-mismatch" }),
+    );
+
+    const rewardActive = activate(0.34);
+    expect(rewardActive.activeEncounter!.type).toBe("reward-draft");
+    expect(() => toggleLock(rewardActive, rewardActive.activeEncounter!.id, "any-stock-id")).toThrowError(
+      expect.objectContaining({ code: "invalid-encounter-type" }),
+    );
+  });
+
+  it("skips a locked entry on reroll while still replacing every other eligible entry (SC-006)", () => {
+    const active = activate(0);
+    const payload = active.activeEncounter!.payload as PartsSupplierPayload;
+    const target = payload.stock[0];
+    const locked = toggleLock(active, active.activeEncounter!.id, target.id);
+
+    const rerolled = restockSupplier(locked, locked.activeEncounter!.id, () => 0.99, ITEM_POOL);
+    const rerolledPayload = rerolled.activeEncounter!.payload as PartsSupplierPayload;
+
+    expect(rerolledPayload.stock[0].item.id).toBe(target.item.id);
+    expect(rerolledPayload.stock[0].locked).toBe(true);
+    // Every other entry still rerolls exactly as it did before locking existed.
+    const unlockedRestock = restockSupplier(active, active.activeEncounter!.id, () => 0.99, ITEM_POOL);
+    const unlockedPayload = unlockedRestock.activeEncounter!.payload as PartsSupplierPayload;
+    expect(rerolledPayload.stock.slice(1).map((entry) => entry.item.id)).toEqual(
+      unlockedPayload.stock.slice(1).map((entry) => entry.item.id),
+    );
+  });
+
+  it("never carries a lock into a freshly-generated encounter", () => {
+    const active = activate(0);
+    const payload = active.activeEncounter!.payload as PartsSupplierPayload;
+    toggleLock(active, active.activeEncounter!.id, payload.stock[0].id);
+
+    // A brand new Parts Supplier payload (e.g. the next one generated) always
+    // starts fully unlocked — locks are scoped to one encounter instance.
+    const fresh = activate(0);
+    const freshPayload = fresh.activeEncounter!.payload as PartsSupplierPayload;
+    expect(freshPayload.stock.every((entry) => entry.locked === false)).toBe(true);
   });
 });

@@ -24,11 +24,13 @@ export type RunSceneRoute = "RunScene" | "PrepareScene" | "ContestScene";
 export interface RunPresentation {
   progressLabel: string;
   creditsLabel: string;
+  /** Feature 015: always visible alongside credits (FR-006). */
+  reputationLabel: string;
   status: Run["status"];
   choices: EncounterChoice[];
   remainingStages: number;
   pendingSponsorLabel: string | null;
-  statusLabel: "Available" | "Active" | "Completed" | "Unavailable";
+  statusLabel: "Available" | "Active" | "Completed" | "Unavailable" | "Failed";
   history: RunHistorySummary[];
 }
 
@@ -64,8 +66,11 @@ export function runPresentation(run: Run): RunPresentation {
   return {
     progressLabel: run.status === "completed"
       ? "Run complete"
-      : `Stage ${run.stageIndex + 1} of ${run.stages.length}`,
+      : run.status === "failed"
+        ? "Run failed"
+        : `Stage ${run.stageIndex + 1} of ${run.stages.length}`,
     creditsLabel: `${run.credits} credits`,
+    reputationLabel: `${run.reputation} reputation`,
     status: run.status,
     choices: run.availableChoices,
     remainingStages: progress.remaining,
@@ -76,9 +81,11 @@ export function runPresentation(run: Run): RunPresentation {
       ? "Unavailable"
       : run.status === "completed"
         ? "Completed"
-        : run.activeEncounter
-          ? "Active"
-          : "Available",
+        : run.status === "failed"
+          ? "Failed"
+          : run.activeEncounter
+            ? "Active"
+            : "Available",
     history: summarizeRunHistory(run),
   };
 }

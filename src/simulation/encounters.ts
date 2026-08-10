@@ -1,5 +1,5 @@
 import { drawItem } from "./draft";
-import { commitGarageCommand, type GarageDestination } from "./garage";
+import { commitGarageCommand, sellItem, type GarageDestination, type GarageSource } from "./garage";
 import {
   activateChoice,
   completeNonPvpEncounter,
@@ -38,6 +38,8 @@ export interface StockEntry {
   id: string;
   item: OfferedItem;
   state: "available" | "purchased";
+  /** New (015-economy-depth FR-010/FR-011). Defaults to false; never persists across encounters. */
+  locked: boolean;
 }
 
 export interface PartsSupplierPayload {
@@ -148,6 +150,7 @@ function createSupplierPayload(
       id: `${run.activeEncounter!.id}-stock-${index + 1}`,
       item: eligible[Math.min(eligible.length - 1, Math.floor(rng() * eligible.length))],
       state: "available" as const,
+      locked: false,
     })),
     unavailable: false,
     restockUsed: false,
@@ -342,10 +345,58 @@ export function restockSupplier(
       payload: {
         ...payload,
         restockUsed: true,
-        stock: payload.stock.map((entry) => entry.state === "purchased" ? entry : {
+        stock: payload.stock.map((entry) => entry.state === "purchased" || entry.locked ? entry : {
           ...entry,
           item: eligible[Math.min(eligible.length - 1, Math.floor(rng() * eligible.length))],
         }),
+      } as EncounterPayload,
+    },
+  };
+}
+
+/**
+ * Sell any held item (active or stored) for half its authored price
+ * (015-economy-depth contract §3). Available during any active encounter —
+ * selling has no encounter-kind-specific payload of its own, unlike
+ * purchaseStock/restockSupplier.
+ */
+export function sellHeldItem(
+  run: Run,
+  encounterId: string,
+  source: Extract<GarageSource, { area: "vehicle" | "storage" }>,
+): Run {
+  if (run.status !== "active" || run.activeEncounter?.id !== encounterId) {
+    throw new RunTransitionError("encounter-id-mismatch", `${encounterId} is not current`);
+  }
+  const result = sellItem(run.build, source);
+  if (result.kind === "failure") {
+    throw new RunTransitionError("invalid-action", "Cannot sell: no item at that position");
+  }
+  const transaction = transactionFor(run, encounterId, "sell-back", result.creditsGained);
+  return {
+    ...run,
+    build: result.build,
+    credits: transaction.balanceAfter,
+    creditTransactions: [...run.creditTransactions, transaction],
+  };
+}
+
+/**
+ * Flip one Parts Supplier StockEntry's locked flag (015-economy-depth
+ * contract §4). No credit cost, no transaction — purely a reroll-scoping
+ * toggle. `locked` is never carried into a freshly-generated payload.
+ */
+export function toggleLock(run: Run, encounterId: string, stockId: string): Run {
+  const payload = requirePayload<PartsSupplierPayload>(run, encounterId, "parts-supplier");
+  const stock = payload.stock.find(({ id }) => id === stockId);
+  if (!stock) throw new RunTransitionError("encounter-id-mismatch", `Stock ${stockId} is not current`);
+  return {
+    ...run,
+    activeEncounter: {
+      ...run.activeEncounter!,
+      payload: {
+        ...payload,
+        stock: payload.stock.map((entry) => entry.id === stockId ? { ...entry, locked: !entry.locked } : entry),
       } as EncounterPayload,
     },
   };

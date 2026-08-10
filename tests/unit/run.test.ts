@@ -3,10 +3,12 @@ import { BASELINE_CAR, ITEM_POOL, SAMPLE_GHOST } from "../../src/content/sample-
 import { chooseEncounter } from "../../src/simulation/encounters";
 import { resolveContest } from "../../src/simulation/contest";
 import {
+  applyReputationLoss,
   completePvpEncounter,
   completeNonPvpEncounter,
   createUnavailableRun,
   createRun,
+  interestFor,
   runProgress,
   RunTransitionError,
   summarizeRunHistory,
@@ -585,5 +587,219 @@ describe("createRunForEntrant", () => {
     const second = createRunForEntrant({ entrantId: "evelyn-mercer", runId: "same", seed: 7, rng: sequenceRng(0, 0.9) });
 
     expect(first).toStrictEqual(second);
+  });
+});
+
+describe("reputation and the \"failed\" RunStatus (015-economy-depth Foundational)", () => {
+  it("starts every new run at a fixed, positive authored reputation value", () => {
+    const run = newRun();
+
+    expect(Number.isInteger(run.reputation)).toBe(true);
+    expect(run.reputation).toBeGreaterThan(0);
+  });
+
+  it("ends the run with status \"failed\", not \"active\" or \"completed\", once reputation reaches zero via advanceRun", () => {
+    const run = { ...advanceToFirstPvp(), reputation: 0 };
+    const result = resolveContest(run.build, SAMPLE_GHOST, 10);
+    const completed = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
+
+    expect(completed.status).toBe("failed");
+    expect(completed.activeEncounter).toBeNull();
+    expect(completed.availableChoices).toEqual([]);
+  });
+
+  it("prioritizes \"failed\" over \"completed\" when reputation reaches zero on the same transition that finishes Stage 6", () => {
+    let run = advanceToFirstPvp();
+    run = completePvpEncounter(run, run.activeEncounter!.id, resolveContest(run.build, SAMPLE_GHOST, 10), () => 0);
+    for (let stage = 0; stage < 2; stage += 1) {
+      run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+      run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
+    }
+    run = { ...run, reputation: 0 };
+    const finalResult = resolveContest(run.build, SAMPLE_GHOST, 12);
+    const finished = completePvpEncounter(run, run.activeEncounter!.id, finalResult, () => 0);
+
+    expect(finished.status).toBe("failed");
+    expect(finished.stageIndex).toBe(6);
+  });
+
+  it("preserves a failed run's history, credit transactions, and completed stages exactly as far as it got", () => {
+    const run = { ...advanceToFirstPvp(), reputation: 0 };
+    const result = resolveContest(run.build, SAMPLE_GHOST, 10);
+    const failed = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
+
+    expect(failed.history).toHaveLength(3);
+    expect(failed.history[2]).toMatchObject({ stagePosition: 3, type: "pvp" });
+    expect(failed.creditTransactions.length).toBeGreaterThan(0);
+    expect(failed.stages.slice(0, 3).every((stage) => stage.state === "completed")).toBe(true);
+  });
+
+  it("never returns a negative reputation from a run construction path", () => {
+    expect(newRun().reputation).toBeGreaterThanOrEqual(0);
+    expect(createUnavailableRun({
+      runId: "unavailable",
+      seed: 0,
+      identityTag: "performance",
+      identity: TEST_IDENTITY,
+      build: emptyBuild(),
+    }).reputation).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("applyReputationLoss (015-economy-depth US1, FR-002/FR-004)", () => {
+  it("decrements by exactly one per trigger, for either trigger kind", () => {
+    const run = newRun();
+
+    expect(applyReputationLoss(run, "pvp-loss").reputation).toBe(run.reputation - 1);
+    expect(applyReputationLoss(run, "sponsor-failure").reputation).toBe(run.reputation - 1);
+  });
+
+  it("floors at exactly 0 and never goes negative", () => {
+    const run = { ...newRun(), reputation: 0 };
+    expect(applyReputationLoss(run, "pvp-loss").reputation).toBe(0);
+  });
+
+  it("does not mutate the input run", () => {
+    const run = newRun();
+    const snapshot = structuredClone(run);
+    applyReputationLoss(run, "pvp-loss");
+    expect(run).toEqual(snapshot);
+  });
+});
+
+describe("completePvpEncounter reputation wiring (US1)", () => {
+  it("decrements reputation on an outright PvP loss", () => {
+    const run = advanceToFirstPvp();
+    const result = resolveContest(run.build, SAMPLE_GHOST, 10);
+    expect(result.outcome).toBe("loss");
+
+    const completed = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
+    expect(completed.reputation).toBe(run.reputation - 1);
+  });
+
+  it("does not decrement reputation on a tied PvP contest", () => {
+    const run = advanceToFirstPvp();
+    const tieGhost = { id: "tie-ghost", lapTime: BASELINE_CAR.baseLapTime };
+    const result = resolveContest(run.build, tieGhost, 10);
+    expect(result.outcome).toBe("tie");
+
+    const completed = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
+    expect(completed.reputation).toBe(run.reputation);
+  });
+
+  it("does not decrement reputation on a PvP win", () => {
+    const run = advanceToFirstPvp();
+    const slowGhost = { id: "slow-ghost", lapTime: 100 };
+    const result = resolveContest(run.build, slowGhost, 10);
+    expect(result.outcome).toBe("win");
+
+    const completed = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
+    expect(completed.reputation).toBe(run.reputation);
+  });
+
+  it("decrements reputation on a failed sponsor objective, independent of a simultaneous PvP win", () => {
+    const base = advanceToFirstPvp();
+    const run: Run = {
+      ...base,
+      activeSponsorContract: {
+        id: "contract",
+        sourceEncounterId: "prior",
+        objective: { kind: "target-race-time", targetSeconds: 1 },
+        payout: 7,
+        status: "pending",
+      },
+    };
+    const slowGhost = { id: "slow-ghost", lapTime: 100 };
+    const result = resolveContest(run.build, slowGhost, 10);
+    expect(result.outcome).toBe("win");
+
+    const completed = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
+    expect(completed.reputation).toBe(run.reputation - 1);
+  });
+
+  it("decrements reputation twice when a PvP loss and a failed sponsor objective land on the same transition", () => {
+    const base = advanceToFirstPvp();
+    const run: Run = {
+      ...base,
+      activeSponsorContract: {
+        id: "contract",
+        sourceEncounterId: "prior",
+        objective: { kind: "target-race-time", targetSeconds: 1 },
+        payout: 7,
+        status: "pending",
+      },
+    };
+    const result = resolveContest(run.build, SAMPLE_GHOST, 10);
+    expect(result.outcome).toBe("loss");
+
+    const completed = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
+    expect(completed.reputation).toBe(run.reputation - 2);
+  });
+
+  it("floors reputation at 0 rather than going negative from a double-decrement transition", () => {
+    const base = { ...advanceToFirstPvp(), reputation: 1 };
+    const run: Run = {
+      ...base,
+      activeSponsorContract: {
+        id: "contract",
+        sourceEncounterId: "prior",
+        objective: { kind: "target-race-time", targetSeconds: 1 },
+        payout: 7,
+        status: "pending",
+      },
+    };
+    const result = resolveContest(run.build, SAMPLE_GHOST, 10);
+
+    const completed = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
+    expect(completed.reputation).toBe(0);
+  });
+});
+
+describe("interestFor (015-economy-depth US2, FR-007/FR-008)", () => {
+  it("is 0 for a zero balance and never manufactures credits from nothing", () => {
+    expect(interestFor(0)).toBe(0);
+  });
+
+  it("is a pure, deterministic function of the banked balance", () => {
+    expect(interestFor(50)).toBe(interestFor(50));
+  });
+
+  it("derives a nonzero amount from a large enough banked balance", () => {
+    expect(interestFor(50)).toBeGreaterThan(0);
+  });
+});
+
+describe("completePvpEncounter interest wiring (US2)", () => {
+  it("appends an interest transaction, as its own transaction kind, when banked credits are large enough", () => {
+    const run = { ...advanceToFirstPvp(), credits: 50 };
+    const result = resolveContest(run.build, SAMPLE_GHOST, 10);
+    expect(result.outcome).toBe("loss");
+
+    const completed = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
+    const interestTx = completed.creditTransactions.find((tx) => tx.kind === "interest");
+
+    expect(interestTx).toBeDefined();
+    expect(interestTx!.amount).toBe(interestFor(50));
+    expect(completed.credits).toBe(50 + 2 + interestFor(50));
+  });
+
+  it("appends no interest transaction at all when the computed amount would be zero (FR-008)", () => {
+    const run = { ...advanceToFirstPvp(), credits: 0 };
+    const result = resolveContest(run.build, SAMPLE_GHOST, 10);
+
+    const completed = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
+    expect(completed.creditTransactions.some((tx) => tx.kind === "interest")).toBe(false);
+  });
+
+  it("computes interest from credits banked before this stage's own participation/win/sponsor income", () => {
+    const run = { ...advanceToFirstPvp(), credits: 50 };
+    const slowGhost = { id: "slow-ghost", lapTime: 100 };
+    const result = resolveContest(run.build, slowGhost, 10);
+    expect(result.outcome).toBe("win");
+
+    const completed = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
+    const interestTx = completed.creditTransactions.find((tx) => tx.kind === "interest");
+
+    expect(interestTx!.amount).toBe(interestFor(50));
   });
 });

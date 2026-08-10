@@ -87,7 +87,7 @@ export class RunScene extends Phaser.Scene {
       fontStyle: "bold",
       color: "#f4d58d",
     }).setOrigin(0.5);
-    this.add.text(width / 2, 78, `${model.progressLabel}  ·  ${model.creditsLabel}`, {
+    this.add.text(width / 2, 78, `${model.progressLabel}  ·  ${model.creditsLabel}  ·  ${model.reputationLabel}`, {
       fontSize: "18px",
       fontFamily: UI_FONT,
       fontStyle: "bold",
@@ -97,7 +97,7 @@ export class RunScene extends Phaser.Scene {
     this.add.text(width - 24, 24, model.statusLabel, {
       fontSize: "12px",
       fontFamily: UI_FONT,
-      color: model.status === "unavailable" ? "#d9a7a7" : "#9eb5c9",
+      color: model.status === "unavailable" || model.status === "failed" ? "#d9a7a7" : "#9eb5c9",
     }).setOrigin(1, 0);
 
     if (this.run.status === "unavailable") {
@@ -120,6 +120,26 @@ export class RunScene extends Phaser.Scene {
       }).setOrigin(0.5);
       model.history.forEach((entry, index) => {
         this.add.text(70, 150 + index * 36, this.historyEntryLabel(entry), {
+          fontSize: "11px",
+          color: entry.type === "pvp" ? "#8fd8ff" : "#d7e1e6",
+          wordWrap: { width: width - 140 },
+        });
+      });
+      this.addControl(width / 2, 405, "Choose Entrant · New Run", () => this.startNewRun());
+      return;
+    }
+
+    if (this.run.status === "failed") {
+      this.add.text(width / 2, 115, "Run Failed — Reputation Lost", {
+        fontSize: "20px",
+        color: "#d9a7a7",
+      }).setOrigin(0.5);
+      this.add.text(width / 2, 140, "The season ended early. Everything up to this point is still on record.", {
+        fontSize: "12px",
+        color: "#c8d2d8",
+      }).setOrigin(0.5);
+      model.history.forEach((entry, index) => {
+        this.add.text(70, 165 + index * 36, this.historyEntryLabel(entry), {
           fontSize: "11px",
           color: entry.type === "pvp" ? "#8fd8ff" : "#d7e1e6",
           wordWrap: { width: width - 140 },

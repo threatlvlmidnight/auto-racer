@@ -3,7 +3,7 @@ import type {
   PartsSupplierPayload,
   RewardDraftPayload,
 } from "../../src/simulation/encounters";
-import { runIdentityForEntrant, type Run, type RunStage } from "../../src/simulation/run";
+import { REPUTATION_START, runIdentityForEntrant, type Run, type RunStage } from "../../src/simulation/run";
 import { directRecurringPracticeBuild } from "./practice-fixtures";
 
 export type PracticeFixtureContext =
@@ -92,6 +92,7 @@ function baseRun(): Run {
         gap: -8.5,
       },
     }],
+    reputation: REPUTATION_START,
   };
 }
 
@@ -116,6 +117,7 @@ export function supplierPracticeFixture(selected = true): PracticeRunFixture {
       id: `${encounterId}-stock-${index + 1}`,
       item: structuredClone(stockItem),
       state: index === 0 ? "purchased" : "available",
+      locked: false,
     })),
     unavailable: false,
     restockUsed: true,

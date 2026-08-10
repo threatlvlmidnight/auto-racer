@@ -93,7 +93,33 @@ export function validateRunBuildContext(
   return { kind: "valid" };
 }
 
-export type RunStatus = "active" | "completed" | "unavailable";
+export type RunStatus = "active" | "completed" | "unavailable" | "failed";
+
+/**
+ * Balance-pass placeholders (015-economy-depth spec.md Assumptions):
+ * exact values are a tuning decision, not fixed by the spec. Chosen so a
+ * run performing badly across both of today's PvP stages (2 losses) or a
+ * PvP loss plus a failed sponsor objective can plausibly fail before
+ * Stage 6, without every below-average run failing automatically.
+ */
+export const REPUTATION_START = 3;
+const REPUTATION_LOSS_BY_TRIGGER: Record<"pvp-loss" | "sponsor-failure", number> = {
+  "pvp-loss": 1,
+  "sponsor-failure": 1,
+};
+
+/**
+ * Balance-pass placeholder (Assumptions): not fixed by the spec. Chosen so
+ * interest stays a no-op for a run's typical early single-digit balance
+ * (matching zero regression in every existing low-credit test) while
+ * becoming real once a player actually banks a double-digit reserve.
+ */
+const INTEREST_RATE = 0.1;
+
+/** Pure (contract §2): amount derived only from the current balance. */
+export function interestFor(bankedCredits: number): number {
+  return Math.floor(bankedCredits * INTEREST_RATE);
+}
 export type StageState = "unavailable" | "available" | "active" | "completed";
 export type EncounterType =
   | "parts-supplier"
@@ -146,7 +172,9 @@ export type CreditTransactionKind =
   | "participation"
   | "win-bonus"
   | "sponsor-immediate"
-  | "sponsor-conditional";
+  | "sponsor-conditional"
+  | "interest"
+  | "sell-back";
 
 export interface CreditTransaction {
   id: string;
@@ -209,6 +237,8 @@ export interface Run {
   creditTransactions: CreditTransaction[];
   activeSponsorContract: SponsorContract | null;
   history: RunHistoryEntry[];
+  /** New (015-economy-depth FR-001). Floored at 0 — never negative (FR-004). */
+  reputation: number;
 }
 
 export type RunTransitionErrorCode =
@@ -299,6 +329,7 @@ export function createRun(input: CreateRunInput): Run {
     creditTransactions: [],
     activeSponsorContract: null,
     history: [],
+    reputation: REPUTATION_START,
   };
   return { ...run, availableChoices: generateEncounterChoices(run, input.rng) };
 }
@@ -391,12 +422,19 @@ export function createUnavailableRun(input: Omit<CreateRunInput, "rng">): Run {
     creditTransactions: [],
     activeSponsorContract: null,
     history: [],
+    reputation: 0,
   };
 }
 
 export function runProgress(run: Run): RunProgress {
   const total = run.stages.length;
-  const current = run.status === "completed" ? total : run.status === "unavailable" ? 0 : run.stageIndex + 1;
+  // "active" and "failed" both report how far the run got (stageIndex + 1);
+  // a failed run deliberately shares that branch, not a default fallthrough.
+  const current = run.status === "completed"
+    ? total
+    : run.status === "unavailable"
+      ? 0
+      : run.stageIndex + 1;
   return {
     current,
     total,
@@ -555,10 +593,15 @@ export function completePvpEncounter(
     encounterTransactionIds.push(transaction.id);
   };
 
+  // Computed from credits banked before this stage's own income (FR-007).
+  const interestAmount = interestFor(run.credits);
+
   appendTransaction("participation", 2);
   if (result.outcome === "win") appendTransaction("win-bonus", 2);
+  if (interestAmount > 0) appendTransaction("interest", interestAmount);
 
   let sponsorOutcome: SponsorContract | undefined;
+  let sponsorFailed = false;
   if (run.activeSponsorContract) {
     const resolution = resolvePendingSponsor(run.activeSponsorContract, result);
     sponsorOutcome = {
@@ -566,6 +609,7 @@ export function completePvpEncounter(
       resolvedEncounterId: active.id,
     };
     if (resolution.succeeded) appendTransaction("sponsor-conditional", sponsorOutcome.payout);
+    sponsorFailed = !resolution.succeeded;
   }
 
   const historyEntry: RunHistoryEntry = {
@@ -583,13 +627,29 @@ export function completePvpEncounter(
     sponsorOutcome,
   };
 
-  return advanceRun({
+  let next: Run = {
     ...run,
     credits,
     creditTransactions: transactions,
     activeSponsorContract: null,
     history: [...run.history, historyEntry],
-  }, rng);
+  };
+  // Independent triggers (015-economy-depth FR-002, research.md Decision 2):
+  // both may fire on the same stage transition, each its own decrement.
+  if (result.outcome === "loss") next = applyReputationLoss(next, "pvp-loss");
+  if (sponsorFailed) next = applyReputationLoss(next, "sponsor-failure");
+
+  return advanceRun(next, rng);
+}
+
+/**
+ * Decrements reputation by one for the given trigger, floored at 0
+ * (015-economy-depth contract §1). Called only from completePvpEncounter,
+ * before its advanceRun call — a sponsor objective can only resolve at PvP
+ * completion, so no other call site can produce either trigger.
+ */
+export function applyReputationLoss(run: Run, trigger: "pvp-loss" | "sponsor-failure"): Run {
+  return { ...run, reputation: Math.max(0, run.reputation - REPUTATION_LOSS_BY_TRIGGER[trigger]) };
 }
 
 function compactItemIds(items: readonly (OfferedItem | null)[]): string[] {
@@ -602,6 +662,22 @@ function sameIds(actual: string[], expected: string[]): boolean {
 
 function advanceRun(run: Run, rng: RandomSource): Run {
   const nextIndex = run.stageIndex + 1;
+
+  // Leading check (015-economy-depth FR-003, research.md Decision 1):
+  // reputation loss takes priority over a simultaneous Stage 6 completion.
+  if (run.reputation <= 0) {
+    return {
+      ...run,
+      status: "failed",
+      stageIndex: Math.min(nextIndex, run.stages.length),
+      stages: run.stages.map((stage, index) =>
+        index === run.stageIndex ? { ...stage, state: "completed" } : stage,
+      ),
+      availableChoices: [],
+      activeEncounter: null,
+    };
+  }
+
   if (nextIndex >= run.stages.length) {
     return {
       ...run,

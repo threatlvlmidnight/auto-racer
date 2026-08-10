@@ -39,7 +39,11 @@ export function addHeaderBand(scene: Phaser.Scene): void {
  * destroy and redraw the stamp instead of leaving stale credits on screen.
  */
 export function addRunStamp(scene: Phaser.Scene, run: Run): Phaser.GameObjects.Text[] {
-  const stage = run.status === "completed" ? "RUN COMPLETE" : `STAGE ${run.stageIndex + 1}/${run.stages.length}`;
+  const stage = run.status === "completed"
+    ? "RUN COMPLETE"
+    : run.status === "failed"
+      ? "RUN FAILED"
+      : `STAGE ${run.stageIndex + 1}/${run.stages.length}`;
   const stageText = scene.add.text(24, 22, stage, {
     fontFamily: UI_FONT,
     fontSize: "11px",

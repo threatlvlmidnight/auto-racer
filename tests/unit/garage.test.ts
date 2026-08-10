@@ -3,6 +3,7 @@ import { ITEM_POOL } from "../../src/content/sample-data";
 import {
   commitGarageCommand,
   previewGarageCommand,
+  sellItem,
   type GarageCommand,
   type GarageContext,
 } from "../../src/simulation/garage";
@@ -423,5 +424,65 @@ describe("resolveInstallation — full catalog matrix", () => {
       expect(resolution.lostFittedBehavior).toStrictEqual(item.fittedBehavior);
       expect(resolution.noAdditionalImprovisedConsequence).toBe(false);
     });
+  });
+});
+
+describe("sellItem (015-economy-depth US3, FR-009)", () => {
+  it("returns exactly half the item's authored price, rounded down, for a vehicle-slot source", () => {
+    const build = vehicleBuild([POWER_ITEM]);
+    const result = sellItem(build, { area: "vehicle", slotId: SLOT[0] });
+
+    expect(result).toMatchObject({ kind: "sold", creditsGained: Math.floor(POWER_ITEM.price / 2), item: POWER_ITEM });
+  });
+
+  it("clears the vehicle slot in the returned build", () => {
+    const build = vehicleBuild([POWER_ITEM]);
+    const result = sellItem(build, { area: "vehicle", slotId: SLOT[0] });
+
+    expect(result.kind).toBe("sold");
+    if (result.kind === "sold") {
+      expect(result.build.slots[0].item).toBeNull();
+      // Nothing else in the build changes.
+      expect(result.build.slots.slice(1)).toEqual(build.slots.slice(1));
+      expect(result.build.storage).toEqual(build.storage);
+    }
+  });
+
+  it("sells a stored item too, clearing that storage position", () => {
+    const build = vehicleBuild([], [OTHER_ITEM]);
+    const result = sellItem(build, { area: "storage", index: 0 });
+
+    expect(result).toMatchObject({ kind: "sold", creditsGained: Math.floor(OTHER_ITEM.price / 2), item: OTHER_ITEM });
+    if (result.kind === "sold") {
+      expect(result.build.storage[0].item).toBeNull();
+    }
+  });
+
+  it("rounds down for an item with an odd authored price", () => {
+    const oddPriced = testItem({ id: "odd", name: "Odd", price: 3, timeModifier: -1 });
+    const build = vehicleBuild([oddPriced]);
+    const result = sellItem(build, { area: "vehicle", slotId: SLOT[0] });
+
+    expect(result).toMatchObject({ creditsGained: 1 }); // floor(3/2) = 1, never 1.5 or 2
+  });
+
+  it("returns a typed failure for an empty source position instead of throwing", () => {
+    const build = vehicleBuild();
+    expect(sellItem(build, { area: "vehicle", slotId: SLOT[0] })).toEqual({
+      kind: "failure",
+      code: "missing-source",
+    });
+    expect(sellItem(build, { area: "storage", index: 0 })).toEqual({
+      kind: "failure",
+      code: "missing-source",
+    });
+  });
+
+  it("never mutates the input build", () => {
+    const build = vehicleBuild([POWER_ITEM], [OTHER_ITEM]);
+    const snapshot = structuredClone(build);
+    sellItem(build, { area: "vehicle", slotId: SLOT[0] });
+
+    expect(build).toEqual(snapshot);
   });
 });

@@ -194,7 +194,7 @@ describe("run scene boundary", () => {
     expect(runPresentation(conditional).pendingSponsorLabel).toContain("next race");
   });
 
-  it("presents available, active, completed, and unavailable states without silent regeneration", () => {
+  it("presents available, active, completed, failed, and unavailable states without silent regeneration", () => {
     const available = create();
     const active = chooseEncounter(available, available.availableChoices[0].id, () => 0, ITEM_POOL);
     const completed = {
@@ -204,6 +204,14 @@ describe("run scene boundary", () => {
       availableChoices: [],
       activeEncounter: null,
       stages: available.stages.map((stage) => ({ ...stage, state: "completed" as const })),
+    };
+    const failed = {
+      ...available,
+      status: "failed" as const,
+      reputation: 0,
+      stageIndex: 3,
+      availableChoices: [],
+      activeEncounter: null,
     };
     const unavailable = createUnavailableRun({
       runId: "missing-context",
@@ -216,11 +224,18 @@ describe("run scene boundary", () => {
     expect(runPresentation(available).statusLabel).toBe("Available");
     expect(runPresentation(active).statusLabel).toBe("Active");
     expect(runPresentation(completed).statusLabel).toBe("Completed");
+    expect(runPresentation(failed).statusLabel).toBe("Failed");
+    expect(runPresentation(failed).progressLabel).not.toContain("Stage");
     expect(runPresentation(unavailable)).toMatchObject({
       statusLabel: "Unavailable",
       choices: [],
       history: [],
     });
     expect(unavailable.availableChoices).toEqual([]);
+  });
+
+  it("always exposes the run's current reputation as its own presentation field (015-economy-depth FR-006)", () => {
+    const run = create();
+    expect(runPresentation(run).reputationLabel).toContain(String(run.reputation));
   });
 });
