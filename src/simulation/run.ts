@@ -169,8 +169,8 @@ export interface RunStage {
   position: number;
   kind: "choice" | "pvp";
   choiceOrdinal?: number;
-  pvpOrdinal?: 1 | 2;
-  lapCount?: 10 | 12;
+  pvpOrdinal?: 1 | 2 | 3 | 4;
+  lapCount?: 10 | 12 | 14 | 16;
   state: StageState;
 }
 
@@ -183,7 +183,7 @@ export interface EncounterChoice {
 
 export interface PvpPayload {
   kind: "pvp";
-  lapCount: 10 | 12;
+  lapCount: 10 | 12 | 14 | 16;
   buildSnapshot: Build;
   result?: ContestResult;
 }
@@ -341,6 +341,12 @@ function createStages(runId: string): RunStage[] {
     { kind: "choice", choiceOrdinal: 3 },
     { kind: "choice", choiceOrdinal: 4 },
     { kind: "pvp", pvpOrdinal: 2, lapCount: 12 },
+    { kind: "choice", choiceOrdinal: 5 },
+    { kind: "choice", choiceOrdinal: 6 },
+    { kind: "pvp", pvpOrdinal: 3, lapCount: 14 },
+    { kind: "choice", choiceOrdinal: 7 },
+    { kind: "choice", choiceOrdinal: 8 },
+    { kind: "pvp", pvpOrdinal: 4, lapCount: 16 },
   ];
   return definitions.map((definition, index) => ({
     ...definition,

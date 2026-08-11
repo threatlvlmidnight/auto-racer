@@ -10,6 +10,7 @@ import {
 import { resolveContest } from "../../src/simulation/contest";
 import {
   completeNonPvpEncounter,
+  completePvpEncounter,
   createUnavailableRun,
   createRun,
   runIdentityForEntrant,
@@ -65,7 +66,7 @@ describe("run scene boundary", () => {
     const run = create();
     const model = runPresentation(run);
 
-    expect(model.progressLabel).toBe("Stage 1 of 6");
+    expect(model.progressLabel).toBe("Stage 1 of 12");
     expect(model.creditsLabel).toBe("5 credits");
     expect(model.choices.map(({ id }) => id)).toEqual(run.availableChoices.map(({ id }) => id));
     expect(runRoute(run)).toBe("RunScene");
@@ -100,6 +101,32 @@ describe("run scene boundary", () => {
     expect(continued.history).toHaveLength(3);
     expect(() => continueRunFromResult(continued, input.encounterId, result, () => 0))
       .toThrowError(RunTransitionError);
+  });
+
+  it("plays a full 12-stage run start to finish, ending on the 4th PvP stage (017-season-structure-grow US1)", () => {
+    // A slow ghost via the legacy 2-car resolveContest guarantees a win at
+    // every stage, keeping this structural test independent of the
+    // 015-economy-depth reputation table (which a real 8-car field result
+    // could otherwise fail the run against, before all 12 stages are seen).
+    const slowGhost = { id: "slow-ghost", lapTime: 1000 };
+    let run = create();
+    expect(run.stages).toHaveLength(12);
+
+    for (let pvpCount = 0; pvpCount < 4; pvpCount += 1) {
+      for (let stage = 0; stage < 2; stage += 1) {
+        run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+        run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
+      }
+      const lapCount = run.stages[run.stageIndex].lapCount!;
+      const result = resolveContest(run.build, slowGhost, lapCount);
+      if (pvpCount < 3) expect(run.status).toBe("active");
+      run = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
+    }
+
+    expect(run.status).toBe("completed");
+    expect(run.stageIndex).toBe(12);
+    expect(run.history).toHaveLength(12);
+    expect(run.history.filter((entry) => entry.type === "pvp")).toHaveLength(4);
   });
 
   it("wires the current PvP stage's ordinal through to contestSceneInput's level (US3, FR-004)", () => {
@@ -200,7 +227,7 @@ describe("run scene boundary", () => {
     const completed = {
       ...available,
       status: "completed" as const,
-      stageIndex: 6,
+      stageIndex: 12,
       availableChoices: [],
       activeEncounter: null,
       stages: available.stages.map((stage) => ({ ...stage, state: "completed" as const })),

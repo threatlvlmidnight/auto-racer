@@ -31,6 +31,12 @@ function stages(activePosition = 1): RunStage[] {
     { kind: "choice", choiceOrdinal: 3 },
     { kind: "choice", choiceOrdinal: 4 },
     { kind: "pvp", pvpOrdinal: 2, lapCount: 12 },
+    { kind: "choice", choiceOrdinal: 5 },
+    { kind: "choice", choiceOrdinal: 6 },
+    { kind: "pvp", pvpOrdinal: 3, lapCount: 14 },
+    { kind: "choice", choiceOrdinal: 7 },
+    { kind: "choice", choiceOrdinal: 8 },
+    { kind: "pvp", pvpOrdinal: 4, lapCount: 16 },
   ].map((definition, index) => ({
     ...definition,
     id: `practice-run-stage-${index + 1}`,

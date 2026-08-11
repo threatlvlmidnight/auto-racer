@@ -425,9 +425,10 @@ describe("Sponsor Meeting", () => {
     });
   });
 
-  it("produces stable whole-second targets 3-6 seconds below both scheduled baselines", () => {
-    ([1, 2] as const).forEach((pvpOrdinal) => {
-      const lapCount = pvpOrdinal === 1 ? 10 : 12;
+  it("produces stable whole-second targets 3-6 seconds below every scheduled baseline (017-season-structure-grow US2)", () => {
+    const lapCountByOrdinal = { 1: 10, 2: 12, 3: 14, 4: 16 } as const;
+    ([1, 2, 3, 4] as const).forEach((pvpOrdinal) => {
+      const lapCount = lapCountByOrdinal[pvpOrdinal];
       const target = seededTargetSeconds({
         seed: 7,
         pvpOrdinal,
@@ -445,6 +446,56 @@ describe("Sponsor Meeting", () => {
         baseLapTime: BASELINE_CAR.baseLapTime,
         lapCount,
       })).toBe(target);
+    });
+  });
+});
+
+describe("sponsor next-PvP-stage lookup across the 12-stage schedule (017-season-structure-grow US2, FR-005)", () => {
+  // objectiveForKind's next-pvp lookup (run.stages.slice(stageIndex+1).find(...))
+  // and the rival/track ordinal-consuming formulas it feeds are unbounded scans —
+  // no code change was needed to widen them (research.md Decision 5). These tests
+  // verify that claim holds at all four widened PvP ordinals, including
+  // acceptance at the 11th (last) choice stage, immediately before the 12th
+  // (final) PvP stage.
+  const choiceStageIndexBeforeEachPvp = [1, 4, 7, 10]; // 0-indexed: stages 2, 5, 8, 11
+  const pvpOrdinalAfter = [1, 2, 3, 4] as const;
+  const lapCountAfter = [10, 12, 14, 16] as const;
+
+  it.each(choiceStageIndexBeforeEachPvp.map((stageIndex, i) => [stageIndex, pvpOrdinalAfter[i], lapCountAfter[i]] as const))(
+    "targets pvpOrdinal %i / lapCount %i's PvP stage when a target-race-time contract is accepted immediately before it",
+    (stageIndex, pvpOrdinal, lapCount) => {
+      const run = { ...create(), stageIndex, availableChoices: [
+        { id: "sponsor-choice", stageId: `run-choices-stage-${stageIndex + 1}`, type: "sponsor-meeting" as const, summary: "" },
+      ] };
+      const active = chooseEncounter(run, "sponsor-choice", () => 0.99, ITEM_POOL);
+      const payload = active.activeEncounter!.payload as SponsorMeetingPayload;
+      const targetTimeOption = payload.options.find((option) => option.kind === "target-race-time");
+
+      expect(targetTimeOption).toBeDefined();
+      if (targetTimeOption?.kind !== "target-race-time" || targetTimeOption.objective.kind !== "target-race-time") return;
+      expect(targetTimeOption.objective.targetSeconds).toBe(seededTargetSeconds({
+        seed: run.seed,
+        pvpOrdinal,
+        baseLapTime: run.build.car.baseLapTime,
+        lapCount,
+      }));
+    },
+  );
+
+  it("continues to count trigger-tagged-items events correctly when accepted at the last choice stage before the 4th (final) PvP", () => {
+    const run = { ...create(), stageIndex: 10, availableChoices: [
+      { id: "sponsor-choice", stageId: "run-choices-stage-11", type: "sponsor-meeting" as const, summary: "" },
+    ] };
+    const active = chooseEncounter(run, "sponsor-choice", () => 0.99, ITEM_POOL);
+    const payload = active.activeEncounter!.payload as SponsorMeetingPayload;
+    const taggedOption = payload.options.find((option) => option.kind === "trigger-tagged-items");
+
+    expect(taggedOption).toBeDefined();
+    if (taggedOption?.kind !== "trigger-tagged-items") return;
+    expect(taggedOption.objective).toEqual({
+      kind: "trigger-tagged-items",
+      identityTag: run.identityTag,
+      requiredEvents: 10,
     });
   });
 });

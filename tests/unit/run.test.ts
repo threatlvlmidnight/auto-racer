@@ -78,9 +78,86 @@ describe("createRun", () => {
       { id: "run-001-stage-4", kind: "choice", lapCount: undefined },
       { id: "run-001-stage-5", kind: "choice", lapCount: undefined },
       { id: "run-001-stage-6", kind: "pvp", lapCount: 12 },
+      { id: "run-001-stage-7", kind: "choice", lapCount: undefined },
+      { id: "run-001-stage-8", kind: "choice", lapCount: undefined },
+      { id: "run-001-stage-9", kind: "pvp", lapCount: 14 },
+      { id: "run-001-stage-10", kind: "choice", lapCount: undefined },
+      { id: "run-001-stage-11", kind: "choice", lapCount: undefined },
+      { id: "run-001-stage-12", kind: "pvp", lapCount: 16 },
     ]);
     expect(run.availableChoices).toHaveLength(2);
     expect(new Set(run.availableChoices.map((choice) => choice.type)).size).toBe(2);
+  });
+});
+
+describe("12-stage schedule (017-season-structure-grow US1, FR-001/FR-002/FR-003)", () => {
+  it("produces exactly 12 stages in the fixed [choice, choice, pvp] x4 order", () => {
+    const run = newRun();
+    expect(run.stages).toHaveLength(12);
+    expect(run.stages.map((stage) => stage.kind)).toEqual([
+      "choice", "choice", "pvp",
+      "choice", "choice", "pvp",
+      "choice", "choice", "pvp",
+      "choice", "choice", "pvp",
+    ]);
+  });
+
+  it("assigns choiceOrdinal 1-8 across the 8 choice stages, in order", () => {
+    const run = newRun();
+    expect(run.stages.filter((stage) => stage.kind === "choice").map((stage) => stage.choiceOrdinal))
+      .toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it("assigns pvpOrdinal 1-4 (the widened type) and a defined lapCount to every pvp stage", () => {
+    const run = newRun();
+    const pvpStages = run.stages.filter((stage) => stage.kind === "pvp");
+    expect(pvpStages.map((stage) => stage.pvpOrdinal)).toEqual([1, 2, 3, 4]);
+    expect(pvpStages.every((stage) => typeof stage.lapCount === "number")).toBe(true);
+    // Widened lapCount union (10 | 12 | 14 | 16) — a type-level check via
+    // assignability, exercised at runtime against the authored values.
+    expect(pvpStages.map((stage) => stage.lapCount)).toEqual([10, 12, 14, 16]);
+  });
+
+  it("only the final (12th) stage is a pvp stage that ends the schedule", () => {
+    const run = newRun();
+    expect(run.stages[11].kind).toBe("pvp");
+    expect(run.stages[11].pvpOrdinal).toBe(4);
+  });
+
+  it("generateEncounterChoices offers only the three existing non-PvP encounter types at every one of the 8 choice stages", () => {
+    let run = newRun();
+    const seenTypes = new Set<string>();
+    for (let choiceCount = 0; choiceCount < 8; choiceCount += 1) {
+      run.availableChoices.forEach((choice) => seenTypes.add(choice.type));
+      run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+      run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
+      if (run.stages[run.stageIndex]?.kind === "pvp") {
+        const result = resolveContest(run.build, { id: "slow-ghost", lapTime: 100 }, run.stages[run.stageIndex].lapCount!);
+        run = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
+      }
+    }
+    expect([...seenTypes].every((type) =>
+      type === "parts-supplier" || type === "reward-draft" || type === "sponsor-meeting")).toBe(true);
+  });
+
+  it("advanceRun reaches \"completed\" only after the 12th stage resolves, not at the old 6-stage boundary", () => {
+    const slowGhost = { id: "slow-ghost", lapTime: 100 };
+    let run = newRun();
+    for (let pvpCount = 0; pvpCount < 4; pvpCount += 1) {
+      for (let stage = 0; stage < 2; stage += 1) {
+        run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+        run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
+      }
+      const lapCount = run.stages[run.stageIndex].lapCount!;
+      const result = resolveContest(run.build, slowGhost, lapCount);
+      if (pvpCount < 3) {
+        expect(run.status).toBe("active");
+      }
+      run = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
+    }
+    expect(run.status).toBe("completed");
+    expect(run.stageIndex).toBe(12);
+    expect(run.history).toHaveLength(12);
   });
 });
 
@@ -226,17 +303,24 @@ describe("PvP run transitions", () => {
       RunTransitionError,
     );
 
-    for (let stage = 0; stage < 2; stage += 1) {
-      run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
-      run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
+    // Play through the remaining 3 PvP stages (of 4 total in the
+    // 12-stage schedule — 017-season-structure-grow) to reach the real
+    // final PvP, not the old 6-stage schedule's second one.
+    let finalId = "";
+    for (let pvpCount = 0; pvpCount < 3; pvpCount += 1) {
+      for (let stage = 0; stage < 2; stage += 1) {
+        run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+        run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
+      }
+      finalId = run.activeEncounter!.id;
+      const lapCount = run.stages[run.stageIndex].lapCount!;
+      run = completePvpEncounter(run, finalId, resolveContest(run.build, slowGhost, lapCount), () => 0);
     }
-    const finalId = run.activeEncounter!.id;
-    run = completePvpEncounter(run, finalId, resolveContest(run.build, slowGhost, 12), () => 0);
 
     expect(run.status).toBe("completed");
-    expect(run.stageIndex).toBe(6);
-    expect(run.history).toHaveLength(6);
-    expect(() => completePvpEncounter(run, finalId, resolveContest(run.build, SAMPLE_GHOST, 12)))
+    expect(run.stageIndex).toBe(12);
+    expect(run.history).toHaveLength(12);
+    expect(() => completePvpEncounter(run, finalId, resolveContest(run.build, SAMPLE_GHOST, 16)))
       .toThrowError(expect.objectContaining({ code: "run-not-active" }));
   });
 });
@@ -247,7 +331,7 @@ describe("run status and summaries", () => {
     const detailed: Run = {
       ...base,
       status: "completed",
-      stageIndex: 6,
+      stageIndex: 12,
       credits: 9,
       creditTransactions: [
         { id: "purchase", encounterId: "supplier", kind: "purchase", amount: -2, balanceAfter: 3 },
@@ -304,7 +388,7 @@ describe("run status and summaries", () => {
         payout: 7,
       },
     });
-    expect(runProgress(detailed)).toEqual({ current: 6, total: 6, remaining: 0, status: "completed" });
+    expect(runProgress(detailed)).toEqual({ current: 12, total: 12, remaining: 0, status: "completed" });
   });
 
   it("constructs unavailable state without choices and creates a clean capacity-preserving reset", () => {
@@ -513,7 +597,7 @@ describe("createRunForEntrant", () => {
     expect(result.run.build.storage.every((position) => position.item === null)).toBe(true);
   });
 
-  it("starts every confirmed run with 5 credits, stage 1, the fixed six stages, and no history", () => {
+  it("starts every confirmed run with 5 credits, stage 1, the fixed twelve stages, and no history", () => {
     const result = confirm("lucien-soto");
 
     expect(result.kind).toBe("created");
@@ -527,9 +611,13 @@ describe("createRunForEntrant", () => {
       activeEncounter: null,
       activeSponsorContract: null,
     });
-    expect(result.run.stages).toHaveLength(6);
-    expect(result.run.stages.map((stage) => stage.kind))
-      .toEqual(["choice", "choice", "pvp", "choice", "choice", "pvp"]);
+    expect(result.run.stages).toHaveLength(12);
+    expect(result.run.stages.map((stage) => stage.kind)).toEqual([
+      "choice", "choice", "pvp",
+      "choice", "choice", "pvp",
+      "choice", "choice", "pvp",
+      "choice", "choice", "pvp",
+    ]);
   });
 
   it("generates the opening encounter choices exactly once", () => {
@@ -614,19 +702,29 @@ describe("reputation and the \"failed\" RunStatus (015-economy-depth Foundationa
     expect(completed.availableChoices).toEqual([]);
   });
 
-  it("prioritizes \"failed\" over \"completed\" when reputation reaches zero on the same transition that finishes Stage 6", () => {
+  it("prioritizes \"failed\" over \"completed\" when reputation reaches zero on the same transition that finishes the final (12th) stage", () => {
+    // 017-season-structure-grow: the schedule is now 12 stages (4 PvP
+    // stages), so this coincidence can only genuinely occur at the real
+    // final stage — wins the first 3 PvPs on a slow ghost to keep
+    // reputation clear of the floor until forcing it to 0 right before
+    // the 4th and final one.
+    const slowGhost = { id: "slow-ghost", lapTime: 1000 };
     let run = advanceToFirstPvp();
-    run = completePvpEncounter(run, run.activeEncounter!.id, resolveContest(run.build, SAMPLE_GHOST, 10), () => 0);
-    for (let stage = 0; stage < 2; stage += 1) {
-      run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
-      run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
+    for (let pvpCount = 0; pvpCount < 3; pvpCount += 1) {
+      const lapCount = run.stages[run.stageIndex].lapCount!;
+      run = completePvpEncounter(run, run.activeEncounter!.id, resolveContest(run.build, slowGhost, lapCount), () => 0);
+      for (let stage = 0; stage < 2; stage += 1) {
+        run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+        run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
+      }
     }
     run = { ...run, reputation: 0 };
-    const finalResult = resolveContest(run.build, SAMPLE_GHOST, 12);
+    const finalLapCount = run.stages[run.stageIndex].lapCount!;
+    const finalResult = resolveContest(run.build, SAMPLE_GHOST, finalLapCount);
     const finished = completePvpEncounter(run, run.activeEncounter!.id, finalResult, () => 0);
 
     expect(finished.status).toBe("failed");
-    expect(finished.stageIndex).toBe(6);
+    expect(finished.stageIndex).toBe(12);
   });
 
   it("preserves a failed run's history, credit transactions, and completed stages exactly as far as it got", () => {

@@ -73,7 +73,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   private isUsableRun(run: Run): boolean {
-    return Array.isArray(run.stages) && run.stages.length === 6 && Array.isArray(run.history);
+    return Array.isArray(run.stages) && run.stages.length === 12 && Array.isArray(run.history);
   }
 
   private render(): void {

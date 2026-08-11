@@ -206,9 +206,9 @@ function objectiveForKind(run: Run, kind: SponsorObjective["kind"]): SponsorObje
 
 export function seededTargetSeconds(input: {
   seed: number;
-  pvpOrdinal: 1 | 2;
+  pvpOrdinal: 1 | 2 | 3 | 4;
   baseLapTime: number;
-  lapCount: 10 | 12;
+  lapCount: 10 | 12 | 14 | 16;
 }): number {
   const offset = 3 + Math.abs((input.seed * 31 + input.pvpOrdinal * 17) % 4);
   return Math.round(input.baseLapTime * input.lapCount) - offset;

@@ -157,7 +157,7 @@ export function activeEncounterPresentation(run: Run): ActiveEncounterPresentati
 export interface ContestSceneInput {
   run: Run;
   encounterId: string;
-  lapCount: 10 | 12;
+  lapCount: 10 | 12 | 14 | 16;
   build: Run["build"];
   /** Exactly 7 rival profiles; identical for every entrant (FR-010). */
   rivalRoster: readonly RivalProfile[];

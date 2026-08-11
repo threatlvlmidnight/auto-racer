@@ -114,4 +114,14 @@ describe("resolveRivalBuild level-scaling (US3, FR-004)", () => {
     const filled = [...installedItems(build), ...storedItems(build)].filter((item) => item !== null);
     expect(filled.length).toBeLessThanOrEqual(build.slots.length + build.storage.length);
   });
+
+  it("resolves correctly for pvpOrdinal 3 and 4 (017-season-structure-grow US2, FR-005), continuing the increasing fill trend", () => {
+    const countFilled = (build: ReturnType<typeof resolveRivalBuild>) =>
+      [...installedItems(build), ...storedItems(build)].filter((item) => item !== null).length;
+
+    expect(() => resolveRivalBuild(profile, 3, 5)).not.toThrow();
+    expect(() => resolveRivalBuild(profile, 4, 5)).not.toThrow();
+    expect(countFilled(resolveRivalBuild(profile, 3, 5))).toBeGreaterThanOrEqual(countFilled(resolveRivalBuild(profile, 2, 5)));
+    expect(countFilled(resolveRivalBuild(profile, 4, 5))).toBeGreaterThanOrEqual(countFilled(resolveRivalBuild(profile, 3, 5)));
+  });
 });
