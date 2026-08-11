@@ -214,6 +214,17 @@ export function commitGarageCommand(context: GarageContext, command: GarageComma
   const slots = context.build.slots.map((slot) => ({ ...slot }));
   const storage = context.build.storage.map((position) => ({ ...position }));
 
+  // Tier travels with the item on a move/swap; a fresh offer placement
+  // always starts at tier 1 (016-duplicate-item-tiering data-model.md).
+  const sourceTier = command.source.area === "vehicle"
+    ? slots[slotIndexOf(context.build, command.source.slotId)].tier
+    : command.source.area === "storage"
+      ? storage[command.source.index].tier
+      : 1;
+  const destinationTier = command.destination.area === "vehicle"
+    ? slots[slotIndexOf(context.build, command.destination.slotId)].tier
+    : storage[command.destination.index].tier;
+
   // Clear the source first so a single item can never occupy two positions.
   if (command.source.area === "vehicle") {
     slots[slotIndexOf(context.build, command.source.slotId)].item = null;
@@ -225,16 +236,24 @@ export function commitGarageCommand(context: GarageContext, command: GarageComma
   const displaced = preview.occupant;
   if (preview.disposition === "swap" && displaced) {
     if (command.source.area === "vehicle") {
-      slots[slotIndexOf(context.build, command.source.slotId)].item = displaced;
+      const slot = slots[slotIndexOf(context.build, command.source.slotId)];
+      slot.item = displaced;
+      slot.tier = destinationTier;
     } else if (command.source.area === "storage") {
-      storage[command.source.index].item = displaced;
+      const position = storage[command.source.index];
+      position.item = displaced;
+      position.tier = destinationTier;
     }
   }
 
   if (command.destination.area === "vehicle") {
-    slots[slotIndexOf(context.build, command.destination.slotId)].item = item;
+    const slot = slots[slotIndexOf(context.build, command.destination.slotId)];
+    slot.item = item;
+    slot.tier = sourceTier;
   } else {
-    storage[command.destination.index].item = item;
+    const position = storage[command.destination.index];
+    position.item = item;
+    position.tier = sourceTier;
   }
 
   const evicted = preview.disposition === "replace" || preview.disposition === "evict" ? displaced : null;

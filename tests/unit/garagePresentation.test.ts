@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ITEM_POOL } from "../../src/content/sample-data";
-import { garageItemInspector } from "../../src/scenes/garagePresentation";
+import { garageItemInspector, previewAcquisitionResolution } from "../../src/scenes/garagePresentation";
+import { resolveDuplicateAcquisition, TIER_BONUS_PERCENT } from "../../src/simulation/tiering";
 import { testItem, vehicleBuild } from "../fixtures/vehicle-build-fixtures";
 
 const POWER_FITTED = ITEM_POOL.find((item) => item.id === "item-001")!; // Power, Fitted time-modifier
@@ -79,6 +80,67 @@ describe("garageItemInspector", () => {
   it("reports a readable cooldown/trigger label for both direct and buff items", () => {
     expect(garageItemInspector(POWER_FITTED, "power", 10, EMPTY_BUILD).cooldownLabel.length).toBeGreaterThan(0);
     expect(garageItemInspector(BUFF_ITEM, "power", 10, EMPTY_BUILD).cooldownLabel.length).toBeGreaterThan(0);
+  });
+});
+
+describe("garageItemInspector — tier display (016-duplicate-item-tiering US1, FR-005)", () => {
+  it("reports tier 1 for an item not currently held anywhere in the build", () => {
+    expect(garageItemInspector(POWER_FITTED, "power", 10, EMPTY_BUILD).tier).toBe(1);
+  });
+
+  it("reports the held position's current tier for a board item", () => {
+    const build = vehicleBuild([POWER_FITTED]);
+    build.slots[0].tier = 2;
+    expect(garageItemInspector(POWER_FITTED, "power", 10, build).tier).toBe(2);
+  });
+
+  it("reports the held position's current tier for a storage item", () => {
+    const build = vehicleBuild([], [POWER_FITTED]);
+    build.storage[0].tier = 3;
+    expect(garageItemInspector(POWER_FITTED, null, 10, build).tier).toBe(3);
+  });
+});
+
+describe("garageItemInspector — live effective value (016-duplicate-item-tiering US2, FR-006)", () => {
+  it("reports the same effective value as the base value at tier 1", () => {
+    const inspector = garageItemInspector(POWER_FITTED, "power", 10, EMPTY_BUILD);
+    expect(inspector.effectiveEffectLabel).toBe(inspector.baseEffectLabel);
+  });
+
+  it("reports a boosted effective value distinct from the base value at tier 2+", () => {
+    const build = vehicleBuild([POWER_FITTED]);
+    build.slots[0].tier = 3;
+    const inspector = garageItemInspector(POWER_FITTED, "power", 10, build);
+    expect(inspector.effectiveEffectLabel).not.toBe(inspector.baseEffectLabel);
+    const boostedPercent = TIER_BONUS_PERCENT * 2;
+    expect(inspector.effectiveEffectLabel).toContain(
+      (POWER_FITTED.timeModifier + POWER_FITTED.timeModifier * (boostedPercent / 100)).toFixed(2),
+    );
+  });
+});
+
+describe("previewAcquisitionResolution (016-duplicate-item-tiering US1, FR-011)", () => {
+  it("matches resolveDuplicateAcquisition for the same build/item", () => {
+    const build = vehicleBuild([POWER_FITTED]);
+    expect(previewAcquisitionResolution(build, POWER_FITTED)).toEqual(
+      resolveDuplicateAcquisition(build, POWER_FITTED),
+    );
+    expect(previewAcquisitionResolution(EMPTY_BUILD, POWER_FITTED)).toEqual({ kind: "new" });
+  });
+
+  it("reflects a build change made earlier within the same encounter", () => {
+    expect(previewAcquisitionResolution(EMPTY_BUILD, POWER_FITTED)).toEqual({ kind: "new" });
+    const afterPurchase = vehicleBuild([POWER_FITTED]);
+    expect(previewAcquisitionResolution(afterPurchase, POWER_FITTED)).toMatchObject({ kind: "tier-upgrade" });
+  });
+
+  it("shows the exact credit amount for an offer matching an already-★3 held item (016 US3, FR-003)", () => {
+    const build = vehicleBuild([POWER_FITTED]);
+    build.slots[0].tier = 3;
+    expect(previewAcquisitionResolution(build, POWER_FITTED)).toEqual({
+      kind: "max-tier-convert",
+      creditsGained: Math.floor(POWER_FITTED.price / 2),
+    });
   });
 });
 

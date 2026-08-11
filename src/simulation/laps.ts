@@ -6,6 +6,7 @@ import {
 } from "./buffs";
 import { resolveInstallation } from "./slots";
 import { resolveSynergyEffects } from "./synergy";
+import { applyTierBonus } from "./tiering";
 import {
   LAP_COUNT,
   MIN_LAP_TIME,
@@ -97,7 +98,7 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT): PlayerLa
       const installation = resolveInstallation(slot.item, slot.slotType);
       const synergy = synergyResolution.get(slot.slotId);
       return [{
-        item: effectiveItem(slot.item, installation, synergy),
+        item: effectiveItem(applyTierBonus(slot.item, slot.tier), installation, synergy),
         area: "board" as const,
         index,
         active: true,
@@ -108,7 +109,7 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT): PlayerLa
     }),
     ...build.storage.flatMap((position, index) => position.item
       ? [{
-        item: position.item,
+        item: applyTierBonus(position.item, position.tier),
         area: "storage" as const,
         index,
         active: position.item.activeWhileStored === true,

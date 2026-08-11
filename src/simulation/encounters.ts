@@ -11,7 +11,8 @@ import {
   type SponsorContract,
   type SponsorObjective,
 } from "./run";
-import { TAG_WEIGHT, type Build, type ContestResult, type OfferedItem } from "./types";
+import { resolveDuplicateAcquisition } from "./tiering";
+import { TAG_WEIGHT, type Build, type ContestResult, type OfferedItem, type VehicleBuild } from "./types";
 
 export type RandomSource = () => number;
 
@@ -258,7 +259,7 @@ export function acceptReward(
   run: Run,
   encounterId: string,
   offerId: string,
-  placement: PlacementCommand,
+  placement?: PlacementCommand,
   rng: RandomSource = () => 0,
 ): Run {
   const payload = requirePayload<RewardDraftPayload>(run, encounterId, "reward-draft");
@@ -267,11 +268,12 @@ export function acceptReward(
   }
   const offer = payload.offers.find(({ id }) => id === offerId);
   if (!offer) throw new RunTransitionError("encounter-id-mismatch", `Offer ${offerId} is not current`);
-  const build = applyPlacement(run.build, offer.item, placement);
+  const acquisition = applyAcquisition(run.build, offer.item, placement);
+  const { run: updated, creditTransactionIds } = withDuplicateConversion(run, encounterId, acquisition);
   return completeNonPvpEncounter(
-    run,
+    updated,
     encounterId,
-    { build, acquisitionOutcome: { kind: "accepted", itemIds: [offer.item.id] } },
+    { build: acquisition.build, acquisitionOutcome: { kind: "accepted", itemIds: [offer.item.id] }, creditTransactionIds },
     rng,
   );
 }
@@ -294,7 +296,7 @@ export function purchaseStock(
   run: Run,
   encounterId: string,
   stockId: string,
-  placement: PlacementCommand,
+  placement?: PlacementCommand,
 ): Run {
   const payload = requirePayload<PartsSupplierPayload>(run, encounterId, "parts-supplier");
   const stock = payload.stock.find(({ id }) => id === stockId);
@@ -304,13 +306,17 @@ export function purchaseStock(
   if (stock.item.price > run.credits) {
     throw new RunTransitionError("insufficient-credits", `Cannot afford ${stock.item.name}`);
   }
-  const build = applyPlacement(run.build, stock.item, placement);
-  const transaction = transactionFor(run, encounterId, "purchase", -stock.item.price);
-  return {
+  const acquisition = applyAcquisition(run.build, stock.item, placement);
+  const purchaseTransaction = transactionFor(run, encounterId, "purchase", -stock.item.price);
+  const afterPurchase: Run = {
     ...run,
-    build,
-    credits: transaction.balanceAfter,
-    creditTransactions: [...run.creditTransactions, transaction],
+    credits: purchaseTransaction.balanceAfter,
+    creditTransactions: [...run.creditTransactions, purchaseTransaction],
+  };
+  const { run: afterConversion } = withDuplicateConversion(afterPurchase, encounterId, acquisition);
+  return {
+    ...afterConversion,
+    build: acquisition.build,
     activeEncounter: {
       ...run.activeEncounter!,
       payload: {
@@ -480,6 +486,64 @@ function requirePayload<T>(run: Run, encounterId: string, kind: T extends { kind
     throw new RunTransitionError("invalid-encounter-type", `Expected ${String(kind)}`);
   }
   return run.activeEncounter.payload as T;
+}
+
+interface AcquisitionApplication {
+  build: VehicleBuild;
+  /** >0 only for a max-tier-convert resolution (016-duplicate-item-tiering contract §5). */
+  duplicateCreditsGained: number;
+}
+
+/**
+ * Routes an about-to-be-acquired item through duplicate detection before any
+ * placement decision (016-duplicate-item-tiering contract §5). `"new"` falls
+ * through to the existing placement path unchanged; `"tier-upgrade"` updates
+ * only the matched position's tier; `"max-tier-convert"` leaves the build
+ * untouched and reports credits for the caller to record as a transaction.
+ */
+function applyAcquisition(
+  build: VehicleBuild,
+  item: OfferedItem,
+  placement: PlacementCommand | undefined,
+): AcquisitionApplication {
+  const resolution = resolveDuplicateAcquisition(build, item);
+  if (resolution.kind === "new") {
+    if (!placement) {
+      throw new RunTransitionError("invalid-action", `A placement is required to acquire ${item.name}`);
+    }
+    return { build: applyPlacement(build, item, placement), duplicateCreditsGained: 0 };
+  }
+  if (resolution.kind === "tier-upgrade") {
+    const updatedBuild = resolution.area === "vehicle"
+      ? {
+        ...build,
+        slots: build.slots.map((slot) => slot.slotId === resolution.slotId ? { ...slot, tier: resolution.toTier } : slot),
+      }
+      : {
+        ...build,
+        storage: build.storage.map((position) => position.index === resolution.index ? { ...position, tier: resolution.toTier } : position),
+      };
+    return { build: updatedBuild, duplicateCreditsGained: 0 };
+  }
+  return { build, duplicateCreditsGained: resolution.creditsGained };
+}
+
+/**
+ * Appends the `"duplicate-conversion"` transaction for a max-tier-convert
+ * resolution, if any (016-duplicate-item-tiering contract §5). A no-op that
+ * returns `run` unchanged for every other resolution.
+ */
+function withDuplicateConversion(
+  run: Run,
+  encounterId: string,
+  acquisition: AcquisitionApplication,
+): { run: Run; creditTransactionIds: string[] } {
+  if (acquisition.duplicateCreditsGained <= 0) return { run, creditTransactionIds: [] };
+  const transaction = transactionFor(run, encounterId, "duplicate-conversion", acquisition.duplicateCreditsGained);
+  return {
+    run: { ...run, credits: transaction.balanceAfter, creditTransactions: [...run.creditTransactions, transaction] },
+    creditTransactionIds: [transaction.id],
+  };
 }
 
 /**

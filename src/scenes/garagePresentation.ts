@@ -8,6 +8,7 @@ import {
 } from "../simulation/garage";
 import { resolveInstallation } from "../simulation/slots";
 import { matchesTarget, resolveConditionPercent } from "../simulation/synergy";
+import { applyTierBonus, resolveDuplicateAcquisition, type DuplicateResolution } from "../simulation/tiering";
 import type {
   InstallationState,
   ItemDefinition,
@@ -143,13 +144,17 @@ export interface GarageItemSummary {
   improvisedLabel: string;
 }
 
+function effectLabel(item: ItemDefinition): string {
+  return `${item.timeModifier >= 0 ? "+" : ""}${item.timeModifier.toFixed(2)}s per firing`;
+}
+
 function itemSummary(item: ItemDefinition): GarageItemSummary {
   return {
     id: item.id,
     name: item.name,
     categoryLabel: item.installationCategory.toUpperCase(),
     originLabel: item.origin,
-    baseEffectLabel: `${item.timeModifier >= 0 ? "+" : ""}${item.timeModifier.toFixed(2)}s per firing`,
+    baseEffectLabel: effectLabel(item),
     fittedLabel: item.fittedBehavior.description,
     improvisedLabel: item.improvisedBehavior.description,
   };
@@ -217,6 +222,21 @@ export interface GarageItemInspector extends GarageItemSummary {
   noAdditionalConsequenceLabel: string | null;
   /** Feature 014: one entry per authored synergy effect, with its live current value. */
   synergyEffects: SynergyEffectDisplay[];
+  /**
+   * 016-duplicate-item-tiering: the current tier of the matching held
+   * position (board or storage) for this exact item id, or 1 when the item
+   * is not currently held anywhere in the build.
+   */
+  tier: 1 | 2 | 3;
+  /** 016-duplicate-item-tiering: `baseEffectLabel` with the tier bonus folded in. */
+  effectiveEffectLabel: string;
+}
+
+function heldTier(item: ItemDefinition, build: VehicleBuild): 1 | 2 | 3 {
+  const slotMatch = build.slots.find((slot) => slot.item?.id === item.id);
+  if (slotMatch) return slotMatch.tier;
+  const storageMatch = build.storage.find((position) => position.item?.id === item.id);
+  return storageMatch?.tier ?? 1;
 }
 
 /**
@@ -235,6 +255,7 @@ export function garageItemInspector(
 ): GarageItemInspector {
   const summary = itemSummary(item);
   const resolution = slotType ? resolveInstallation(item, slotType) : null;
+  const tier = heldTier(item, build);
 
   return {
     ...summary,
@@ -250,7 +271,19 @@ export function garageItemInspector(
       ? item.improvisedBehavior.description
       : null,
     synergyEffects: (item.synergyEffects ?? []).map((effect) => synergyEffectDisplay(item, effect, build)),
+    tier,
+    effectiveEffectLabel: effectLabel(applyTierBonus(item, tier)),
   };
+}
+
+/**
+ * Thin presentation-facing re-export of `resolveDuplicateAcquisition`
+ * (016-duplicate-item-tiering contract §6) — computed fresh against the
+ * current build so a Parts Supplier/Reward Draft offer can be labeled with
+ * its real pre-commit outcome, never baked into the payload.
+ */
+export function previewAcquisitionResolution(build: VehicleBuild, item: ItemDefinition): DuplicateResolution {
+  return resolveDuplicateAcquisition(build, item);
 }
 
 export interface GarageComparisonModel {

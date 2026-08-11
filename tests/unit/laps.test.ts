@@ -621,6 +621,83 @@ describe("simulatePlayerLaps — synergy fold (014-item-synergy-tags, Foundation
   });
 });
 
+describe("simulatePlayerLaps — tier fold (016-duplicate-item-tiering US2, FR-006)", () => {
+  it("folds a board item's tier bonus in before its installation delta", () => {
+    const item = testItem({
+      id: "tiered-power",
+      name: "Tiered Power",
+      price: 1,
+      timeModifier: -10,
+      cooldown: 1,
+      installationCategory: "power",
+      fittedBehavior: { kind: "time-modifier", timeModifier: -1, description: "Fitted: extra 1s." },
+    });
+    const build = vehicleBuild([item]);
+    build.slots[0].tier = 2;
+    const contribution = simulatePlayerLaps(build)[0].contributions.find((entry) => entry.sourceItemId === "tiered-power")!;
+
+    // tier 2: -10 * 1.15 = -11.5, then Fitted's flat -1 => -12.5
+    expect(contribution.resultingContribution).toBeCloseTo(-12.5);
+  });
+
+  it("folds a storage item's tier bonus even though storage has no installation state", () => {
+    const item = testItem({
+      id: "tiered-storage",
+      name: "Tiered Storage",
+      price: 1,
+      timeModifier: -4,
+      cooldown: 1,
+      activeWhileStored: true,
+    });
+    const build = vehicleBuild([], [item]);
+    build.storage[0].tier = 3;
+    const contribution = simulatePlayerLaps(build)[0].contributions.find((entry) => entry.sourceItemId === "tiered-storage")!;
+
+    // tier 3: -4 * 1.30 = -5.2
+    expect(contribution.resultingContribution).toBeCloseTo(-5.2);
+  });
+
+  it("composes tier, installation, and synergy together without dropping any layer", () => {
+    const target = testItem({
+      id: "tiered-target",
+      name: "Tiered Target",
+      price: 1,
+      timeModifier: -10,
+      cooldown: 1,
+      installationCategory: "power",
+      fittedBehavior: { kind: "time-modifier", timeModifier: -1, description: "Fitted: extra 1s." },
+      synergyTags: ["gearing"],
+    });
+    const source = testItem({
+      id: "synergy-source",
+      name: "Synergy Source",
+      price: 1,
+      timeModifier: 0,
+      synergyEffects: [
+        {
+          target: { kind: "tag", tag: "gearing" },
+          appliesTo: "others",
+          condition: { kind: "linear-per-count", percentPerMatch: 10 },
+          description: "Boosts gearing items by 10% per matching item.",
+        },
+      ],
+    });
+    const build = vehicleBuild([target, null, null, source]);
+    build.slots[0].tier = 2;
+    const contribution = simulatePlayerLaps(build)[0].contributions.find((entry) => entry.sourceItemId === "tiered-target")!;
+
+    // tier 2: -10 * 1.15 = -11.5; + Fitted -1 => -12.5; + 10% synergy => -13.75
+    expect(contribution.resultingContribution).toBeCloseTo(-13.75);
+  });
+
+  it("leaves a tier-1 item's contribution identical to today's untiered value", () => {
+    const item = testItem({ id: "untiered", name: "Untiered", price: 1, timeModifier: -6, cooldown: 1 });
+    const contribution = simulatePlayerLaps(vehicleBuild([item]))[0].contributions
+      .find((entry) => entry.sourceItemId === "untiered")!;
+    expect(contribution.resultingContribution).toBe(-6);
+  });
+});
+
 describe("authored synergy example items (014 US1/US2, sample-data.ts)", () => {
   it("US1: item-011 (Compact Data Logger) boosts other held gearing items, attributed to it", () => {
     const dataLogger = catalogItem("item-011");

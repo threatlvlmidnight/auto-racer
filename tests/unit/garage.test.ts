@@ -326,6 +326,64 @@ describe("commitGarageCommand — atomic, immutable transitions", () => {
   });
 });
 
+describe("tier field (016-duplicate-item-tiering foundational)", () => {
+  it("defaults every empty and freshly-placed position to tier 1", () => {
+    const build = vehicleBuild();
+    build.slots.forEach((slot) => expect(slot.tier).toBe(1));
+    build.storage.forEach((position) => expect(position.tier).toBe(1));
+
+    const result = commitGarageCommand(
+      offerContext(build),
+      command({ area: "offer", offerId: "offer-a" }, { area: "vehicle", slotId: SLOT[0] }),
+    );
+    expect(result.kind).toBe("committed");
+    if (result.kind !== "committed") return;
+    expect(result.build.slots[0].tier).toBe(1);
+  });
+
+  it("carries an item's tier with it across a plain move", () => {
+    const build = vehicleBuild([POWER_ITEM]);
+    build.slots[0].tier = 3;
+    const result = commitGarageCommand(
+      context(build),
+      command({ area: "vehicle", slotId: SLOT[0] }, { area: "storage", index: 2 }),
+    );
+
+    expect(result.kind).toBe("committed");
+    if (result.kind !== "committed") return;
+    expect(result.build.storage[2].tier).toBe(3);
+    expect(result.build.slots[0].item).toBeNull();
+  });
+
+  it("swaps each item's own tier along with it", () => {
+    const build = vehicleBuild([POWER_ITEM], [CHASSIS_ITEM]);
+    build.slots[0].tier = 2;
+    build.storage[0].tier = 3;
+    const result = commitGarageCommand(
+      context(build),
+      command({ area: "vehicle", slotId: SLOT[0] }, { area: "storage", index: 0 }, "swap"),
+    );
+
+    expect(result.kind).toBe("committed");
+    if (result.kind !== "committed") return;
+    expect(result.build.storage[0].tier).toBe(2);
+    expect(result.build.slots[0].tier).toBe(3);
+  });
+
+  it("gives a newly-placed offer item tier 1 even when it replaces/evicts a higher-tier occupant", () => {
+    const build = vehicleBuild([CHASSIS_ITEM]);
+    build.slots[0].tier = 3;
+    const result = commitGarageCommand(
+      offerContext(build),
+      command({ area: "offer", offerId: "offer-a" }, { area: "vehicle", slotId: SLOT[0] }, "evict"),
+    );
+
+    expect(result.kind).toBe("committed");
+    if (result.kind !== "committed") return;
+    expect(result.build.slots[0].tier).toBe(1);
+  });
+});
+
 describe("garage item-copy conservation", () => {
   it("never duplicates or drops an item across a long sequence of legal operations", () => {
     let build = vehicleBuild([ITEM_POOL[0], ITEM_POOL[1]], [ITEM_POOL[2]]);

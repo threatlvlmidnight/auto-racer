@@ -56,7 +56,7 @@ describe("protected run state", () => {
       (run) => { run.creditTransactions[0].amount += 1; },
       (run) => { run.activeSponsorContract!.status = "failed"; },
       (run) => { run.build.slots.reverse(); },
-      (run) => { run.build.storage[0] = { index: 0, item: run.build.slots[0].item }; },
+      (run) => { run.build.storage[0] = { index: 0, item: run.build.slots[0].item, tier: 1 }; },
       (run) => { run.history[0].pvpOutcome!.gap += 1; },
     ];
 

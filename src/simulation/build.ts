@@ -17,10 +17,11 @@ export function createEmptyVehicleBuild(vehicleId: VehicleId): VehicleBuild {
   return {
     vehicleId,
     car: BASELINE_CAR,
-    slots: vehicle.slots.map((slot) => ({ slotId: slot.id, slotType: slot.type, item: null })),
+    slots: vehicle.slots.map((slot) => ({ slotId: slot.id, slotType: slot.type, item: null, tier: 1 as const })),
     storage: Array.from({ length: VEHICLE_STORAGE_CAPACITY }, (_unused, index) => ({
       index,
       item: null,
+      tier: 1 as const,
     })),
   };
 }

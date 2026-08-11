@@ -178,11 +178,15 @@ export interface VehicleSlotState {
   slotId: string;
   slotType: SlotType;
   item: ItemDefinition | null;
+  /** 016-duplicate-item-tiering: meaningful only when item is non-null. */
+  tier: 1 | 2 | 3;
 }
 
 export interface StoredPosition {
   index: number;
   item: ItemDefinition | null;
+  /** 016-duplicate-item-tiering: meaningful only when item is non-null. */
+  tier: 1 | 2 | 3;
 }
 
 /** The run's authoritative current build; replaces the generic board. */

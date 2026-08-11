@@ -210,7 +210,8 @@ export type CreditTransactionKind =
   | "sponsor-immediate"
   | "sponsor-conditional"
   | "interest"
-  | "sell-back";
+  | "sell-back"
+  | "duplicate-conversion";
 
 export interface CreditTransaction {
   id: string;

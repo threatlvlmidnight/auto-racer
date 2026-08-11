@@ -202,6 +202,9 @@ describe("Parts Supplier and ledger", () => {
   });
 
   it("allows multiple affordable purchases and preserves purchased slots during restock", () => {
+    // Both stock entries draw the same item (rng pins index 0 on every draw),
+    // so the second purchase resolves as a tier-upgrade in place
+    // (016-duplicate-item-tiering), not a second physical copy in storage.
     const cheap = { ...ITEM_POOL.find((item) => item.identityTag === "performance")!, price: 2 };
     const active = activate(0, [cheap]);
     const payload = active.activeEncounter!.payload as PartsSupplierPayload;
@@ -209,16 +212,14 @@ describe("Parts Supplier and ledger", () => {
       area: "vehicle",
       slotId: active.build.slots[0].slotId,
     });
-    const second = purchaseStock(first, first.activeEncounter!.id, payload.stock[1].id, {
-      area: "storage",
-      index: 0,
-    });
+    const second = purchaseStock(first, first.activeEncounter!.id, payload.stock[1].id);
     const restocked = restockSupplier(second, second.activeEncounter!.id, () => 0, [cheap]);
     const restockedPayload = restocked.activeEncounter!.payload as PartsSupplierPayload;
 
     expect(second.credits).toBe(1);
     expect(second.build.slots[0].item?.id).toBe(cheap.id);
-    expect(second.build.storage[0].item?.id).toBe(cheap.id);
+    expect(second.build.slots[0].tier).toBe(2);
+    expect(second.build.storage.every((position) => position.item === null)).toBe(true);
     expect(restocked.credits).toBe(0);
     expect(restockedPayload.stock.map(({ state }) => state)).toEqual([
       "purchased",
@@ -274,6 +275,83 @@ describe("Parts Supplier and ledger", () => {
       area: "vehicle",
       slotId: purchased.build.slots[1].slotId,
     })).toThrowError(expect.objectContaining({ code: "invalid-action" }));
+  });
+});
+
+describe("duplicate acquisition routing (016-duplicate-item-tiering US1/US3)", () => {
+  const heldBuild = (item: OfferedItem, tier: 1 | 2 | 3 = 1) => ({
+    ...vehicleBuild(),
+    slots: vehicleBuild().slots.map((slot, index) => index === 0 ? { ...slot, item, tier } : slot),
+  });
+
+  it("purchaseStock resolves a tier-upgrade in place, without requiring or consulting a placement", () => {
+    const cheap = { ...ITEM_POOL.find((item) => item.identityTag === "performance")!, price: 2 };
+    const run = create(() => 0);
+    const held = { ...run, build: heldBuild(cheap, 1) };
+    const active = chooseEncounter(held, held.availableChoices.find((c) => c.type === "parts-supplier")!.id, () => 0, [cheap]);
+    const payload = active.activeEncounter!.payload as PartsSupplierPayload;
+
+    const purchased = purchaseStock(active, active.activeEncounter!.id, payload.stock[0].id);
+
+    expect(purchased.build.slots[0].item?.id).toBe(cheap.id);
+    expect(purchased.build.slots[0].tier).toBe(2);
+    expect(purchased.build.storage.every((position) => position.item === null)).toBe(true);
+    expect(purchased.credits).toBe(active.credits - cheap.price);
+    expect((purchased.activeEncounter!.payload as PartsSupplierPayload)
+      .stock.find(({ id }) => id === payload.stock[0].id)!.state).toBe("purchased");
+  });
+
+  it("purchaseStock resolves a max-tier-convert as a duplicate-conversion transaction, leaving the build untouched", () => {
+    const cheap = { ...ITEM_POOL.find((item) => item.identityTag === "performance")!, price: 2 };
+    const run = create(() => 0);
+    const held = { ...run, build: heldBuild(cheap, 3) };
+    const active = chooseEncounter(held, held.availableChoices.find((c) => c.type === "parts-supplier")!.id, () => 0, [cheap]);
+    const payload = active.activeEncounter!.payload as PartsSupplierPayload;
+    const buildSnapshot = structuredClone(active.build);
+
+    const converted = purchaseStock(active, active.activeEncounter!.id, payload.stock[0].id);
+
+    expect(converted.build).toEqual(buildSnapshot);
+    expect(converted.credits).toBe(active.credits - cheap.price + Math.floor(cheap.price / 2));
+    expect(converted.creditTransactions).toEqual([
+      ...active.creditTransactions,
+      expect.objectContaining({ kind: "purchase", amount: -cheap.price }),
+      expect.objectContaining({ kind: "duplicate-conversion", amount: Math.floor(cheap.price / 2) }),
+    ]);
+    expect((converted.activeEncounter!.payload as PartsSupplierPayload)
+      .stock.find(({ id }) => id === payload.stock[0].id)!.state).toBe("purchased");
+  });
+
+  it("acceptReward resolves a tier-upgrade in place, without requiring or consulting a placement", () => {
+    const cheap = { ...ITEM_POOL.find((item) => item.identityTag === "performance")!, price: 2 };
+    const run = create(() => 0);
+    const held = { ...run, build: heldBuild(cheap, 2) };
+    const active = chooseEncounter(held, held.availableChoices.find((c) => c.type === "reward-draft")!.id, () => 0, [cheap]);
+    const payload = active.activeEncounter!.payload as RewardDraftPayload;
+
+    const completed = acceptReward(active, active.activeEncounter!.id, payload.offers[0].id);
+
+    expect(completed.build.slots[0].item?.id).toBe(cheap.id);
+    expect(completed.build.slots[0].tier).toBe(3);
+    expect(completed.build.storage.every((position) => position.item === null)).toBe(true);
+  });
+
+  it("acceptReward resolves a max-tier-convert as a duplicate-conversion transaction, leaving the build untouched", () => {
+    const cheap = { ...ITEM_POOL.find((item) => item.identityTag === "performance")!, price: 2 };
+    const run = create(() => 0);
+    const held = { ...run, build: heldBuild(cheap, 3) };
+    const active = chooseEncounter(held, held.availableChoices.find((c) => c.type === "reward-draft")!.id, () => 0, [cheap]);
+    const payload = active.activeEncounter!.payload as RewardDraftPayload;
+    const buildSnapshot = structuredClone(active.build);
+
+    const completed = acceptReward(active, active.activeEncounter!.id, payload.offers[0].id);
+
+    expect(completed.build).toEqual(buildSnapshot);
+    expect(completed.creditTransactions).toEqual([
+      ...active.creditTransactions,
+      expect.objectContaining({ kind: "duplicate-conversion", amount: Math.floor(cheap.price / 2) }),
+    ]);
+    expect(completed.history).toHaveLength(active.history.length + 1);
   });
 });
 
