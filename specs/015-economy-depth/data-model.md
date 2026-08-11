@@ -19,33 +19,45 @@ UI) MUST add an explicit `"failed"` branch — none may fall through a
 
 | Field | Type | Rules |
 |---|---|---|
-| `reputation` | `number` | New. Starts at a fixed authored value (FR-001; exact value is a balance-pass constant, not fixed by this spec — Assumptions). Never increases within this feature's scope (Key Entities). Floored at `0` — a decrement that would go negative clamps to `0` instead (FR-004). |
+| `reputation` | `number` | New. Starts at a fixed authored value (FR-001; exact value is a balance-pass constant, not fixed by this spec — Assumptions). Rises or falls per race on the player's finishing position, and separately falls on a failed sponsor objective (superseded by chat follow-up — see Reputation Delta below; no longer capped at its starting value). Floored at `0` — a change that would go negative clamps to `0` instead (FR-004). |
 
-## Reputation Decrement
+## Reputation Delta (superseded design — chat follow-up)
+
+Originally a flat per-trigger decrement (`applyReputationLoss`, win/loss
+only). Redesigned so a race's reputation change scales with the player's
+1-8 finishing position, since a fixed-elimination "loss" doesn't capture
+how a mid-pack or podium finish should feel different:
 
 ```ts
-function applyReputationLoss(run: Run, trigger: "pvp-loss" | "sponsor-failure"): Run;
+function reputationDeltaForPosition(position: number): number; // 1:+3 … 4:0 … 8:-4
+function applyRaceReputationChange(run: Run, position: number): Run;
+function applySponsorFailurePenalty(run: Run): Run; // flat -1, unchanged in shape
 ```
 
 Called only from `completePvpEncounter`, immediately before its existing
 `advanceRun(...)` call (Research Decision 2) — the one place both
 trigger conditions are already known:
 
-- `trigger: "pvp-loss"` — `result.outcome === "loss"` (a tie does
-  **not** trigger this — FR-002).
-- `trigger: "sponsor-failure"` — `resolvePendingSponsor(...)` returned
-  `succeeded: false` for a pending contract.
+- The race delta uses `result.playerPosition` when present (the real
+  N-car finishing position, threaded through by
+  `runPresentation.ts`'s `toLegacyContestResult`), else falls back to a
+  position derived from the legacy `outcome` (`win`→1, `tie`→4,
+  `loss`→8) so the older 2-car `resolveContest` path still resolves
+  through the same table.
+- The sponsor penalty fires when `resolvePendingSponsor(...)` returned
+  `succeeded: false` for a pending contract — unchanged from the
+  original design.
 
-Both conditions are independent; if a stage somehow satisfies both (a
-lost PvP contest that was also the pending sponsor contract's failed
-objective), reputation decrements once per trigger, not once per stage —
+Both conditions are independent; if a stage satisfies both (a
+back-of-field finish that was also the pending sponsor contract's failed
+objective), reputation changes once per trigger, not once per stage —
 matches how `appendTransaction` already independently records
 `participation`/`win-bonus`/`sponsor-conditional` as separate entries
 for the same stage.
 
-`run.reputation` is floored at `0` inline in `applyReputationLoss`, not
-left to `advanceRun` to clamp — `advanceRun` only ever reads the
-already-clamped value.
+`run.reputation` is floored at `0` inline in both functions, not left to
+`advanceRun` to clamp — `advanceRun` only ever reads the already-clamped
+value.
 
 ## `advanceRun` Extension
 

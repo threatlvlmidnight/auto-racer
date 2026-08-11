@@ -153,14 +153,14 @@ the locked offer is unchanged while every other offer is replaced.
 
 - **FR-001**: The system MUST track a reputation value on every active
   run, starting at a fixed authored value.
-- **FR-002**: Reputation MUST decrease on either of the two existing
-  outcome shapes that already represent "this went badly": a lost
-  scheduled PvP contest, or a failed/unmet sponsor objective. Both
-  trigger reputation loss — reputation is not tied to PvP alone. A tied
-  PvP contest does NOT count as a loss for this purpose — reputation only
-  decreases on an outright loss, treating a tie as neutral, matching how
-  a tie already doesn't count as a win for champ points elsewhere in the
-  game.
+- **FR-002**: Reputation MUST change on every scheduled PvP contest,
+  scaled to the player's finishing position (chat follow-up, superseding
+  the original win/loss-only design): podium finishes (1st-3rd) increase
+  reputation by a decreasing amount, 4th is neutral, and back-of-field
+  finishes (5th-8th) decrease it by an increasing amount. A failed/unmet
+  sponsor objective ALSO decreases reputation, independently of the same
+  contest's position-based change — both may apply on the same stage
+  transition, each its own delta.
 - **FR-003**: When reputation reaches zero, the run MUST end immediately
   via a new, distinct `RunStatus` value (not a reuse of today's
   `"completed"` status) — the same way `"unavailable"` already drives its
@@ -206,10 +206,11 @@ the locked offer is unchanged while every other offer is replaced.
 ### Key Entities
 
 - **Reputation**: A new numeric field on the active `Run`, starting at a
-  fixed authored value, decreasing on authored trigger conditions
-  (FR-002), and driving a new run-ending outcome at zero. Never increases
-  above its starting value within this feature's scope (no "regain
-  reputation" mechanic is introduced here).
+  fixed authored value, rising or falling on authored trigger conditions
+  (FR-002), and driving a new run-ending outcome at zero. Position-based
+  race outcomes can raise it above its starting value (chat follow-up,
+  superseding the original "never increases" design) — only the
+  zero-floor (FR-004) still bounds it.
 - **Interest Transaction**: A new credit-transaction kind, computed from
   the player's currently banked credits at the moment it's applied.
 - **Sell Transaction**: A new credit-transaction kind, applied when the

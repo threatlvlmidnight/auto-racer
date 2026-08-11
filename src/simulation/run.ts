@@ -11,6 +11,7 @@ import {
   ACTIVE_IDENTITY_TAG,
   VEHICLE_STORAGE_CAPACITY,
   type Build,
+  type ContestOutcome,
   type ContestResult,
   type EntrantId,
   type IdentityTag,
@@ -96,17 +97,52 @@ export function validateRunBuildContext(
 export type RunStatus = "active" | "completed" | "unavailable" | "failed";
 
 /**
- * Balance-pass placeholders (015-economy-depth spec.md Assumptions):
- * exact values are a tuning decision, not fixed by the spec. Chosen so a
- * run performing badly across both of today's PvP stages (2 losses) or a
- * PvP loss plus a failed sponsor objective can plausibly fail before
- * Stage 6, without every below-average run failing automatically.
+ * Balance-pass placeholder (015-economy-depth spec.md Assumptions, rescaled
+ * per chat follow-up): exact value is a tuning decision, not fixed by the
+ * spec. Chosen so a run that finishes mid-pack (position 4-5) across a
+ * couple of PvP stages can plausibly still fail before Stage 6, without
+ * every below-average run failing automatically.
  */
-export const REPUTATION_START = 3;
-const REPUTATION_LOSS_BY_TRIGGER: Record<"pvp-loss" | "sponsor-failure", number> = {
-  "pvp-loss": 1,
-  "sponsor-failure": 1,
+export const REPUTATION_START = 6;
+
+/**
+ * Position-based reputation delta (015-economy-depth, chat follow-up):
+ * podium finishes (1-3) gain reputation, back-of-field finishes (5-8) lose
+ * it, and 4th is neutral. Keyed by the player's live 1-8 finishing
+ * position — see ContestResult.playerPosition.
+ */
+const POSITION_REPUTATION_DELTA: Record<number, number> = {
+  1: 3,
+  2: 2,
+  3: 1,
+  4: 0,
+  5: -1,
+  6: -2,
+  7: -3,
+  8: -4,
 };
+
+/**
+ * Flat penalty applied on a failed sponsor objective, independent of race
+ * position (015-economy-depth FR-002, research.md Decision 2).
+ */
+const SPONSOR_FAILURE_REPUTATION_DELTA = -1;
+
+/**
+ * Legacy 2-car resolveContest(build, ghost, lapCount) calls have no 1-8
+ * position — only a win/tie/loss outcome. Maps that outcome onto the same
+ * position-delta table so both paths share one reputation calculation.
+ */
+const LEGACY_OUTCOME_POSITION: Record<ContestOutcome, number> = {
+  win: 1,
+  tie: 4,
+  loss: 8,
+};
+
+/** Looks up the position-based reputation delta (015-economy-depth). */
+export function reputationDeltaForPosition(position: number): number {
+  return POSITION_REPUTATION_DELTA[position] ?? 0;
+}
 
 /**
  * Balance-pass placeholder (Assumptions): not fixed by the spec. Chosen so
@@ -635,21 +671,32 @@ export function completePvpEncounter(
     history: [...run.history, historyEntry],
   };
   // Independent triggers (015-economy-depth FR-002, research.md Decision 2):
-  // both may fire on the same stage transition, each its own decrement.
-  if (result.outcome === "loss") next = applyReputationLoss(next, "pvp-loss");
-  if (sponsorFailed) next = applyReputationLoss(next, "sponsor-failure");
+  // both may fire on the same stage transition, each its own delta.
+  const position = result.playerPosition ?? LEGACY_OUTCOME_POSITION[result.outcome];
+  next = applyRaceReputationChange(next, position);
+  if (sponsorFailed) next = applySponsorFailurePenalty(next);
 
   return advanceRun(next, rng);
 }
 
 /**
- * Decrements reputation by one for the given trigger, floored at 0
- * (015-economy-depth contract §1). Called only from completePvpEncounter,
- * before its advanceRun call — a sponsor objective can only resolve at PvP
- * completion, so no other call site can produce either trigger.
+ * Applies the position-based reputation delta for a finished race, floored
+ * at 0 (015-economy-depth contract §1, chat follow-up rescale). Called only
+ * from completePvpEncounter, before its advanceRun call.
  */
-export function applyReputationLoss(run: Run, trigger: "pvp-loss" | "sponsor-failure"): Run {
-  return { ...run, reputation: Math.max(0, run.reputation - REPUTATION_LOSS_BY_TRIGGER[trigger]) };
+export function applyRaceReputationChange(run: Run, position: number): Run {
+  return { ...run, reputation: Math.max(0, run.reputation + reputationDeltaForPosition(position)) };
+}
+
+/**
+ * Decrements reputation by a flat amount for a failed sponsor objective,
+ * floored at 0 (015-economy-depth contract §1). Called only from
+ * completePvpEncounter, before its advanceRun call — a sponsor objective
+ * can only resolve at PvP completion, so no other call site can produce
+ * this trigger.
+ */
+export function applySponsorFailurePenalty(run: Run): Run {
+  return { ...run, reputation: Math.max(0, run.reputation + SPONSOR_FAILURE_REPUTATION_DELTA) };
 }
 
 function compactItemIds(items: readonly (OfferedItem | null)[]): string[] {

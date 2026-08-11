@@ -314,6 +314,14 @@ export interface ContestResult {
   laps: LapBreakdown[];
   /** Resolver-emitted facts used by scored and practice presentation alike. */
   contributions?: ContributionEvidence[];
+  /**
+   * 015-economy-depth: the player's live 1-8 finishing position in the full
+   * field, when known. Populated only by the N-car bridge
+   * (runPresentation.ts's toLegacyContestResult) — absent for the legacy
+   * 2-car resolveContest(build, ghost, lapCount) path, since a 1v1 result
+   * has no equivalent position on an 8-car scale.
+   */
+  playerPosition?: number;
 }
 
 // --- Feature 012: multi-ghost contest --------------------------------------

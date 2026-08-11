@@ -219,6 +219,7 @@ function toLegacyContestResult(result: NCarContestResult): ContestResult {
       contributions: lap.contributions,
     })),
     contributions: player.laps.flatMap((lap) => lap.contributions),
+    playerPosition: player.position,
   };
 }
 

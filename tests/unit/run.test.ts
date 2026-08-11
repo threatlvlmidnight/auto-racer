@@ -3,12 +3,14 @@ import { BASELINE_CAR, ITEM_POOL, SAMPLE_GHOST } from "../../src/content/sample-
 import { chooseEncounter } from "../../src/simulation/encounters";
 import { resolveContest } from "../../src/simulation/contest";
 import {
-  applyReputationLoss,
+  applyRaceReputationChange,
+  applySponsorFailurePenalty,
   completePvpEncounter,
   completeNonPvpEncounter,
   createUnavailableRun,
   createRun,
   interestFor,
+  reputationDeltaForPosition,
   runProgress,
   RunTransitionError,
   summarizeRunHistory,
@@ -209,9 +211,13 @@ describe("PvP run transitions", () => {
   });
 
   it("rejects stale and duplicate IDs and completes the final PvP exactly once", () => {
+    // Uses a slow ghost rather than SAMPLE_GHOST so both PvP stages resolve
+    // as wins, keeping reputation clear of the failure floor — this test
+    // exercises ID handling, not the 015-economy-depth reputation table.
+    const slowGhost = { id: "slow-ghost", lapTime: 100 };
     let run = advanceToFirstPvp();
     const firstId = run.activeEncounter!.id;
-    const firstResult = resolveContest(run.build, SAMPLE_GHOST, 10);
+    const firstResult = resolveContest(run.build, slowGhost, 10);
     expect(() => completePvpEncounter(run, "wrong-id", firstResult, () => 0)).toThrowError(
       expect.objectContaining({ code: "encounter-id-mismatch" }),
     );
@@ -225,7 +231,7 @@ describe("PvP run transitions", () => {
       run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
     }
     const finalId = run.activeEncounter!.id;
-    run = completePvpEncounter(run, finalId, resolveContest(run.build, SAMPLE_GHOST, 12), () => 0);
+    run = completePvpEncounter(run, finalId, resolveContest(run.build, slowGhost, 12), () => 0);
 
     expect(run.status).toBe("completed");
     expect(run.stageIndex).toBe(6);
@@ -646,38 +652,59 @@ describe("reputation and the \"failed\" RunStatus (015-economy-depth Foundationa
   });
 });
 
-describe("applyReputationLoss (015-economy-depth US1, FR-002/FR-004)", () => {
-  it("decrements by exactly one per trigger, for either trigger kind", () => {
+describe("reputationDeltaForPosition (015-economy-depth US1, position rescale)", () => {
+  it("awards a decreasing bonus for each podium position", () => {
+    expect(reputationDeltaForPosition(1)).toBe(3);
+    expect(reputationDeltaForPosition(2)).toBe(2);
+    expect(reputationDeltaForPosition(3)).toBe(1);
+  });
+
+  it("is neutral for 4th place", () => {
+    expect(reputationDeltaForPosition(4)).toBe(0);
+  });
+
+  it("charges an increasing penalty for each back-of-field position", () => {
+    expect(reputationDeltaForPosition(5)).toBe(-1);
+    expect(reputationDeltaForPosition(6)).toBe(-2);
+    expect(reputationDeltaForPosition(7)).toBe(-3);
+    expect(reputationDeltaForPosition(8)).toBe(-4);
+  });
+});
+
+describe("applyRaceReputationChange / applySponsorFailurePenalty (015-economy-depth US1, FR-002/FR-004)", () => {
+  it("applies the position delta, up or down", () => {
     const run = newRun();
 
-    expect(applyReputationLoss(run, "pvp-loss").reputation).toBe(run.reputation - 1);
-    expect(applyReputationLoss(run, "sponsor-failure").reputation).toBe(run.reputation - 1);
+    expect(applyRaceReputationChange(run, 1).reputation).toBe(run.reputation + 3);
+    expect(applyRaceReputationChange(run, 8).reputation).toBe(run.reputation - 4);
   });
 
   it("floors at exactly 0 and never goes negative", () => {
     const run = { ...newRun(), reputation: 0 };
-    expect(applyReputationLoss(run, "pvp-loss").reputation).toBe(0);
+    expect(applyRaceReputationChange(run, 8).reputation).toBe(0);
+    expect(applySponsorFailurePenalty(run).reputation).toBe(0);
   });
 
   it("does not mutate the input run", () => {
     const run = newRun();
     const snapshot = structuredClone(run);
-    applyReputationLoss(run, "pvp-loss");
+    applyRaceReputationChange(run, 8);
+    applySponsorFailurePenalty(run);
     expect(run).toEqual(snapshot);
   });
 });
 
-describe("completePvpEncounter reputation wiring (US1)", () => {
-  it("decrements reputation on an outright PvP loss", () => {
+describe("completePvpEncounter reputation wiring (US1, position rescale)", () => {
+  it("applies the largest penalty on an outright PvP loss (legacy 2-car path maps loss to position 8)", () => {
     const run = advanceToFirstPvp();
     const result = resolveContest(run.build, SAMPLE_GHOST, 10);
     expect(result.outcome).toBe("loss");
 
     const completed = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
-    expect(completed.reputation).toBe(run.reputation - 1);
+    expect(completed.reputation).toBe(run.reputation - 4);
   });
 
-  it("does not decrement reputation on a tied PvP contest", () => {
+  it("is neutral on a tied PvP contest (legacy 2-car path maps tie to position 4)", () => {
     const run = advanceToFirstPvp();
     const tieGhost = { id: "tie-ghost", lapTime: BASELINE_CAR.baseLapTime };
     const result = resolveContest(run.build, tieGhost, 10);
@@ -687,17 +714,25 @@ describe("completePvpEncounter reputation wiring (US1)", () => {
     expect(completed.reputation).toBe(run.reputation);
   });
 
-  it("does not decrement reputation on a PvP win", () => {
+  it("awards the largest bonus on a PvP win (legacy 2-car path maps win to position 1)", () => {
     const run = advanceToFirstPvp();
     const slowGhost = { id: "slow-ghost", lapTime: 100 };
     const result = resolveContest(run.build, slowGhost, 10);
     expect(result.outcome).toBe("win");
 
     const completed = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
-    expect(completed.reputation).toBe(run.reputation);
+    expect(completed.reputation).toBe(run.reputation + 3);
   });
 
-  it("decrements reputation on a failed sponsor objective, independent of a simultaneous PvP win", () => {
+  it("uses the real N-car finishing position when the result carries one, ignoring the legacy outcome mapping", () => {
+    const run = advanceToFirstPvp();
+    const result: ContestResult = { ...resolveContest(run.build, SAMPLE_GHOST, 10), playerPosition: 5 };
+
+    const completed = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
+    expect(completed.reputation).toBe(run.reputation - 1);
+  });
+
+  it("decrements reputation for a failed sponsor objective, independent of a simultaneous PvP win", () => {
     const base = advanceToFirstPvp();
     const run: Run = {
       ...base,
@@ -714,10 +749,10 @@ describe("completePvpEncounter reputation wiring (US1)", () => {
     expect(result.outcome).toBe("win");
 
     const completed = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
-    expect(completed.reputation).toBe(run.reputation - 1);
+    expect(completed.reputation).toBe(run.reputation + 3 - 1);
   });
 
-  it("decrements reputation twice when a PvP loss and a failed sponsor objective land on the same transition", () => {
+  it("combines the race delta and a failed sponsor objective on the same transition", () => {
     const base = advanceToFirstPvp();
     const run: Run = {
       ...base,
@@ -733,10 +768,10 @@ describe("completePvpEncounter reputation wiring (US1)", () => {
     expect(result.outcome).toBe("loss");
 
     const completed = completePvpEncounter(run, run.activeEncounter!.id, result, () => 0);
-    expect(completed.reputation).toBe(run.reputation - 2);
+    expect(completed.reputation).toBe(run.reputation - 4 - 1);
   });
 
-  it("floors reputation at 0 rather than going negative from a double-decrement transition", () => {
+  it("floors reputation at 0 rather than going negative from a combined penalty", () => {
     const base = { ...advanceToFirstPvp(), reputation: 1 };
     const run: Run = {
       ...base,
