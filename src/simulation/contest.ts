@@ -1,6 +1,7 @@
 import { simulatePlayerLaps } from "./laps";
 import { resolveRivalBuild } from "./rivals";
 import { installedItems, storedItems } from "./slots";
+import { generateTrack } from "./tracks";
 import {
   LAP_COUNT,
   type Build,
@@ -118,7 +119,13 @@ function resolveNCarContest(
     );
   }
 
-  const playerLaps = simulatePlayerLaps(playerBuild, lapCount);
+  // 018-track-generation: exactly one track per contest, applied identically
+  // to the player and every rival — none exempt (research.md Decision 6,
+  // FR-009). This is a new call, separate from ContestScene.ts's own
+  // rendering-side generateTrack call, which given the same (seed, level)
+  // always agrees with this one since generateTrack is pure.
+  const track = generateTrack(seed, level);
+  const playerLaps = simulatePlayerLaps(playerBuild, lapCount, track);
   const rosterOrder: Omit<CarResult, "position" | "gapToLeader">[] = [
     {
       id: "player",
@@ -129,7 +136,7 @@ function resolveNCarContest(
       laps: playerLaps,
     },
     ...rivalRoster.map((profile) => {
-      const rivalLaps = simulatePlayerLaps(resolveRivalBuild(profile, level, seed), lapCount);
+      const rivalLaps = simulatePlayerLaps(resolveRivalBuild(profile, level, seed), lapCount, track);
       return {
         id: profile.id,
         role: "rival" as const,

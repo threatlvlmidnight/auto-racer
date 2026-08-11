@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ITEM_POOL } from "../../src/content/sample-data";
 import { firesOnLap, simulatePlayerLaps } from "../../src/simulation/laps";
+import { generateTrack } from "../../src/simulation/tracks";
 import {
   LAP_COUNT,
   MIN_LAP_TIME,
@@ -727,5 +728,87 @@ describe("authored synergy example items (014 US1/US2, sample-data.ts)", () => {
     expect(pairedContribution.synergy).toBeUndefined();
     // The unconditional base effect (Fitted -0.25s, on lap 1 of a Fitted power slot) survives either way.
     expect(pairedContribution.resultingContribution).toBeLessThan(0);
+  });
+});
+
+// 018-track-generation: simulatePlayerLaps's optional track parameter and
+// trackFit fold (data-model.md, contract §5).
+
+function powerHeavyBuild(): Build {
+  return vehicleBuild([
+    testItem({ id: "th-p1", name: "Power 1", price: 0, timeModifier: -1, cooldown: 1, installationCategory: "power" }),
+    testItem({ id: "th-p2", name: "Power 2", price: 0, timeModifier: -1, cooldown: 1, installationCategory: "power" }),
+    testItem({ id: "th-c1", name: "Chassis 1", price: 0, timeModifier: -1, cooldown: 1, installationCategory: "chassis" }),
+  ]);
+}
+
+function chassisHeavyBuild(): Build {
+  return vehicleBuild([
+    testItem({ id: "th-c1", name: "Chassis 1", price: 0, timeModifier: -1, cooldown: 1, installationCategory: "chassis" }),
+    testItem({ id: "th-c2", name: "Chassis 2", price: 0, timeModifier: -1, cooldown: 1, installationCategory: "chassis" }),
+    testItem({ id: "th-p1", name: "Power 1", price: 0, timeModifier: -1, cooldown: 1, installationCategory: "power" }),
+  ]);
+}
+
+function findBiasedTrack(direction: "power" | "cornering") {
+  for (let seed = 0; seed < 100; seed += 1) {
+    const track = generateTrack(seed, 1);
+    const diff = track.characteristics.powerDemand - track.characteristics.corneringDemand;
+    if (direction === "power" && diff > 15) return track;
+    if (direction === "cornering" && diff < -15) return track;
+  }
+  throw new Error(`no ${direction}-biased track found in a 100-seed sample`);
+}
+
+describe("simulatePlayerLaps omitted-track parity (T025, FR-007)", () => {
+  it("produces a byte-for-byte identical result to a two-argument call for every existing fixture", () => {
+    expect(simulatePlayerLaps(buffDependentPracticeBuild())).toEqual(
+      simulatePlayerLaps(buffDependentPracticeBuild(), LAP_COUNT),
+    );
+    expect(simulatePlayerLaps(emptyBuild())).toEqual(simulatePlayerLaps(emptyBuild(), LAP_COUNT));
+  });
+
+  it("omits trackFit entirely when no track is supplied", () => {
+    const laps = simulatePlayerLaps(powerHeavyBuild());
+    laps.forEach((lap) => expect(lap.trackFit).toBeUndefined());
+  });
+});
+
+describe("simulatePlayerLaps track-fit fold (T026, contract §5)", () => {
+  it("makes a Power-leaning build faster on a powerDemand-heavy track and slower on a corneringDemand-heavy one", () => {
+    const powerTrack = findBiasedTrack("power");
+    const corneringTrack = findBiasedTrack("cornering");
+    const build = powerHeavyBuild();
+    const baseline = simulatePlayerLaps(build)[0].time;
+
+    expect(simulatePlayerLaps(build, LAP_COUNT, powerTrack)[0].time).toBeLessThan(baseline);
+    expect(simulatePlayerLaps(build, LAP_COUNT, corneringTrack)[0].time).toBeGreaterThan(baseline);
+  });
+
+  it("reverses for a Chassis-leaning build", () => {
+    const powerTrack = findBiasedTrack("power");
+    const corneringTrack = findBiasedTrack("cornering");
+    const build = chassisHeavyBuild();
+    const baseline = simulatePlayerLaps(build)[0].time;
+
+    expect(simulatePlayerLaps(build, LAP_COUNT, powerTrack)[0].time).toBeGreaterThan(baseline);
+    expect(simulatePlayerLaps(build, LAP_COUNT, corneringTrack)[0].time).toBeLessThan(baseline);
+  });
+
+  it("sees trackFit.appliedPercent === 0 on every lap for a neutral/empty build, regardless of track", () => {
+    const track = generateTrack(3, 1);
+    const laps = simulatePlayerLaps(emptyBuild(), LAP_COUNT, track);
+    laps.forEach((lap) => expect(lap.trackFit?.appliedPercent).toBe(0));
+  });
+
+  it("records the applied effect as a new inspectable field, not silently folded into resultingLapTime", () => {
+    const track = generateTrack(3, 1);
+    const lap = simulatePlayerLaps(powerHeavyBuild(), LAP_COUNT, track)[0];
+
+    expect(lap.trackFit).toEqual({
+      appliedPercent: expect.any(Number),
+      appliedSeconds: expect.any(Number),
+    });
+    expect(lap.trackFit!.appliedPercent).not.toBe(0);
   });
 });

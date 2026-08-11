@@ -348,3 +348,53 @@ describe("resolveContest (N-car, US1/US2)", () => {
     expect(legacy.ghostTime).toBeCloseTo(SAMPLE_GHOST.lapTime * 10);
   });
 });
+
+// 018-track-generation: the N-car overload generates its own track per
+// contest and applies it identically to every car (T027, contract §6).
+describe("resolveContest track generation (N-car, US2)", () => {
+  it("gives every car — player and every rival — a trackFit-annotated lap", () => {
+    const result = resolveContest(emptyBuild(), RIVAL_PROFILES, 1, 42);
+
+    result.cars.forEach((car) => {
+      car.laps.forEach((lap) => {
+        expect(lap.trackFit).toEqual({
+          appliedPercent: expect.any(Number),
+          appliedSeconds: expect.any(Number),
+        });
+      });
+    });
+  });
+
+  it("applies exactly one generated track per contest — the empty player build sees trackFit.appliedPercent === 0 on every lap", () => {
+    const result = resolveContest(emptyBuild(), RIVAL_PROFILES, 1, 42);
+    const player = result.cars.find((car) => car.role === "player")!;
+    const percents = player.laps.map((lap) => lap.trackFit!.appliedPercent);
+
+    expect(new Set(percents)).toEqual(new Set([0]));
+  });
+
+  it("gives every rival the identical track as the player — same seed/level always produces the same set of rival trackFit values as another identical contest", () => {
+    const first = resolveContest(emptyBuild(), RIVAL_PROFILES, 3, 11);
+    const second = resolveContest(emptyBuild(), RIVAL_PROFILES, 3, 11);
+    const rivalFits = (result: typeof first) => result.cars
+      .filter((car) => car.role === "rival")
+      .map((car) => car.laps[0].trackFit!.appliedPercent);
+
+    expect(rivalFits(second)).toEqual(rivalFits(first));
+  });
+
+  it("regenerates the same track for the same (seed, level), deterministically affecting the result", () => {
+    const first = resolveContest(emptyBuild(), RIVAL_PROFILES, 2, 7, 12);
+    const second = resolveContest(emptyBuild(), RIVAL_PROFILES, 2, 7, 12);
+
+    expect(second).toEqual(first);
+  });
+
+  it("does not apply a track to the legacy 2-car overload", () => {
+    const legacy = resolveContest(emptyBuild(), SAMPLE_GHOST, 10);
+
+    legacy.laps.forEach((lap) => {
+      expect((lap as { trackFit?: unknown }).trackFit).toBeUndefined();
+    });
+  });
+});

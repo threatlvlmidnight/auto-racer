@@ -301,6 +301,8 @@ export interface LapBreakdown {
   firedItems: FiredItem[];
   /** Complete computation evidence. Optional for legacy constructed fixtures. */
   contributions?: ContributionEvidence[];
+  /** 018-track-generation: present only when simulatePlayerLaps was called with a track. */
+  trackFit?: { appliedPercent: number; appliedSeconds: number };
 }
 
 /** The output of resolving a contest (contracts/simulation-contract.md). */

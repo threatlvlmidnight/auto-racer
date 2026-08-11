@@ -164,7 +164,7 @@ export interface CarPlaybackSchedule {
 export interface NCarPlaybackSchedule {
   scaleFactor: number;
   cars: CarPlaybackSchedule[];
-  /** 013-race-spectacle: selectTrack's result, attached once per schedule so every consumer reads the same track. */
+  /** 013-race-spectacle: the caller's generated track, attached once per schedule so every consumer reads the same track. */
   track: Track;
 }
 

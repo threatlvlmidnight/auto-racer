@@ -8,7 +8,7 @@ import {
   type NCarPlaybackSchedule,
   type RankedCar,
 } from "../simulation/playback";
-import { pointAtProgress, selectTrack } from "../simulation/tracks";
+import { generateTrack, pointAtProgress } from "../simulation/tracks";
 import {
   SLOT_CAPACITY,
   type NCarContestResult,
@@ -77,7 +77,7 @@ export class ContestScene extends Phaser.Scene {
     this.run = input.run;
     this.encounterId = input.encounterId;
     this.result = resolveContest(input.build, input.rivalRoster, input.level, input.seed, input.lapCount);
-    const track = selectTrack(input.seed, input.level);
+    const track = generateTrack(input.seed, input.level);
     this.schedule = buildNCarPlaybackSchedule(this.result, track);
     this.elapsedSeconds = 0;
     this.lastRenderedPlayerLapIndex = -1;

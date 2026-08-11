@@ -7,6 +7,7 @@ import {
 import { resolveInstallation } from "./slots";
 import { resolveSynergyEffects } from "./synergy";
 import { applyTierBonus } from "./tiering";
+import { trackFitPercent, type Track } from "./tracks";
 import {
   LAP_COUNT,
   MIN_LAP_TIME,
@@ -24,6 +25,8 @@ export interface PlayerLap {
   time: number;
   firedItems: FiredItem[];
   contributions: ContributionEvidence[];
+  /** 018-track-generation: present only when simulatePlayerLaps was called with a track. */
+  trackFit?: { appliedPercent: number; appliedSeconds: number };
 }
 
 interface LocatedItem {
@@ -88,10 +91,14 @@ function installationBehaviorSource(installation: InstallationResolution): strin
   return installation.appliedInstallationBehavior?.description ?? installation.baseBehavior.description;
 }
 
-export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT): PlayerLap[] {
+export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: Track): PlayerLap[] {
   // Computed once per build, before the per-lap loop — composition doesn't
   // vary lap to lap (014-item-synergy-tags research.md Decision 3).
   const synergyResolution = resolveSynergyEffects(build);
+  // 018-track-generation: a build's own composition doesn't vary lap to lap
+  // either, so its track-fit percentage is computed once, not re-derived
+  // per lap (research.md Decision 5).
+  const fitPercent = track ? trackFitPercent(build, track.characteristics) : 0;
   const locatedItems: LocatedItem[] = [
     ...build.slots.flatMap((slot, index) => {
       if (!slot.item) return [];
@@ -239,7 +246,16 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT): PlayerLa
       evidence.resultingLapTime = resultingLapTime;
     });
 
-    return { time: resultingLapTime, firedItems, contributions };
+    // 018-track-generation: track-fit is a whole-lap scale applied after
+    // every existing fold (tier, installation, synergy, buffs, clamp) — a
+    // build/car-level effect, not attributable to any single held item
+    // (research.md Decision 5).
+    const finalTime = track ? resultingLapTime * (1 - fitPercent / 100) : resultingLapTime;
+    const trackFit = track
+      ? { appliedPercent: fitPercent, appliedSeconds: finalTime - resultingLapTime }
+      : undefined;
+
+    return { time: finalTime, firedItems, contributions, trackFit };
   });
 }
 

@@ -15,9 +15,8 @@ import {
 } from "../../src/simulation/playback";
 import { ITEM_POOL } from "../../src/content/sample-data";
 import { RIVAL_PROFILES } from "../../src/content/rivals";
-import { TRACKS } from "../../src/content/tracks";
 import { resolveContest } from "../../src/simulation/contest";
-import { selectTrack } from "../../src/simulation/tracks";
+import { generateTrack, type Track } from "../../src/simulation/tracks";
 import {
   LAP_COUNT,
   MIN_LAP_TIME,
@@ -28,7 +27,31 @@ import {
 } from "../../src/simulation/types";
 import { vehicleBuild } from "../fixtures/vehicle-build-fixtures";
 
-const TEST_TRACK = TRACKS[0];
+// 018-track-generation: a local literal fixture, standing in for a generated
+// Track — this suite exercises rendering-side playback math, not generation
+// itself (tracks.test.ts owns generateTrack's own contract).
+const TEST_TRACK: Track = {
+  id: "track-fixture",
+  name: "Fixture Loop",
+  segments: [
+    { kind: "straight", length: 120 },
+    { kind: "corner", turnDegrees: 90, direction: "left" },
+    { kind: "straight", length: 120 },
+    { kind: "corner", turnDegrees: 90, direction: "left" },
+    { kind: "straight", length: 120 },
+    { kind: "corner", turnDegrees: 90, direction: "left" },
+    { kind: "straight", length: 120 },
+    { kind: "corner", turnDegrees: 90, direction: "left" },
+  ],
+  characteristics: { corneringDemand: 46, brakingDemand: 0, powerDemand: 54 },
+  points: [
+    { x: 530, y: 210 }, { x: 519, y: 239 }, { x: 486, y: 268 }, { x: 435, y: 294 },
+    { x: 371, y: 313 }, { x: 300, y: 320 }, { x: 229, y: 313 }, { x: 165, y: 294 },
+    { x: 114, y: 268 }, { x: 81, y: 239 }, { x: 70, y: 210 }, { x: 81, y: 181 },
+    { x: 114, y: 152 }, { x: 165, y: 126 }, { x: 229, y: 107 }, { x: 300, y: 100 },
+    { x: 371, y: 107 }, { x: 435, y: 126 }, { x: 486, y: 152 }, { x: 519, y: 181 },
+  ],
+};
 type TickerLineList = TickerLine[];
 
 function resultWithLapTimes(playerLapTimes: number[], ghostLapTimes: number[]): ContestResult {
@@ -302,7 +325,7 @@ describe("buildNCarPlaybackSchedule", () => {
 
   it("attaches the selected track once per schedule (013-race-spectacle, data-model.md)", () => {
     const result = resolveContest(vehicleBuild(), tieRoster, 1, 42);
-    const track = selectTrack(42, 1);
+    const track = generateTrack(42, 1);
     const schedule = buildNCarPlaybackSchedule(result, track);
 
     expect(schedule.track).toEqual(track);
