@@ -130,3 +130,91 @@ export function validateRivalCatalog(profiles: readonly RivalProfile[]): RivalCa
 
   return { kind: "valid" };
 }
+
+// --- 019-async-ghost-pool -------------------------------------------------
+// GHOST_POOL is a new, separate, additive catalog — RIVAL_PROFILES above is
+// never widened or replaced (research.md Decision 1). Every new entry reuses
+// one of the same four vehicle topologies and authors its own complete
+// levelTable, exactly like the entries it extends.
+
+export const GHOST_POOL: readonly RivalProfile[] = [
+  ...RIVAL_PROFILES,
+  {
+    id: "rival-thorne",
+    name: "Wren Thorne",
+    color: "#2fb8b8",
+    vehicleId: "the-hush",
+    levelScaling: levelTable([
+      [1, { slotsToFill: 2, priceBias: "low" }],
+      [2, { slotsToFill: 4, priceBias: "mid" }],
+      [3, { slotsToFill: 6, priceBias: "mid" }],
+      [4, { slotsToFill: 7, priceBias: "high" }],
+    ]),
+  },
+  {
+    id: "rival-halden",
+    name: "Ottoline Halden",
+    color: "#b8b82f",
+    vehicleId: "the-highwheel",
+    levelScaling: levelTable([
+      [1, { slotsToFill: 3, priceBias: "mid" }],
+      [2, { slotsToFill: 5, priceBias: "mid" }],
+      [3, { slotsToFill: 6, priceBias: "high" }],
+      [4, { slotsToFill: 7, priceBias: "high" }],
+    ]),
+  },
+  {
+    id: "rival-espinoza",
+    name: "Casimir Espinoza",
+    color: "#b82f6e",
+    vehicleId: "the-needle",
+    levelScaling: levelTable([
+      [1, { slotsToFill: 4, priceBias: "low" }],
+      [2, { slotsToFill: 5, priceBias: "low" }],
+      [3, { slotsToFill: 6, priceBias: "mid" }],
+      [4, { slotsToFill: 7, priceBias: "high" }],
+    ]),
+  },
+  {
+    id: "rival-linden",
+    name: "Perpetua Linden",
+    color: "#2f6eb8",
+    vehicleId: "the-lark",
+    levelScaling: levelTable([
+      [1, { slotsToFill: 2, priceBias: "mid" }],
+      [2, { slotsToFill: 4, priceBias: "high" }],
+      [3, { slotsToFill: 6, priceBias: "high" }],
+      [4, { slotsToFill: 7, priceBias: "high" }],
+    ]),
+  },
+  {
+    id: "rival-okoye",
+    name: "Delphine Okoye",
+    color: "#6eb82f",
+    vehicleId: "the-highwheel",
+    levelScaling: levelTable([
+      [1, { slotsToFill: 3, priceBias: "low" }],
+      [2, { slotsToFill: 4, priceBias: "mid" }],
+      [3, { slotsToFill: 5, priceBias: "mid" }],
+      [4, { slotsToFill: 7, priceBias: "high" }],
+    ]),
+  },
+];
+
+/**
+ * Sibling to validateRivalCatalog, never a modification of it (research.md
+ * Decision 4) — enforces a minimum of 7 entries, not an exact count, since
+ * GHOST_POOL is expected to grow past 7.
+ */
+export function validateGhostPool(pool: readonly RivalProfile[]): RivalCatalogValidation {
+  if (pool.length < 7) return { kind: "invalid", code: "wrong-count" };
+
+  const ids = pool.map((profile) => profile.id);
+  if (new Set(ids).size !== ids.length) return { kind: "invalid", code: "duplicate-id" };
+
+  for (const profile of pool) {
+    if (!vehicleById(profile.vehicleId)) return { kind: "invalid", code: "unknown-vehicle" };
+  }
+
+  return { kind: "valid" };
+}

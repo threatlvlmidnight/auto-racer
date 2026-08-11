@@ -89,3 +89,35 @@ export function resolveRivalBuild(profile: RivalProfile, level: number, seed: nu
 
   return build;
 }
+
+/**
+ * Deterministic per-contest selection of 7 distinct entries from a wider
+ * pool (019-async-ghost-pool, contract §3). Reuses this file's existing
+ * mulberry32 PRNG rather than importing 018-track-generation's own —
+ * neither feature depends on the other's implementation order
+ * (research.md Decision 2).
+ *
+ * Accepts only a plain (pool, seed, level) — never a Run, Build, or other
+ * player-scoped object — so a future shared-lobby feature can supply a
+ * lobby-scoped identifier here with zero change (FR-003, FR-005).
+ *
+ * A partial Fisher-Yates shuffle: only the first 7 positions are finalized,
+ * guaranteeing 7 distinct entries by construction, never by a separate
+ * distinctness check (research.md Decision 5).
+ */
+export function selectGhostRoster(
+  pool: readonly RivalProfile[],
+  seed: number,
+  level: number,
+): RivalProfile[] {
+  const rng = mulberry32(seed * 1000003 + level);
+  const shuffled = [...pool];
+  const selectionSize = Math.min(7, shuffled.length);
+
+  for (let index = 0; index < selectionSize; index += 1) {
+    const swapIndex = index + Math.floor(rng() * (shuffled.length - index));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+
+  return shuffled.slice(0, selectionSize);
+}

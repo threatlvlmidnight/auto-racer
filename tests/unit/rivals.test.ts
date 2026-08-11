@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { vehicleById } from "../../src/content/entrants";
-import { RIVAL_PROFILES, validateRivalCatalog } from "../../src/content/rivals";
-import { resolveRivalBuild } from "../../src/simulation/rivals";
+import { GHOST_POOL, RIVAL_PROFILES, validateGhostPool, validateRivalCatalog } from "../../src/content/rivals";
+import { resolveRivalBuild, selectGhostRoster } from "../../src/simulation/rivals";
 import { installedItems, storedItems } from "../../src/simulation/slots";
 
 describe("RIVAL_PROFILES catalog (FR-004)", () => {
@@ -123,5 +123,133 @@ describe("resolveRivalBuild level-scaling (US3, FR-004)", () => {
     expect(() => resolveRivalBuild(profile, 4, 5)).not.toThrow();
     expect(countFilled(resolveRivalBuild(profile, 3, 5))).toBeGreaterThanOrEqual(countFilled(resolveRivalBuild(profile, 2, 5)));
     expect(countFilled(resolveRivalBuild(profile, 4, 5))).toBeGreaterThanOrEqual(countFilled(resolveRivalBuild(profile, 3, 5)));
+  });
+});
+
+// 019-async-ghost-pool: GHOST_POOL is a new, separate, additive catalog —
+// RIVAL_PROFILES itself is never widened (T002, research.md Decision 1).
+describe("GHOST_POOL catalog (T002, contract §1)", () => {
+  it("contains every RIVAL_PROFILES entry, unchanged, as its own leading prefix", () => {
+    expect(GHOST_POOL.slice(0, RIVAL_PROFILES.length)).toEqual(RIVAL_PROFILES);
+  });
+
+  it("contains at least one entry beyond RIVAL_PROFILES", () => {
+    expect(GHOST_POOL.length).toBeGreaterThan(RIVAL_PROFILES.length);
+  });
+
+  it("leaves RIVAL_PROFILES itself byte-for-byte identical — still exactly 7, still valid", () => {
+    expect(RIVAL_PROFILES).toHaveLength(7);
+    expect(validateRivalCatalog(RIVAL_PROFILES)).toEqual({ kind: "valid" });
+  });
+
+  it("gives every GHOST_POOL entry a unique id", () => {
+    const ids = GHOST_POOL.map((profile) => profile.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("resolves every new entry's vehicleId to an existing vehicle definition", () => {
+    GHOST_POOL.forEach((profile) => {
+      expect(vehicleById(profile.vehicleId)).toBeDefined();
+    });
+  });
+});
+
+describe("validateGhostPool (T003, contract §2)", () => {
+  it("validates GHOST_POOL itself", () => {
+    expect(validateGhostPool(GHOST_POOL)).toEqual({ kind: "valid" });
+  });
+
+  it("fails on fewer than 7 entries", () => {
+    expect(validateGhostPool(GHOST_POOL.slice(0, 6))).toEqual({ kind: "invalid", code: "wrong-count" });
+  });
+
+  it("accepts more than 7 entries — a minimum, not an exact count", () => {
+    expect(GHOST_POOL.length).toBeGreaterThan(7);
+    expect(validateGhostPool(GHOST_POOL)).toEqual({ kind: "valid" });
+  });
+
+  it("fails loudly on a duplicate id", () => {
+    const broken = [...GHOST_POOL.slice(0, -1), { ...GHOST_POOL[GHOST_POOL.length - 1], id: GHOST_POOL[0].id }];
+    expect(validateGhostPool(broken)).toEqual({ kind: "invalid", code: "duplicate-id" });
+  });
+
+  it("fails loudly on an unresolvable vehicleId", () => {
+    const broken = [
+      ...GHOST_POOL.slice(0, -1),
+      { ...GHOST_POOL[GHOST_POOL.length - 1], vehicleId: "not-a-real-vehicle" as never },
+    ];
+    expect(validateGhostPool(broken)).toEqual({ kind: "invalid", code: "unknown-vehicle" });
+  });
+
+  it("never modifies validateRivalCatalog's own exactly-7 behavior", () => {
+    expect(validateRivalCatalog(GHOST_POOL)).toEqual({ kind: "invalid", code: "wrong-count" });
+  });
+});
+
+// 019-async-ghost-pool: selectGhostRoster (T007-T010, T016, contract §3).
+describe("selectGhostRoster determinism (T007, FR-002)", () => {
+  it("returns a deeply equal result for identical (pool, seed, level)", () => {
+    const first = selectGhostRoster(GHOST_POOL, 17, 2);
+    const second = selectGhostRoster(GHOST_POOL, 17, 2);
+    expect(second).toEqual(first);
+  });
+
+  it("agrees across a wide sample of (seed, level) pairs", () => {
+    for (let seed = -5; seed <= 5; seed += 1) {
+      const a = selectGhostRoster(GHOST_POOL, seed, 3);
+      const b = selectGhostRoster(GHOST_POOL, seed, 3);
+      expect(b).toEqual(a);
+    }
+  });
+});
+
+describe("selectGhostRoster distinctness (T008, FR-002)", () => {
+  it("always returns exactly 7 entries with no duplicate id", () => {
+    for (let seed = 0; seed < 20; seed += 1) {
+      const roster = selectGhostRoster(GHOST_POOL, seed, 1);
+      expect(roster).toHaveLength(7);
+      expect(new Set(roster.map((profile) => profile.id)).size).toBe(7);
+    }
+  });
+
+  it("every selected entry is a real GHOST_POOL member", () => {
+    const roster = selectGhostRoster(GHOST_POOL, 9, 4);
+    const poolIds = new Set(GHOST_POOL.map((profile) => profile.id));
+    roster.forEach((profile) => expect(poolIds.has(profile.id)).toBe(true));
+  });
+});
+
+describe("selectGhostRoster variety (T009, FR-002)", () => {
+  it("selects different combinations for different (seed, level) pairs — not always the first 7", () => {
+    const rosters = Array.from({ length: 15 }, (_, seed) =>
+      selectGhostRoster(GHOST_POOL, seed, 1).map((profile) => profile.id).join(","));
+    expect(new Set(rosters).size).toBeGreaterThan(1);
+  });
+
+  it("is not always identical to RIVAL_PROFILES' own fixed order", () => {
+    const rosters = Array.from({ length: 15 }, (_, seed) =>
+      selectGhostRoster(GHOST_POOL, seed, 1).map((profile) => profile.id).join(","));
+    const fixedOrder = RIVAL_PROFILES.map((profile) => profile.id).join(",");
+    expect(rosters.some((roster) => roster !== fixedOrder)).toBe(true);
+  });
+});
+
+describe("selectGhostRoster still resolves through resolveRivalBuild unchanged (T010)", () => {
+  it("a selected entry resolves into a real VehicleBuild exactly as any RivalProfile does", () => {
+    const roster = selectGhostRoster(GHOST_POOL, 3, 2);
+    const build = resolveRivalBuild(roster[0], 2, 3);
+    const vehicle = vehicleById(roster[0].vehicleId)!;
+    expect(build.vehicleId).toBe(roster[0].vehicleId);
+    expect(build.slots).toHaveLength(vehicle.slots.length);
+  });
+});
+
+describe("selectGhostRoster non-coupling signature (T016, FR-003/FR-005)", () => {
+  it("is called successfully with only (pool, seed, level) — no Run, Build, or player-identity value anywhere", () => {
+    const pool: readonly (typeof GHOST_POOL)[number][] = GHOST_POOL;
+    const seed = 1234;
+    const level = 3;
+    const roster = selectGhostRoster(pool, seed, level);
+    expect(roster).toHaveLength(7);
   });
 });

@@ -10,7 +10,8 @@ import {
   RunTransitionError,
   summarizeRunHistory,
 } from "../simulation/run";
-import { RIVAL_PROFILES } from "../content/rivals";
+import { GHOST_POOL } from "../content/rivals";
+import { selectGhostRoster } from "../simulation/rivals";
 import type { CarProgress } from "../simulation/playback";
 import type { ContestResult, NCarContestResult, RivalProfile } from "../simulation/types";
 import type { RandomSource } from "../simulation/encounters";
@@ -178,13 +179,16 @@ export function contestSceneInput(run: Run, encounterId: string): ContestSceneIn
     throw new RunTransitionError("encounter-id-mismatch", `${encounterId} is not active PvP`);
   }
   const stage = run.stages.find((candidate) => candidate.id === encounter.stageId);
+  const level = stage?.pvpOrdinal ?? 1;
   return {
     run,
     encounterId,
     lapCount: encounter.payload.lapCount,
     build: encounter.payload.buildSnapshot,
-    rivalRoster: RIVAL_PROFILES,
-    level: stage?.pvpOrdinal ?? 1,
+    // 019-async-ghost-pool: a deterministic 7-car selection from the wider
+    // GHOST_POOL, replacing the always-identical fixed RIVAL_PROFILES roster.
+    rivalRoster: selectGhostRoster(GHOST_POOL, run.seed, level),
+    level,
     seed: run.seed,
   };
 }

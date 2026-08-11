@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ITEM_POOL } from "../../src/content/sample-data";
+import { GHOST_POOL } from "../../src/content/rivals";
+import { selectGhostRoster } from "../../src/simulation/rivals";
 import {
   chooseEncounter,
   purchaseStock,
@@ -153,6 +155,17 @@ describe("run scene boundary", () => {
     advanceThroughTwoChoices();
     const secondInput = contestSceneInput(run, run.activeEncounter!.id);
     expect(secondInput.level).toBe(2);
+  });
+
+  it("populates rivalRoster from selectGhostRoster(GHOST_POOL, run.seed, level), not a fixed direct reference (019-async-ghost-pool T011)", () => {
+    let run = create();
+    for (let stage = 0; stage < 2; stage += 1) {
+      run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+      run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
+    }
+    const input = contestSceneInput(run, run.activeEncounter!.id);
+
+    expect(input.rivalRoster).toEqual(selectGhostRoster(GHOST_POOL, run.seed, input.level));
   });
 
   it("keeps encounter selection separate from acquisition and exposes Supplier economy state", () => {
