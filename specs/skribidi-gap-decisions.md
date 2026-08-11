@@ -46,6 +46,14 @@ more recorded opponents." The actual non-negotiable was never the count of
 
 **Owner**: a new feature, working title `multi-ghost-contest`.
 
+**Follow-up, 2026-08-11**: `specs/019-async-ghost-pool/spec.md` takes
+the first real step on "real async multiplayer remains its own future
+feature" above — widens the authored 7-profile catalog into a larger
+pool with deterministic per-contest selection, explicitly *not* real
+player-recorded ghosts or a backend. See its own spec for the
+mechanism-first/real-backend-later scope split, confirmed directly with
+the owner.
+
 ---
 
 ## 2. Race presentation / track
@@ -75,6 +83,17 @@ generation, to avoid any cross-client floating-point or RNG drift risk.
 This implies a defined "race ID" / shared-seed concept that also touches
 §1's N-ghost result. **Needs a dedicated `/speckit.clarify` pass before
 `/speckit.plan`** — do not assume an implementation here.
+
+**Progress, 2026-08-11**: `018-track-generation` (spec'd) resolves the
+track half of this — `generateTrack(seed, pvpOrdinal)` takes a plain
+numeric seed, never a `Run`/player object, specifically so a future
+shared race ID can be substituted with no rework.
+`019-async-ghost-pool` (spec'd) applies the identical pattern to §1's
+N-ghost roster selection. Neither feature defines what a real
+multi-participant "race ID" actually *is* yet (both still derive their
+numeric input from the current player's own run for now) — that
+remains open, owned by whatever future feature builds the real
+async-multiplayer backend and lobby concept.
 
 **Owner**: a new feature, working title `race-spectacle`, sequenced
 alongside or just after `multi-ghost-contest` (§1).
@@ -221,6 +240,21 @@ outcome-determining value).
 **Owner**: new feature, working title `pre-race-setup`. Depends on §2
 (`race-spectacle`) for a real track to preview and tune against — cannot
 be specified in detail before that track model exists.
+
+**Split, 2026-08-11**: Working this feature turned up two prerequisites
+that needed their own scope rather than being decided inline:
+
+- **Rival Intel** moves out of `pre-race-setup` entirely, to its own
+  future feature — not yet specified.
+- The item-driven configurable control mechanic (the brake-bias-slider
+  example above) is blocked on `specs/018-track-generation/spec.md` —
+  today's `013-race-spectacle` track is a decorative polyline with no
+  real characteristic to tune against. `018` gives tracks a real
+  corner/straight structure, three motorsport-grounded characteristic
+  scores (`corneringDemand`/`brakingDemand`/`powerDemand`), and wires
+  build composition into real lap-time simulation against them.
+  `pre-race-setup` itself (the actual screen + control UI) remains
+  unspecified until `018` lands.
 
 ---
 
