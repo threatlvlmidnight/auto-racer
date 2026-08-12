@@ -93,6 +93,14 @@ export interface ItemDefinition {
   // --- Feature 021: arcade physics simulation ---
   /** Optional, additive to timeModifier — deltas to a build's four physical stats. */
   physics?: ItemPhysicsContribution;
+
+  // --- Feature 022: contextual physics effects ---
+  /**
+   * Optional, additional to (never replacing) `physics` — stat deltas that
+   * apply only where their own PhysicsCondition matches (022 data-model.md).
+   * `undefined` and `[]` are equivalent: both mean "no conditional contributions."
+   */
+  conditionalPhysics?: readonly ConditionalPhysicsContribution[];
 }
 
 // --- Feature 021: arcade physics simulation -------------------------------
@@ -113,6 +121,40 @@ export interface LapPhaseBreakdown {
   /** Index into the track's own segments array this phase occurred within/around. */
   segmentIndex: number;
   seconds: number;
+  /**
+   * 022-contextual-physics-effects: which conditional contribution(s), if
+   * any, actually applied to produce this phase (FR-006, US3, contract §4).
+   * Absent/empty means no conditional contribution matched this phase.
+   */
+  conditionalMatches?: readonly ConditionalPhysicsMatch[];
+}
+
+// --- Feature 022: contextual physics effects ------------------------------
+
+/** A qualifier restricting where a stat delta applies (022 data-model.md). */
+export interface PhysicsCondition {
+  kind: "corner-tightness";
+  direction: "at-least" | "at-most";
+  turnDegrees: number;
+}
+
+/** An item's stat delta, paired with the PhysicsCondition that gates it (022 data-model.md). */
+export interface ConditionalPhysicsContribution {
+  condition: PhysicsCondition;
+  /** Reuses 021's existing four-field delta shape unchanged. */
+  delta: ItemPhysicsContribution;
+  /**
+   * Which held item this contribution came from — populated by laps.ts's
+   * resolver when collecting active items' conditionalPhysics entries, never
+   * authored directly on ItemDefinition (US3 inspectability, FR-006).
+   */
+  sourceItemId?: string;
+}
+
+/** Attribution of one matched conditional contribution to a phase (022 US3, FR-006). */
+export interface ConditionalPhysicsMatch {
+  sourceItemId: string;
+  stat: keyof ItemPhysicsContribution;
 }
 
 // --- Feature 014: tag-targeted synergy behavior --------------------------

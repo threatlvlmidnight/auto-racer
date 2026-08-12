@@ -13,6 +13,7 @@ import {
   MIN_LAP_TIME,
   type BuffApplication,
   type Build,
+  type ConditionalPhysicsContribution,
   type ContributionEffectKind,
   type ContributionEvidence,
   type FiredItem,
@@ -121,6 +122,21 @@ function resolvePhysicalStats(activeItems: readonly OfferedItem[]): PhysicalStat
   };
 }
 
+/**
+ * 022-contextual-physics-effects: flattens every active held item's own
+ * conditionalPhysics entries into one list (order-preserving, no
+ * deduplication — additive stacking, data-model.md), mirroring
+ * resolvePhysicalStats's own active-item filtering. Stamps each entry with
+ * its owning item's real id (US3 inspectability, FR-006) — authored content
+ * never sets sourceItemId itself.
+ */
+function resolveConditionalPhysicsContributions(
+  activeItems: readonly OfferedItem[],
+): ConditionalPhysicsContribution[] {
+  return activeItems.flatMap((item) =>
+    (item.conditionalPhysics ?? []).map((contribution) => ({ ...contribution, sourceItemId: item.id })));
+}
+
 export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: Track): PlayerLap[] {
   // Computed once per build, before the per-lap loop — composition doesn't
   // vary lap to lap (014-item-synergy-tags research.md Decision 3).
@@ -156,7 +172,10 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: T
   // lap to lap either — resolved once (research.md Decision 6), from the
   // same active-item set every other per-lap fold already uses.
   const physicsStats = resolvePhysicalStats(activeItems);
-  const physicsResult = track ? simulateLapPhysics(physicsStats, track.segments) : undefined;
+  const conditionalPhysicsContributions = resolveConditionalPhysicsContributions(activeItems);
+  const physicsResult = track
+    ? simulateLapPhysics(physicsStats, track.segments, conditionalPhysicsContributions)
+    : undefined;
   let stackingState: StackingState = {};
 
   return Array.from({ length: lapCount }, (_, index) => {

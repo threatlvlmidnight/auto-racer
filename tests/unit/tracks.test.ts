@@ -3,6 +3,7 @@ import {
   apexSpeed,
   cornerArcLength,
   generateTrack,
+  matchesPhysicsCondition,
   pointAtProgress,
   simulateLapPhysics,
   solveSpan,
@@ -12,7 +13,14 @@ import {
   type Track,
   type TrackSegment,
 } from "../../src/simulation/tracks";
-import type { ItemPhysicsContribution, LapPhaseBreakdown, LapPhaseKind } from "../../src/simulation/types";
+import type {
+  ConditionalPhysicsContribution,
+  ItemDefinition,
+  ItemPhysicsContribution,
+  LapPhaseBreakdown,
+  LapPhaseKind,
+  PhysicsCondition,
+} from "../../src/simulation/types";
 
 // 018-track-generation: TRACKS/selectTrack are removed entirely — every track
 // consumed by this suite is generated (research.md Decision 1; contract §1-2).
@@ -356,5 +364,262 @@ describe("simulateLapPhysics shape-sensitivity (T005, SC-001)", () => {
     const resultA = simulateLapPhysics(STOCK_PHYSICAL_STATS, segmentsA);
     const resultB = simulateLapPhysics(STOCK_PHYSICAL_STATS, segmentsB);
     expect(resultA.totalSeconds).not.toBeCloseTo(resultB.totalSeconds, 6);
+  });
+});
+
+// 022-contextual-physics-effects: PhysicsCondition/ConditionalPhysicsContribution
+// type shapes, and ItemDefinition.conditionalPhysics coexisting with the
+// existing physics field (T002, data-model.md).
+describe("conditional physics types (T002)", () => {
+  it("PhysicsCondition is a corner-tightness discriminated union with both directions", () => {
+    const atLeast: PhysicsCondition = { kind: "corner-tightness", direction: "at-least", turnDegrees: 45 };
+    const atMost: PhysicsCondition = { kind: "corner-tightness", direction: "at-most", turnDegrees: 45 };
+    expect(atLeast.kind).toBe("corner-tightness");
+    expect([atLeast.direction, atMost.direction]).toEqual(["at-least", "at-most"]);
+  });
+
+  it("ConditionalPhysicsContribution pairs a condition with 021's existing ItemPhysicsContribution delta shape", () => {
+    const delta: ItemPhysicsContribution = { accelerationDelta: 10 };
+    const contribution: ConditionalPhysicsContribution = {
+      condition: { kind: "corner-tightness", direction: "at-least", turnDegrees: 45 },
+      delta,
+    };
+    expect(contribution.delta).toBe(delta);
+  });
+
+  it("ItemDefinition.conditionalPhysics is optional and coexists with the existing optional physics field", () => {
+    const base: Pick<ItemDefinition, "physics" | "conditionalPhysics"> = {};
+    const flatOnly: Pick<ItemDefinition, "physics" | "conditionalPhysics"> = {
+      physics: { accelerationDelta: 5 },
+    };
+    const conditionalOnly: Pick<ItemDefinition, "physics" | "conditionalPhysics"> = {
+      conditionalPhysics: [{
+        condition: { kind: "corner-tightness", direction: "at-least", turnDegrees: 45 },
+        delta: { accelerationDelta: 5 },
+      }],
+    };
+    const both: Pick<ItemDefinition, "physics" | "conditionalPhysics"> = {
+      physics: flatOnly.physics,
+      conditionalPhysics: conditionalOnly.conditionalPhysics,
+    };
+    expect(base.conditionalPhysics).toBeUndefined();
+    expect(flatOnly.conditionalPhysics).toBeUndefined();
+    expect(conditionalOnly.physics).toBeUndefined();
+    expect(both.physics).toBeDefined();
+    expect(both.conditionalPhysics).toBeDefined();
+  });
+});
+
+// 022-contextual-physics-effects: the pure corner-tightness matcher (T003,
+// contracts §1) — tested in complete isolation, no engine wiring yet.
+describe("matchesPhysicsCondition (T003, contract §1)", () => {
+  it("'at-least' matches a corner's turnDegrees at or above the threshold, inclusive", () => {
+    const condition: PhysicsCondition = { kind: "corner-tightness", direction: "at-least", turnDegrees: 45 };
+    expect(matchesPhysicsCondition(condition, 46)).toBe(true);
+    expect(matchesPhysicsCondition(condition, 45)).toBe(true);
+    expect(matchesPhysicsCondition(condition, 44)).toBe(false);
+  });
+
+  it("'at-most' matches a corner's turnDegrees at or below the threshold, inclusive", () => {
+    const condition: PhysicsCondition = { kind: "corner-tightness", direction: "at-most", turnDegrees: 45 };
+    expect(matchesPhysicsCondition(condition, 44)).toBe(true);
+    expect(matchesPhysicsCondition(condition, 45)).toBe(true);
+    expect(matchesPhysicsCondition(condition, 46)).toBe(false);
+  });
+
+  it("is pure and deterministic — identical input always returns identical output", () => {
+    const condition: PhysicsCondition = { kind: "corner-tightness", direction: "at-least", turnDegrees: 30 };
+    expect(matchesPhysicsCondition(condition, 40)).toBe(matchesPhysicsCondition(condition, 40));
+  });
+
+  it("reads nothing beyond its own two arguments — behaves identically across many unrelated corner angles for the same condition", () => {
+    const condition: PhysicsCondition = { kind: "corner-tightness", direction: "at-least", turnDegrees: 50 };
+    [10, 20, 49.9, 50, 50.1, 90, 149].forEach((turnDegrees) => {
+      expect(matchesPhysicsCondition(condition, turnDegrees)).toBe(turnDegrees >= 50);
+    });
+  });
+});
+
+// 022-contextual-physics-effects US1 (T007-T011): simulateLapPhysics resolves
+// conditional deltas per span/corner (research.md Decision 1). A hand-built
+// three-corner segment sequence — gentle A (20deg), medium B (50deg), sharp C
+// (90deg), each separated by a 100-length straight — gives three spans whose
+// bounding corners are all distinct, so each stat's per-phase corner
+// association (previous/current/either/self) can be isolated precisely:
+//   span @ segmentIndex 0: previous=C, current=A
+//   span @ segmentIndex 2: previous=A, current=B
+//   span @ segmentIndex 4: previous=B, current=C
+// Verified baseline: every span produces all three phase kinds under
+// STOCK_PHYSICAL_STATS, so a targeted phase kind is always present to compare.
+describe("conditional physics resolution — simulateLapPhysics (T007-T011, US1, contract §3)", () => {
+  const CORNER_ANGLES = { A: 20, B: 50, C: 90 };
+  const STRAIGHT_LENGTH = 100;
+  const SPAN_SEGMENT_INDEX = { touchingA: 0, touchingB: 2, touchingC: 4 } as const;
+
+  function threeCornerSegments(): TrackSegment[] {
+    return [CORNER_ANGLES.A, CORNER_ANGLES.B, CORNER_ANGLES.C].flatMap((turnDegrees) => [
+      { kind: "straight" as const, length: STRAIGHT_LENGTH },
+      { kind: "corner" as const, turnDegrees, direction: "left" as const },
+    ]);
+  }
+
+  function sumSecondsBySegmentIndex(phases: readonly LapPhaseBreakdown[]): Map<number, number> {
+    const map = new Map<number, number>();
+    phases.forEach((phase) => {
+      map.set(phase.segmentIndex, (map.get(phase.segmentIndex) ?? 0) + phase.seconds);
+    });
+    return map;
+  }
+
+  function secondsFor(phases: readonly LapPhaseBreakdown[], segmentIndex: number, kind: LapPhaseKind): number {
+    return phases.find((phase) => phase.segmentIndex === segmentIndex && phase.phase === kind)?.seconds ?? 0;
+  }
+
+  it("T007: a corneringSpeedDelta condition matching corner C changes only the two spans bounding C, not the span that doesn't touch it", () => {
+    const segments = threeCornerSegments();
+    const contribution: ConditionalPhysicsContribution = {
+      condition: { kind: "corner-tightness", direction: "at-least", turnDegrees: 80 }, // matches only C (90)
+      delta: { corneringSpeedDelta: 25 },
+    };
+    const baseline = sumSecondsBySegmentIndex(simulateLapPhysics(STOCK_PHYSICAL_STATS, segments).phases);
+    const boosted = sumSecondsBySegmentIndex(
+      simulateLapPhysics(STOCK_PHYSICAL_STATS, segments, [contribution]).phases,
+    );
+
+    expect(boosted.get(SPAN_SEGMENT_INDEX.touchingA)).not.toBeCloseTo(baseline.get(SPAN_SEGMENT_INDEX.touchingA)!, 6);
+    expect(boosted.get(SPAN_SEGMENT_INDEX.touchingC)).not.toBeCloseTo(baseline.get(SPAN_SEGMENT_INDEX.touchingC)!, 6);
+    expect(boosted.get(SPAN_SEGMENT_INDEX.touchingB)).toBeCloseTo(baseline.get(SPAN_SEGMENT_INDEX.touchingB)!, 9);
+  });
+
+  it("T008: an accelerationDelta condition is gated on the previous corner (just exited), not the current one", () => {
+    const segments = threeCornerSegments();
+    const contribution: ConditionalPhysicsContribution = {
+      condition: { kind: "corner-tightness", direction: "at-most", turnDegrees: 30 }, // matches only A (20)
+      delta: { accelerationDelta: 200 },
+    };
+    const baseline = simulateLapPhysics(STOCK_PHYSICAL_STATS, segments).phases;
+    const boosted = simulateLapPhysics(STOCK_PHYSICAL_STATS, segments, [contribution]).phases;
+
+    // Only the span whose *previous* corner is A (segmentIndex touchingB, previous=A) is gated.
+    expect(secondsFor(boosted, SPAN_SEGMENT_INDEX.touchingB, "accelerating"))
+      .not.toBeCloseTo(secondsFor(baseline, SPAN_SEGMENT_INDEX.touchingB, "accelerating"), 6);
+    // Neither other span's previous corner is A, so neither should change at all.
+    expect(sumSecondsBySegmentIndex(boosted).get(SPAN_SEGMENT_INDEX.touchingA))
+      .toBeCloseTo(sumSecondsBySegmentIndex(baseline).get(SPAN_SEGMENT_INDEX.touchingA)!, 9);
+    expect(sumSecondsBySegmentIndex(boosted).get(SPAN_SEGMENT_INDEX.touchingC))
+      .toBeCloseTo(sumSecondsBySegmentIndex(baseline).get(SPAN_SEGMENT_INDEX.touchingC)!, 9);
+  });
+
+  it("T009: a brakingPowerDelta condition is gated on the current corner (about to enter), symmetric to T008", () => {
+    const segments = threeCornerSegments();
+    const contribution: ConditionalPhysicsContribution = {
+      condition: { kind: "corner-tightness", direction: "at-least", turnDegrees: 80 }, // matches only C (90)
+      delta: { brakingPowerDelta: 200 },
+    };
+    const baseline = simulateLapPhysics(STOCK_PHYSICAL_STATS, segments).phases;
+    const boosted = simulateLapPhysics(STOCK_PHYSICAL_STATS, segments, [contribution]).phases;
+
+    // Only the span whose *current* corner is C (segmentIndex touchingC, current=C) is gated.
+    expect(secondsFor(boosted, SPAN_SEGMENT_INDEX.touchingC, "braking"))
+      .not.toBeCloseTo(secondsFor(baseline, SPAN_SEGMENT_INDEX.touchingC, "braking"), 6);
+    expect(sumSecondsBySegmentIndex(boosted).get(SPAN_SEGMENT_INDEX.touchingA))
+      .toBeCloseTo(sumSecondsBySegmentIndex(baseline).get(SPAN_SEGMENT_INDEX.touchingA)!, 9);
+    expect(sumSecondsBySegmentIndex(boosted).get(SPAN_SEGMENT_INDEX.touchingB))
+      .toBeCloseTo(sumSecondsBySegmentIndex(baseline).get(SPAN_SEGMENT_INDEX.touchingB)!, 9);
+  });
+
+  it("T010: a topSpeedDelta condition applies to the cruising phase when either bounding corner matches, not when neither does", () => {
+    const segments = threeCornerSegments();
+    const contribution: ConditionalPhysicsContribution = {
+      condition: { kind: "corner-tightness", direction: "at-least", turnDegrees: 80 }, // matches only C (90)
+      delta: { topSpeedDelta: 30 },
+    };
+    const baseline = simulateLapPhysics(STOCK_PHYSICAL_STATS, segments).phases;
+    const boosted = simulateLapPhysics(STOCK_PHYSICAL_STATS, segments, [contribution]).phases;
+
+    // touchingA (bounds {C, A}) and touchingC (bounds {B, C}) both border C.
+    expect(secondsFor(boosted, SPAN_SEGMENT_INDEX.touchingA, "cruising"))
+      .not.toBeCloseTo(secondsFor(baseline, SPAN_SEGMENT_INDEX.touchingA, "cruising"), 6);
+    expect(secondsFor(boosted, SPAN_SEGMENT_INDEX.touchingC, "cruising"))
+      .not.toBeCloseTo(secondsFor(baseline, SPAN_SEGMENT_INDEX.touchingC, "cruising"), 6);
+    // touchingB (bounds {A, B}) borders neither A nor B matching C's condition.
+    expect(secondsFor(boosted, SPAN_SEGMENT_INDEX.touchingB, "cruising"))
+      .toBeCloseTo(secondsFor(baseline, SPAN_SEGMENT_INDEX.touchingB, "cruising"), 9);
+  });
+
+  it("T021 (US3, FR-006, contract §4): the phase breakdown identifies exactly which conditional contribution (source item id, stat) applied to each phase, attributable to the track's own authored corner angles", () => {
+    const segments = threeCornerSegments();
+    const contribution: ConditionalPhysicsContribution = {
+      condition: { kind: "corner-tightness", direction: "at-least", turnDegrees: 80 }, // matches only C (90)
+      delta: { accelerationDelta: 20 },
+      sourceItemId: "insp-item-1",
+    };
+    const result = simulateLapPhysics(STOCK_PHYSICAL_STATS, segments, [contribution]);
+
+    // Only the accelerating phase of the span whose *previous* corner is C
+    // (segmentIndex touchingA) should carry this attribution.
+    const acceleratingAtTouchingA = result.phases.find(
+      (phase) => phase.segmentIndex === SPAN_SEGMENT_INDEX.touchingA && phase.phase === "accelerating",
+    );
+    expect(acceleratingAtTouchingA?.conditionalMatches).toEqual([
+      { sourceItemId: "insp-item-1", stat: "accelerationDelta" },
+    ]);
+
+    const everyOtherPhase = result.phases.filter((phase) => phase !== acceleratingAtTouchingA);
+    everyOtherPhase.forEach((phase) => {
+      expect(phase.conditionalMatches ?? []).toEqual([]);
+    });
+  });
+
+  it("T019 (US2, FR-005, SC-003): omitting the third argument, or passing [] explicitly, produces byte-for-byte identical output to 021's shipped two-argument behavior, on real generateTrack fixtures", () => {
+    [generateTrack(5, 1), generateTrack(0, 1), generateTrack(9, 3)].forEach((track) => {
+      const twoArgument = simulateLapPhysics(STOCK_PHYSICAL_STATS, track.segments);
+      const explicitEmpty = simulateLapPhysics(STOCK_PHYSICAL_STATS, track.segments, []);
+      expect(explicitEmpty).toEqual(twoArgument);
+    });
+  });
+
+  it("T011: a conditional contribution whose condition is never met anywhere on the track contributes exactly 0 (no error, no fallback)", () => {
+    const segments = threeCornerSegments();
+    const neverMatches: ConditionalPhysicsContribution = {
+      // No corner on this track ever reaches 200 degrees (corners are always < 150).
+      condition: { kind: "corner-tightness", direction: "at-least", turnDegrees: 200 },
+      delta: { accelerationDelta: 500, topSpeedDelta: 500, brakingPowerDelta: 500, corneringSpeedDelta: 500 },
+    };
+    const baseline = simulateLapPhysics(STOCK_PHYSICAL_STATS, segments);
+    const withNeverMatching = simulateLapPhysics(STOCK_PHYSICAL_STATS, segments, [neverMatches]);
+
+    expect(() => withNeverMatching).not.toThrow();
+    expect(withNeverMatching.totalSeconds).toBeCloseTo(baseline.totalSeconds, 9);
+    expect(withNeverMatching.phases).toEqual(baseline.phases);
+  });
+
+  // US4 (T026): the resolution mechanism generalizes across all four stats
+  // and both threshold directions — never hardcoded to the single
+  // acceleration/at-least motivating example T007-T011 exercised precisely.
+  // Each combination's threshold matches exactly one of {A, B, C} and
+  // excludes at least one other, so this can't pass vacuously.
+  const STAT_KEYS: readonly (keyof ItemPhysicsContribution)[] = [
+    "accelerationDelta", "topSpeedDelta", "brakingPowerDelta", "corneringSpeedDelta",
+  ];
+  const DIRECTIONS: readonly PhysicsCondition["direction"][] = ["at-least", "at-most"];
+
+  STAT_KEYS.forEach((statKey) => {
+    DIRECTIONS.forEach((direction) => {
+      it(`T026: ${statKey} conditioned "${direction}" is independently authorable and measurably changes the simulated lap`, () => {
+        const segments = threeCornerSegments();
+        // at-least 80 matches only C (90); at-most 30 matches only A (20).
+        const condition: PhysicsCondition = {
+          kind: "corner-tightness", direction, turnDegrees: direction === "at-least" ? 80 : 30,
+        };
+        const delta: ItemPhysicsContribution = { [statKey]: 40 };
+        const contribution: ConditionalPhysicsContribution = { condition, delta };
+
+        const baseline = simulateLapPhysics(STOCK_PHYSICAL_STATS, segments);
+        const boosted = simulateLapPhysics(STOCK_PHYSICAL_STATS, segments, [contribution]);
+
+        expect(boosted.totalSeconds).not.toBeCloseTo(baseline.totalSeconds, 6);
+      });
+    });
   });
 });

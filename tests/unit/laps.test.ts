@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { ITEM_POOL } from "../../src/content/sample-data";
 import { firesOnLap, simulatePlayerLaps } from "../../src/simulation/laps";
-import { generateTrack, simulateLapPhysics, STOCK_PHYSICAL_STATS } from "../../src/simulation/tracks";
+import {
+  generateTrack,
+  matchesPhysicsCondition,
+  simulateLapPhysics,
+  STOCK_PHYSICAL_STATS,
+  type TrackSegment,
+} from "../../src/simulation/tracks";
 import {
   LAP_COUNT,
   MIN_LAP_TIME,
@@ -956,5 +962,213 @@ describe("PlayerLap.physics inspectability (T027-T028, US3, SC-004)", () => {
   it("omits physics entirely when no track is supplied", () => {
     const lap = simulatePlayerLaps(emptyBuild())[0];
     expect(lap.physics).toBeUndefined();
+  });
+});
+
+// 022-contextual-physics-effects US1 (T012, T013, T013a): conditionalPhysics
+// wired into simulatePlayerLaps via laps.ts's new active-item collection.
+// generateTrack(11, 2)'s six corners span 47.2-77.9 degrees (verified), so an
+// "at-least 60" condition matches only some of them — guaranteeing the SC-001
+// comparison below has real excluded phases, not a vacuous all-match case.
+describe("simulatePlayerLaps conditionalPhysics (T012, T013, T013a, US1)", () => {
+  const CONDITIONAL_TRACK = () => generateTrack(11, 2);
+  const TIGHT_CONDITION = { kind: "corner-tightness" as const, direction: "at-least" as const, turnDegrees: 60 };
+
+  it("T012 (SC-001): a tight-corner-only conditional item's total lap-time contribution is strictly smaller in magnitude than an identical-delta unconditional item's, on a track with excluded phases", () => {
+    const track = CONDITIONAL_TRACK();
+    const flatItem = testItem({
+      id: "sc001-flat", name: "Flat Accel", price: 0, timeModifier: 0,
+      physics: { accelerationDelta: 20 },
+    });
+    const conditionalItem = testItem({
+      id: "sc001-cond", name: "Conditional Accel", price: 0, timeModifier: 0,
+      conditionalPhysics: [{ condition: TIGHT_CONDITION, delta: { accelerationDelta: 20 } }],
+    });
+
+    const plainTime = simulatePlayerLaps(vehicleBuild(), LAP_COUNT, track)[0].time;
+    const flatTime = simulatePlayerLaps(vehicleBuild([flatItem]), LAP_COUNT, track)[0].time;
+    const conditionalTime = simulatePlayerLaps(vehicleBuild([conditionalItem]), LAP_COUNT, track)[0].time;
+
+    const flatContribution = Math.abs(plainTime - flatTime);
+    const conditionalContribution = Math.abs(plainTime - conditionalTime);
+
+    // Guards against a vacuous pass: the conditional item must actually do
+    // something (not be silently ignored) for "strictly smaller" to be
+    // a meaningful claim rather than true-by-default at zero.
+    expect(conditionalContribution).toBeGreaterThan(0);
+    expect(conditionalContribution).toBeLessThan(flatContribution);
+  });
+
+  // Note: "additive" per the contract means the *stat deltas and conditional
+  // contribution lists* combine additively (contract §3) — it does NOT mean
+  // two separately-simulated lap times can be summed, since solveSpan's
+  // kinematics are nonlinear in acceleration/brakingPower/topSpeed (peak
+  // speed is an algebraic function of both `a` and `b` together, with a
+  // topSpeed clamp). The correct test is that splitting one merged
+  // delta/contribution-list across two items produces the exact same
+  // simulateLapPhysics inputs — and therefore an identical result — as
+  // carrying it all on one item.
+  it("T013: an item can carry both physics (flat) and conditionalPhysics simultaneously, both folding into the same resolved inputs as if split across two separate items", () => {
+    const track = CONDITIONAL_TRACK();
+    const flatDelta = { accelerationDelta: 10 };
+    const conditionalDelta = { accelerationDelta: 15 };
+    const flatOnly = testItem({ id: "t013-flat", name: "Flat Only", price: 0, timeModifier: 0, physics: flatDelta });
+    const conditionalOnly = testItem({
+      id: "t013-cond", name: "Conditional Only", price: 0, timeModifier: 0,
+      conditionalPhysics: [{ condition: TIGHT_CONDITION, delta: conditionalDelta }],
+    });
+    const both = testItem({
+      id: "t013-both", name: "Both", price: 0, timeModifier: 0,
+      physics: flatDelta,
+      conditionalPhysics: [{ condition: TIGHT_CONDITION, delta: conditionalDelta }],
+    });
+
+    const plainTime = simulatePlayerLaps(vehicleBuild(), LAP_COUNT, track)[0].time;
+    const flatOnlyTime = simulatePlayerLaps(vehicleBuild([flatOnly]), LAP_COUNT, track)[0].time;
+    const conditionalOnlyTime = simulatePlayerLaps(vehicleBuild([conditionalOnly]), LAP_COUNT, track)[0].time;
+    const combinedTime = simulatePlayerLaps(vehicleBuild([both]), LAP_COUNT, track)[0].time;
+    const splitTime = simulatePlayerLaps(vehicleBuild([flatOnly, conditionalOnly]), LAP_COUNT, track)[0].time;
+
+    // Guards against a vacuous pass: the conditional-only item must actually
+    // do something on this track, or this proves nothing about the fold.
+    expect(conditionalOnlyTime).not.toBeCloseTo(plainTime, 6);
+    // One item carrying both fields produces exactly the same result as
+    // splitting them across two items — neither field overrides the other.
+    expect(combinedTime).toBeCloseTo(splitTime, 9);
+    expect(combinedTime).not.toBeCloseTo(flatOnlyTime, 6);
+    expect(combinedTime).not.toBeCloseTo(conditionalOnlyTime, 6);
+  });
+
+  it("T013a: two separate conditional contributions from two different items, targeting the same stat with overlapping conditions, sum additively rather than overriding or deduplicating", () => {
+    const track = CONDITIONAL_TRACK();
+    const contributionX = { condition: TIGHT_CONDITION, delta: { accelerationDelta: 12 } };
+    const contributionY = { condition: TIGHT_CONDITION, delta: { accelerationDelta: 18 } };
+    const itemX = testItem({ id: "t013a-x", name: "Conditional X", price: 0, timeModifier: 0, conditionalPhysics: [contributionX] });
+    const itemY = testItem({ id: "t013a-y", name: "Conditional Y", price: 0, timeModifier: 0, conditionalPhysics: [contributionY] });
+    const merged = testItem({
+      id: "t013a-merged", name: "Conditional Merged", price: 0, timeModifier: 0,
+      conditionalPhysics: [contributionX, contributionY],
+    });
+
+    const xOnlyTime = simulatePlayerLaps(vehicleBuild([itemX]), LAP_COUNT, track)[0].time;
+    const yOnlyTime = simulatePlayerLaps(vehicleBuild([itemY]), LAP_COUNT, track)[0].time;
+    const splitTime = simulatePlayerLaps(vehicleBuild([itemX, itemY]), LAP_COUNT, track)[0].time;
+    const mergedTime = simulatePlayerLaps(vehicleBuild([merged]), LAP_COUNT, track)[0].time;
+
+    // One item carrying both overlapping contributions produces exactly the
+    // same result as two separate items each carrying one — flattening
+    // across active items (laps.ts) doesn't lose or merge entries.
+    expect(mergedTime).toBeCloseTo(splitTime, 9);
+    // Neither deduplicates down to just one item's own delta alone — if it
+    // did, mergedTime would equal xOnlyTime or yOnlyTime exactly.
+    expect(mergedTime).not.toBeCloseTo(xOnlyTime, 6);
+    expect(mergedTime).not.toBeCloseTo(yOnlyTime, 6);
+  });
+});
+
+// 022-contextual-physics-effects US3 (T021, T022, T022a): PlayerLap.physics
+// inspectability of conditional activity — matching Constitution Principle
+// III (Transparency & Legibility), exactly as 021 required for its own
+// unconditional physics stats.
+describe("simulatePlayerLaps conditionalPhysics inspectability (T021, T022, T022a, US3, FR-006)", () => {
+  /**
+   * Oracle: computes, directly from a track's own authored segments (never
+   * from the simulation's own output), the set of straight-segment indices
+   * whose accelerating phase should carry an attribution for an
+   * accelerationDelta condition (gated on the previous corner — research.md
+   * Decision 1). Reuses matchesPhysicsCondition, already independently
+   * tested (T003).
+   */
+  function expectedAccelerationMatchedSegmentIndices(
+    segments: readonly TrackSegment[],
+    condition: Parameters<typeof matchesPhysicsCondition>[0],
+  ): Set<number> {
+    const corners = segments
+      .map((segment, index) => ({ segment, index }))
+      .filter((entry): entry is { segment: Extract<TrackSegment, { kind: "corner" }>; index: number } =>
+        entry.segment.kind === "corner");
+    const straights = segments
+      .map((segment, index) => ({ segment, index }))
+      .filter((entry): entry is { segment: Extract<TrackSegment, { kind: "straight" }>; index: number } =>
+        entry.segment.kind === "straight");
+    const cornerCount = corners.length;
+    const matched = new Set<number>();
+    for (let i = 0; i < cornerCount; i += 1) {
+      const previous = (i - 1 + cornerCount) % cornerCount;
+      if (matchesPhysicsCondition(condition, corners[previous].segment.turnDegrees)) {
+        matched.add(straights[i].index);
+      }
+    }
+    return matched;
+  }
+
+  it("T021: PlayerLap.physics.phases identifies which conditional item's condition matched each phase, attributable directly to the track's own authored corner angles", () => {
+    const track = generateTrack(11, 2); // corners: 53.4, 47.2, 77.9, 67.3, 51.4, 62.7 (verified)
+    const condition = { kind: "corner-tightness" as const, direction: "at-least" as const, turnDegrees: 70 };
+    const item = testItem({
+      id: "insp-cond-1", name: "Inspectable Conditional", price: 0, timeModifier: 0,
+      conditionalPhysics: [{ condition, delta: { accelerationDelta: 20 } }],
+    });
+    const lap = simulatePlayerLaps(vehicleBuild([item]), LAP_COUNT, track)[0];
+
+    const expectedMatchedSegments = expectedAccelerationMatchedSegmentIndices(track.segments, condition);
+    expect(expectedMatchedSegments.size).toBeGreaterThan(0);
+
+    const actualMatchedPhases = lap.physics!.phases.filter((phase) => (phase.conditionalMatches?.length ?? 0) > 0);
+    expect(actualMatchedPhases.length).toBeGreaterThan(0);
+    actualMatchedPhases.forEach((phase) => {
+      expect(expectedMatchedSegments.has(phase.segmentIndex)).toBe(true);
+      expect(phase.conditionalMatches).toEqual([{ sourceItemId: "insp-cond-1", stat: "accelerationDelta" }]);
+    });
+    // Every phase belonging to a matched segment carries the attribution —
+    // not just one arbitrarily-chosen phase kind within that span.
+    const matchedSegmentIndices = new Set(actualMatchedPhases.map((phase) => phase.segmentIndex));
+    expect(matchedSegmentIndices).toEqual(expectedMatchedSegments);
+  });
+
+  it("T022: the same build simulated on two tracks with different corner angles produces two breakdowns whose matched-phase sets differ, traceable to each track's own segments", () => {
+    const condition = { kind: "corner-tightness" as const, direction: "at-least" as const, turnDegrees: 70 };
+    const item = testItem({
+      id: "insp-cond-2", name: "Inspectable Conditional", price: 0, timeModifier: 0,
+      conditionalPhysics: [{ condition, delta: { accelerationDelta: 20 } }],
+    });
+    const build = vehicleBuild([item]);
+
+    const trackA = generateTrack(11, 2);
+    const trackB = generateTrack(0, 1);
+    expect(trackA.segments).not.toEqual(trackB.segments);
+
+    const lapA = simulatePlayerLaps(build, LAP_COUNT, trackA)[0];
+    const lapB = simulatePlayerLaps(build, LAP_COUNT, trackB)[0];
+
+    const matchedSegmentsA = new Set(
+      lapA.physics!.phases.filter((phase) => (phase.conditionalMatches?.length ?? 0) > 0).map((phase) => phase.segmentIndex),
+    );
+    const matchedSegmentsB = new Set(
+      lapB.physics!.phases.filter((phase) => (phase.conditionalMatches?.length ?? 0) > 0).map((phase) => phase.segmentIndex),
+    );
+
+    expect(matchedSegmentsA).toEqual(expectedAccelerationMatchedSegmentIndices(trackA.segments, condition));
+    expect(matchedSegmentsB).toEqual(expectedAccelerationMatchedSegmentIndices(trackB.segments, condition));
+    expect(matchedSegmentsA).not.toEqual(matchedSegmentsB);
+  });
+
+  it("T022a: PlayerLap.physics.stats for a build holding conditional items still equals the build's base (unconditional-only) resolved PhysicalStats", () => {
+    const track = generateTrack(11, 2);
+    const item = testItem({
+      id: "t022a-cond", name: "Conditional Only", price: 0, timeModifier: 0,
+      conditionalPhysics: [{
+        condition: { kind: "corner-tightness", direction: "at-least", turnDegrees: 60 },
+        delta: { accelerationDelta: 50 },
+      }],
+    });
+    const build = vehicleBuild([item]);
+    const lap = simulatePlayerLaps(build, LAP_COUNT, track)[0];
+    const plainLap = simulatePlayerLaps(vehicleBuild(), LAP_COUNT, track)[0];
+
+    // Guards against a vacuous pass: the conditional item must actually do
+    // something (phases/time differ), even though .stats must not reflect it.
+    expect(lap.time).not.toBeCloseTo(plainLap.time, 6);
+    expect(lap.physics!.stats).toEqual(STOCK_PHYSICAL_STATS);
   });
 });

@@ -1,4 +1,10 @@
-import type { LapPhaseBreakdown } from "./types";
+import type {
+  ConditionalPhysicsContribution,
+  ConditionalPhysicsMatch,
+  ItemPhysicsContribution,
+  LapPhaseBreakdown,
+  PhysicsCondition,
+} from "./types";
 
 // 018-track-generation: tracks are procedurally generated, not hand-authored
 // (research.md Decision 1). TRACKS/selectTrack are removed entirely.
@@ -234,6 +240,54 @@ export function apexSpeed(turnDegrees: number, corneringSpeedStat: number): numb
   return corneringSpeedStat * Math.sqrt(APEX_SPEED_REFERENCE_ANGLE / turnDegrees);
 }
 
+/**
+ * Pure corner-tightness match: "at-least" matches at or above the threshold,
+ * "at-most" matches at or below — both inclusive at the exact-equality
+ * boundary (022-contextual-physics-effects contract §1). Reads nothing
+ * beyond its own two arguments — no track/build/item lookup.
+ */
+export function matchesPhysicsCondition(condition: PhysicsCondition, turnDegrees: number): boolean {
+  return condition.direction === "at-least"
+    ? turnDegrees >= condition.turnDegrees
+    : turnDegrees <= condition.turnDegrees;
+}
+
+/**
+ * Sums one stat's delta across every contribution whose condition matches at
+ * least one of the given corner angles (research.md Decision 1's per-phase
+ * corner association table) — once per matching contribution, never twice
+ * for a contribution that matches more than one candidate (topSpeed's
+ * either-bounding-corner rule, contract §3).
+ */
+function resolveConditionalDelta(
+  contributions: readonly ConditionalPhysicsContribution[],
+  deltaKey: keyof ItemPhysicsContribution,
+  candidateTurnDegrees: readonly number[],
+): number {
+  return contributions.reduce((sum, contribution) => {
+    const matches = candidateTurnDegrees.some((turnDegrees) =>
+      matchesPhysicsCondition(contribution.condition, turnDegrees));
+    return matches ? sum + (contribution.delta[deltaKey] ?? 0) : sum;
+  }, 0);
+}
+
+/**
+ * Attribution counterpart to resolveConditionalDelta (022 US3, FR-006,
+ * contract §4): every contribution that actually targets `deltaKey` and
+ * matches at least one candidate corner, named by its source item.
+ */
+function resolveConditionalMatches(
+  contributions: readonly ConditionalPhysicsContribution[],
+  deltaKey: keyof ItemPhysicsContribution,
+  candidateTurnDegrees: readonly number[],
+): ConditionalPhysicsMatch[] {
+  return contributions
+    .filter((contribution) =>
+      contribution.delta[deltaKey] !== undefined
+      && candidateTurnDegrees.some((turnDegrees) => matchesPhysicsCondition(contribution.condition, turnDegrees)))
+    .map((contribution) => ({ sourceItemId: contribution.sourceItemId ?? "unknown-item", stat: deltaKey }));
+}
+
 export interface SpanPhase {
   kind: "accelerating" | "cruising" | "braking";
   seconds: number;
@@ -328,6 +382,7 @@ export function solveSpan(
 export function simulateLapPhysics(
   stats: PhysicalStats,
   segments: readonly TrackSegment[],
+  conditionalContributions: readonly ConditionalPhysicsContribution[] = [],
 ): { totalSeconds: number; phases: LapPhaseBreakdown[] } {
   const corners = segments
     .map((segment, index) => ({ segment, index }))
@@ -342,7 +397,14 @@ export function simulateLapPhysics(
   const arcLengths = corners.map((entry) => cornerArcLength(entry.segment.turnDegrees));
   const entryLengths = arcLengths.map((length) => length * CORNER_ENTRY_RATIO);
   const exitLengths = arcLengths.map((length) => length * (1 - CORNER_ENTRY_RATIO));
-  const apexSpeeds = corners.map((entry) => apexSpeed(entry.segment.turnDegrees, stats.corneringSpeed));
+  // 022-contextual-physics-effects: a corner's own effective corneringSpeed
+  // is resolved before apexSpeed, directly against that corner's own
+  // turnDegrees — never through a phase (research.md Decision 2).
+  const apexSpeeds = corners.map((entry) => {
+    const effectiveCorneringSpeed = stats.corneringSpeed
+      + resolveConditionalDelta(conditionalContributions, "corneringSpeedDelta", [entry.segment.turnDegrees]);
+    return apexSpeed(entry.segment.turnDegrees, effectiveCorneringSpeed);
+  });
 
   const phases: LapPhaseBreakdown[] = [];
   let totalSeconds = 0;
@@ -350,9 +412,53 @@ export function simulateLapPhysics(
   for (let i = 0; i < cornerCount; i += 1) {
     const previous = (i - 1 + cornerCount) % cornerCount;
     const distance = exitLengths[previous] + straights[i].segment.length + entryLengths[i];
-    const span = solveSpan(distance, apexSpeeds[previous], apexSpeeds[i], stats);
+    // 022-contextual-physics-effects: per-span effective acceleration/
+    // brakingPower/topSpeed (research.md Decision 1) — resolved once per
+    // span, before solveSpan, whose own four-argument signature is
+    // untouched (contract §3).
+    const previousTurnDegrees = corners[previous].segment.turnDegrees;
+    const currentTurnDegrees = corners[i].segment.turnDegrees;
+    const effectiveStats: PhysicalStats = {
+      acceleration: stats.acceleration
+        + resolveConditionalDelta(conditionalContributions, "accelerationDelta", [previousTurnDegrees]),
+      brakingPower: stats.brakingPower
+        + resolveConditionalDelta(conditionalContributions, "brakingPowerDelta", [currentTurnDegrees]),
+      topSpeed: stats.topSpeed
+        + resolveConditionalDelta(
+          conditionalContributions, "topSpeedDelta", [previousTurnDegrees, currentTurnDegrees],
+        ),
+      corneringSpeed: stats.corneringSpeed,
+    };
+    const span = solveSpan(distance, apexSpeeds[previous], apexSpeeds[i], effectiveStats);
+    // 022-contextual-physics-effects (US3): per-phase attribution, mirroring
+    // the effective-stat resolution above. corneringSpeed's condition is
+    // evaluated at corner i itself (research.md Decision 2), so its matches
+    // are attributed to every phase in this span — corner i's own span.
+    const accelerationMatches = resolveConditionalMatches(
+      conditionalContributions, "accelerationDelta", [previousTurnDegrees],
+    );
+    const brakingMatches = resolveConditionalMatches(
+      conditionalContributions, "brakingPowerDelta", [currentTurnDegrees],
+    );
+    const topSpeedMatches = resolveConditionalMatches(
+      conditionalContributions, "topSpeedDelta", [previousTurnDegrees, currentTurnDegrees],
+    );
+    const corneringSpeedMatches = resolveConditionalMatches(
+      conditionalContributions, "corneringSpeedDelta", [currentTurnDegrees],
+    );
     span.phases.forEach((phase) => {
-      phases.push({ phase: phase.kind, segmentIndex: straights[i].index, seconds: phase.seconds });
+      const conditionalMatches: ConditionalPhysicsMatch[] = [
+        ...corneringSpeedMatches,
+        ...(phase.kind === "accelerating" ? accelerationMatches : []),
+        ...(phase.kind === "braking" ? brakingMatches : []),
+        ...(phase.kind === "cruising" ? topSpeedMatches : []),
+      ];
+      phases.push({
+        phase: phase.kind,
+        segmentIndex: straights[i].index,
+        seconds: phase.seconds,
+        conditionalMatches: conditionalMatches.length > 0 ? conditionalMatches : undefined,
+      });
       totalSeconds += phase.seconds;
     });
   }
