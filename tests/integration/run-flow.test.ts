@@ -25,6 +25,7 @@ import {
   raceLapLabel,
   runPresentation,
   runRoute,
+  toLegacyContestResult,
 } from "../../src/scenes/runPresentation";
 import {
   createPracticeReturnContext,
@@ -166,6 +167,24 @@ describe("run scene boundary", () => {
     const input = contestSceneInput(run, run.activeEncounter!.id);
 
     expect(input.rivalRoster).toEqual(selectGhostRoster(GHOST_POOL, run.seed, input.level));
+  });
+
+  it("toLegacyContestResult preserves each lap's physics breakdown when bridging an NCarContestResult (021-arcade-physics-simulation T028a, /speckit.analyze finding I1)", () => {
+    let run = create();
+    for (let stage = 0; stage < 2; stage += 1) {
+      run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+      run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
+    }
+    const input = contestSceneInput(run, run.activeEncounter!.id);
+    const result = resolveContest(input.build, input.rivalRoster, input.level, input.seed, input.lapCount);
+    const player = result.cars.find((car) => car.role === "player")!;
+    // 021 US1-US3 already wired physics onto every N-car lap — this test's
+    // real assertion is that the bridge doesn't silently drop it.
+    expect(player.laps[0].physics).toBeDefined();
+
+    const legacy = toLegacyContestResult(result);
+
+    expect(legacy.laps[0].physics).toEqual(player.laps[0].physics);
   });
 
   it("keeps encounter selection separate from acquisition and exposes Supplier economy state", () => {

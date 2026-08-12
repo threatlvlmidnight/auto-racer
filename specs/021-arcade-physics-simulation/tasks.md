@@ -245,6 +245,32 @@ wiring, before anything else depends on it.
 
 ## Notes
 
+- **Implementation deviation from plan, discovered during T016**: two of
+  the `"simulatePlayerLaps track-fit fold (T026, contract §5)"` describe
+  block's tests (the Power/Chassis-leaning-build-vs-baseline comparisons)
+  had to be deleted during US1, not deferred to Polish as originally
+  scoped — they compare a track-supplied result's magnitude against a
+  track-less baseline, which real physics (adding tens of seconds) breaks
+  structurally the moment physics is wired in, regardless of whether
+  `trackFit` itself is still present. T034's remaining scope at Polish is
+  now smaller (the other 2 tests in that block, which assert `trackFit`'s
+  own field value and were unaffected by this).
+- **`/speckit.analyze` finding I1, re-scoped during implementation**: the
+  original finding assumed `run.history` was a meaningful secondary
+  transparency surface worth threading `physics` into. Deeper tracing
+  during T028a found this overstated the impact — `completePvpEncounter`
+  never reads `result.laps` at all (verified directly against the code,
+  not assumed), `run.history` only ever stores a compact `pvpOutcome`
+  summary (`outcome`/`lapCount`/`playerTime`/`ghostTime`/`gap`, never
+  per-lap data, for *anything*), and `resolvePendingSponsor` reads only
+  `lap.firedItems`. `toLegacyContestResult`'s bridged `ContestResult.laps`
+  has no real consumer for `trackFit` or `physics` today — `ResultScene.ts`
+  (the actual post-race-review surface) already reads `NCarContestResult`
+  directly, bypassing this bridge entirely. The fix was implemented anyway
+  (exporting `toLegacyContestResult`, full TDD coverage in
+  `tests/integration/run-flow.test.ts`) as type-correctness/future-proofing
+  rather than a live transparency-gap fix — worth knowing this distinction
+  if `LapBreakdown.physics` is ever relied on for something real later.
 - Every changed `src/simulation/` contract has an earlier failing test
   task; implementation begins only after the listed RED checks fail for
   the expected missing behavior.

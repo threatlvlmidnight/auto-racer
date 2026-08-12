@@ -202,7 +202,7 @@ export function contestSceneInput(run: Run, encounterId: string): ContestSceneIn
  * nearest competitor: the car one rank above the player, or one rank below
  * if the player is already leading.
  */
-function toLegacyContestResult(result: NCarContestResult): ContestResult {
+export function toLegacyContestResult(result: NCarContestResult): ContestResult {
   const player = result.cars.find((car) => car.role === "player")!;
   const nearestRank = player.position === 1 ? 2 : player.position - 1;
   const nearest = result.cars.find((car) => car.position === nearestRank) ?? player;
@@ -221,6 +221,10 @@ function toLegacyContestResult(result: NCarContestResult): ContestResult {
       ghostLapTime: nearest.laps[index]?.time ?? lap.time,
       firedItems: lap.firedItems,
       contributions: lap.contributions,
+      // 021-arcade-physics-simulation: forwarded explicitly — this mapping
+      // does not auto-forward new PlayerLap fields; trackFit had the same
+      // gap, undiscovered until /speckit.analyze (finding I1).
+      physics: lap.physics,
     })),
     contributions: player.laps.flatMap((lap) => lap.contributions),
     playerPosition: player.position,

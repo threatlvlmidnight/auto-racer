@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildTrackLean,
+  apexSpeed,
+  cornerArcLength,
   generateTrack,
   pointAtProgress,
+  simulateLapPhysics,
+  solveSpan,
+  STOCK_PHYSICAL_STATS,
+  trackCharacteristics,
+  type PhysicalStats,
   type Track,
   type TrackSegment,
 } from "../../src/simulation/tracks";
-import { testItem, vehicleBuild } from "../fixtures/vehicle-build-fixtures";
+import type { ItemPhysicsContribution, LapPhaseBreakdown, LapPhaseKind } from "../../src/simulation/types";
 
 // 018-track-generation: TRACKS/selectTrack are removed entirely — every track
 // consumed by this suite is generated (research.md Decision 1; contract §1-2).
@@ -207,42 +213,148 @@ describe("pointAtProgress on a generated track (T021, FR-011)", () => {
   });
 });
 
-describe("buildTrackLean (T024, FR-006)", () => {
-  it("returns 0 for an empty build", () => {
-    expect(buildTrackLean(vehicleBuild())).toBe(0);
+
+// 021-arcade-physics-simulation: PhysicalStats/ItemPhysicsContribution/
+// LapPhaseKind/LapPhaseBreakdown shapes (T002).
+describe("physics types (T002)", () => {
+  it("STOCK_PHYSICAL_STATS has all four dimensions, all strictly positive", () => {
+    const stats: PhysicalStats = STOCK_PHYSICAL_STATS;
+    expect(stats.acceleration).toBeGreaterThan(0);
+    expect(stats.topSpeed).toBeGreaterThan(0);
+    expect(stats.brakingPower).toBeGreaterThan(0);
+    expect(stats.corneringSpeed).toBeGreaterThan(0);
   });
 
-  it("returns 0 for an exactly balanced Power/Chassis build", () => {
-    const build = vehicleBuild([
-      testItem({ id: "p1", name: "Power 1", price: 0, timeModifier: 0, installationCategory: "power" }),
-      testItem({ id: "c1", name: "Chassis 1", price: 0, timeModifier: 0, installationCategory: "chassis" }),
-    ]);
-    expect(buildTrackLean(build)).toBe(0);
+  it("ItemPhysicsContribution fields are all optional", () => {
+    const empty: ItemPhysicsContribution = {};
+    const full: ItemPhysicsContribution = {
+      accelerationDelta: 1,
+      topSpeedDelta: 1,
+      brakingPowerDelta: 1,
+      corneringSpeedDelta: 1,
+    };
+    expect(empty).toEqual({});
+    expect(full.accelerationDelta).toBe(1);
   });
 
-  it("returns positive for a Power-heavy build", () => {
-    const build = vehicleBuild([
-      testItem({ id: "p1", name: "Power 1", price: 0, timeModifier: 0, installationCategory: "power" }),
-      testItem({ id: "p2", name: "Power 2", price: 0, timeModifier: 0, installationCategory: "power" }),
-      testItem({ id: "c1", name: "Chassis 1", price: 0, timeModifier: 0, installationCategory: "chassis" }),
-    ]);
-    expect(buildTrackLean(build)).toBeGreaterThan(0);
+  it("LapPhaseBreakdown records a phase kind, segment index, and seconds", () => {
+    const kinds: LapPhaseKind[] = ["accelerating", "cruising", "braking", "apex"];
+    const breakdown: LapPhaseBreakdown = { phase: "accelerating", segmentIndex: 0, seconds: 1.2 };
+    expect(kinds).toContain(breakdown.phase);
+    expect(breakdown.seconds).toBeGreaterThan(0);
+  });
+});
+
+describe("cornerArcLength / apexSpeed (T003, contract §2)", () => {
+  it("apexSpeed decreases as turnDegrees increases, for a fixed corneringSpeedStat", () => {
+    const gentle = apexSpeed(20, 50);
+    const sharp = apexSpeed(120, 50);
+    expect(sharp).toBeLessThan(gentle);
   });
 
-  it("returns negative for a Chassis-heavy build", () => {
-    const build = vehicleBuild([
-      testItem({ id: "c1", name: "Chassis 1", price: 0, timeModifier: 0, installationCategory: "chassis" }),
-      testItem({ id: "c2", name: "Chassis 2", price: 0, timeModifier: 0, installationCategory: "chassis" }),
-      testItem({ id: "p1", name: "Power 1", price: 0, timeModifier: 0, installationCategory: "power" }),
-    ]);
-    expect(buildTrackLean(build)).toBeLessThan(0);
+  it("apexSpeed increases as corneringSpeedStat increases, for a fixed turnDegrees", () => {
+    const weak = apexSpeed(60, 30);
+    const strong = apexSpeed(60, 80);
+    expect(strong).toBeGreaterThan(weak);
   });
 
-  it("excludes storage items from the count", () => {
-    const build = vehicleBuild(
-      [],
-      [testItem({ id: "p1", name: "Power 1", price: 0, timeModifier: 0, installationCategory: "power" })],
-    );
-    expect(buildTrackLean(build)).toBe(0);
+  it("apexSpeed and cornerArcLength are pure — identical input always returns identical output", () => {
+    expect(apexSpeed(75, 55)).toBe(apexSpeed(75, 55));
+    expect(cornerArcLength(75)).toBe(cornerArcLength(75));
+  });
+
+  it("cornerArcLength is always positive for any legal turnDegrees in (0, 150)", () => {
+    [1, 20, 75, 149].forEach((turnDegrees) => {
+      expect(cornerArcLength(turnDegrees)).toBeGreaterThan(0);
+    });
+  });
+
+  it("apexSpeed is always positive and finite for any legal turnDegrees and a wide range of stats", () => {
+    for (let turnDegrees = 1; turnDegrees < 150; turnDegrees += 7) {
+      for (const stat of [1, 20, 50, 100, 300]) {
+        const speed = apexSpeed(turnDegrees, stat);
+        expect(Number.isFinite(speed)).toBe(true);
+        expect(speed).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
+describe("solveSpan (T004, contract §3)", () => {
+  it("is pure and deterministic", () => {
+    const a = solveSpan(200, 30, 60, STOCK_PHYSICAL_STATS);
+    const b = solveSpan(200, 30, 60, STOCK_PHYSICAL_STATS);
+    expect(b).toEqual(a);
+  });
+
+  it("totalSeconds exactly equals the sum of its own phases[].seconds", () => {
+    [
+      [200, 30, 60],
+      [50, 10, 10],
+      [1000, 0, 0],
+      [10, 80, 20],
+    ].forEach(([distance, entrySpeed, exitSpeed]) => {
+      const result = solveSpan(distance, entrySpeed, exitSpeed, STOCK_PHYSICAL_STATS);
+      const summed = result.phases.reduce((sum, phase) => sum + phase.seconds, 0);
+      expect(summed).toBeCloseTo(result.totalSeconds, 9);
+    });
+  });
+
+  it("never exceeds stats.topSpeed at its peak", () => {
+    const result = solveSpan(5000, 0, 0, STOCK_PHYSICAL_STATS);
+    expect(result.peakSpeed).toBeLessThanOrEqual(STOCK_PHYSICAL_STATS.topSpeed);
+  });
+
+  it("produces fewer phases for a short distance than a long one between the same speeds", () => {
+    const short = solveSpan(5, 40, 40, STOCK_PHYSICAL_STATS);
+    const long = solveSpan(5000, 40, 40, STOCK_PHYSICAL_STATS);
+    expect(short.phases.length).toBeLessThan(long.phases.length);
+  });
+
+  it("produces finite, non-negative totalSeconds even when entrySpeed already exceeds the achievable peak", () => {
+    const result = solveSpan(1, 89, 5, STOCK_PHYSICAL_STATS);
+    expect(Number.isFinite(result.totalSeconds)).toBe(true);
+    expect(result.totalSeconds).toBeGreaterThanOrEqual(0);
+  });
+
+  it("produces zero time for zero distance", () => {
+    const result = solveSpan(0, 40, 40, STOCK_PHYSICAL_STATS);
+    expect(result.totalSeconds).toBe(0);
+  });
+});
+
+describe("simulateLapPhysics shape-sensitivity (T005, SC-001)", () => {
+  // generateTrack(0, 1) and generateTrack(0, 2) are a real, verified pair:
+  // identical trackCharacteristics ({ powerDemand: 55, corneringDemand: 45,
+  // brakingDemand: 0 }), genuinely different segments. Deliberately real
+  // generated tracks, not a hand-permuted single multiset — a full-cycle
+  // reordering of the *same* corners/straights turns out to be mathematically
+  // invariant under this model (every corner appears exactly once as
+  // "previous" and once as "current" regardless of adjacency order, so the
+  // per-span sums cancel out identically) — a real property of the model,
+  // not a bug, but it means only genuinely different underlying segment data
+  // (as any two real generated tracks have) exercises shape-sensitivity.
+  const segmentsA = generateTrack(0, 1).segments;
+  const segmentsB = generateTrack(0, 2).segments;
+
+  it("is pure and deterministic", () => {
+    const a = simulateLapPhysics(STOCK_PHYSICAL_STATS, segmentsA);
+    const b = simulateLapPhysics(STOCK_PHYSICAL_STATS, segmentsA);
+    expect(b).toEqual(a);
+  });
+
+  it("totalSeconds equals the sum of its own phases[].seconds", () => {
+    const result = simulateLapPhysics(STOCK_PHYSICAL_STATS, segmentsA);
+    const summed = result.phases.reduce((sum, phase) => sum + phase.seconds, 0);
+    expect(summed).toBeCloseTo(result.totalSeconds, 9);
+  });
+
+  it("two real generated tracks with equal trackCharacteristics scores but different real layouts produce different lap times", () => {
+    expect(trackCharacteristics(segmentsA)).toEqual(trackCharacteristics(segmentsB));
+    expect(segmentsA).not.toEqual(segmentsB);
+
+    const resultA = simulateLapPhysics(STOCK_PHYSICAL_STATS, segmentsA);
+    const resultB = simulateLapPhysics(STOCK_PHYSICAL_STATS, segmentsB);
+    expect(resultA.totalSeconds).not.toBeCloseTo(resultB.totalSeconds, 6);
   });
 });

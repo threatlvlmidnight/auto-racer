@@ -1,4 +1,4 @@
-import type { Build, ItemDefinition } from "./types";
+import type { LapPhaseBreakdown } from "./types";
 
 // 018-track-generation: tracks are procedurally generated, not hand-authored
 // (research.md Decision 1). TRACKS/selectTrack are removed entirely.
@@ -27,6 +27,14 @@ export interface TrackPoint {
   headingRadians: number;
 }
 
+/** A build's capability in each of four physical dimensions (021 data-model.md). */
+export interface PhysicalStats {
+  acceleration: number;
+  topSpeed: number;
+  brakingPower: number;
+  corneringSpeed: number;
+}
+
 // --- Balance-pass placeholders (research.md Decision 3/4) ------------------
 const MIN_CORNER_COUNT = 6;
 const MAX_CORNER_COUNT = 10;
@@ -48,8 +56,25 @@ const CORNER_LENGTH_EXPONENT = 1.5;
 const CORNER_LENGTH_SCALE = 0.5;
 const SHARP_CORNER_DEGREES = 55;
 const BRAKING_REFERENCE = 260;
-const TRACK_FIT_MAX_PERCENT = 6;
 const BOUNDING_BOX = { minX: 70, maxX: 560, minY: 84, maxY: 320 };
+
+// --- 021-arcade-physics-simulation: balance-pass placeholders --------------
+/**
+ * A corner's own physics-only arc-length — distinct from its zero-length
+ * geometric vertex representation used by deriveTrackPoints/pointAtProgress
+ * (research.md Decision 2). Same super-linear shape as trackCharacteristics'
+ * cornering-length formula, but its own separate constants: this one is
+ * calibrated to a physical distance real straights can be compared against,
+ * not scoring variance.
+ */
+const CORNER_ARC_LENGTH_EXPONENT = 1.2;
+const CORNER_ARC_LENGTH_SCALE = 1;
+/** The turnDegrees at which corneringSpeedStat itself equals the apex speed. */
+const APEX_SPEED_REFERENCE_ANGLE = 60;
+/** Symmetric default split of a corner's own arc-length (research.md Decision 4). */
+const CORNER_ENTRY_RATIO = 0.5;
+/** Guards every solveSpan phase/distance comparison against float noise. */
+const PHYSICS_EPSILON = 1e-9;
 
 /**
  * mulberry32 (public-domain), seeded once per generateTrack call from a
@@ -181,6 +206,160 @@ export function trackCharacteristics(segments: readonly TrackSegment[]): TrackCh
   };
 }
 
+/** The stock (no-item) baseline physical stats (021 data-model.md). */
+export const STOCK_PHYSICAL_STATS: PhysicalStats = {
+  acceleration: 40,
+  topSpeed: 90,
+  brakingPower: 60,
+  corneringSpeed: 50,
+};
+
+/**
+ * A corner's own physics-only traversal distance, in the same abstract
+ * units as a straight's `length` — a new notion distinct from the zero-
+ * length geometric vertex `deriveTrackPoints` already uses for rendering
+ * (research.md Decision 2, contract §2).
+ */
+export function cornerArcLength(turnDegrees: number): number {
+  return Math.pow(turnDegrees, CORNER_ARC_LENGTH_EXPONENT) * CORNER_ARC_LENGTH_SCALE;
+}
+
+/**
+ * A corner's own maximum negotiable (apex) speed — sharper corners always
+ * require a lower speed than gentler ones for the same build; a build with
+ * more cornering-speed capability is always faster through the same corner
+ * (research.md Decision 3, contract §2).
+ */
+export function apexSpeed(turnDegrees: number, corneringSpeedStat: number): number {
+  return corneringSpeedStat * Math.sqrt(APEX_SPEED_REFERENCE_ANGLE / turnDegrees);
+}
+
+export interface SpanPhase {
+  kind: "accelerating" | "cruising" | "braking";
+  seconds: number;
+  distance: number;
+}
+
+export interface SpanResult {
+  peakSpeed: number;
+  phases: SpanPhase[];
+  totalSeconds: number;
+}
+
+/**
+ * The standard closed-form trapezoidal velocity-profile solution: accelerate
+ * from entrySpeed, optionally cruise at stats.topSpeed, then brake down to
+ * exitSpeed, covering exactly `distance` (research.md Decision 1, contract
+ * §3). Pure function of its own four arguments — no track/build/item lookup.
+ * Falls back to a single best-effort accelerate-only or brake-only phase
+ * when `distance` is too short for both target speeds to be reached exactly
+ * — always finite, always non-negative, never NaN.
+ */
+export function solveSpan(
+  distance: number,
+  entrySpeed: number,
+  exitSpeed: number,
+  stats: PhysicalStats,
+): SpanResult {
+  const { acceleration: a, brakingPower: b, topSpeed } = stats;
+
+  if (distance <= 0) {
+    return { peakSpeed: entrySpeed, phases: [], totalSeconds: 0 };
+  }
+
+  const algebraicPeakSquared = (2 * a * b * distance + b * entrySpeed ** 2 + a * exitSpeed ** 2) / (a + b);
+
+  if (algebraicPeakSquared < Math.max(entrySpeed ** 2, exitSpeed ** 2)) {
+    // Not enough distance to reach a mutual peak — best-effort single phase
+    // covering the whole span (research.md Decision 1's degenerate case).
+    if (exitSpeed >= entrySpeed) {
+      const endSpeed = Math.min(topSpeed, Math.sqrt(entrySpeed ** 2 + 2 * a * distance));
+      const seconds = (endSpeed - entrySpeed) / a;
+      const phases: SpanPhase[] = seconds > PHYSICS_EPSILON
+        ? [{ kind: "accelerating", seconds, distance }]
+        : [];
+      return { peakSpeed: endSpeed, phases, totalSeconds: Math.max(0, seconds) };
+    }
+    const endSpeed = Math.sqrt(Math.max(0, entrySpeed ** 2 - 2 * b * distance));
+    const seconds = (entrySpeed - endSpeed) / b;
+    const phases: SpanPhase[] = seconds > PHYSICS_EPSILON
+      ? [{ kind: "braking", seconds, distance }]
+      : [];
+    return { peakSpeed: entrySpeed, phases, totalSeconds: Math.max(0, seconds) };
+  }
+
+  const peakSpeed = Math.min(topSpeed, Math.sqrt(algebraicPeakSquared));
+  const phases: SpanPhase[] = [];
+  let totalSeconds = 0;
+
+  const accelDistance = Math.max(0, (peakSpeed ** 2 - entrySpeed ** 2) / (2 * a));
+  const accelSeconds = (peakSpeed - entrySpeed) / a;
+  if (accelSeconds > PHYSICS_EPSILON) {
+    phases.push({ kind: "accelerating", seconds: accelSeconds, distance: accelDistance });
+    totalSeconds += accelSeconds;
+  }
+
+  const brakeDistance = Math.max(0, (peakSpeed ** 2 - exitSpeed ** 2) / (2 * b));
+  const brakeSeconds = (peakSpeed - exitSpeed) / b;
+
+  const cruiseDistance = distance - accelDistance - brakeDistance;
+  if (cruiseDistance > PHYSICS_EPSILON) {
+    const cruiseSeconds = cruiseDistance / peakSpeed;
+    phases.push({ kind: "cruising", seconds: cruiseSeconds, distance: cruiseDistance });
+    totalSeconds += cruiseSeconds;
+  }
+
+  if (brakeSeconds > PHYSICS_EPSILON) {
+    phases.push({ kind: "braking", seconds: brakeSeconds, distance: brakeDistance });
+    totalSeconds += brakeSeconds;
+  }
+
+  return { peakSpeed, phases, totalSeconds };
+}
+
+/**
+ * Flattens a track's real segment sequence into inter-apex spans (research.md
+ * Decision 1) and sums each span's solveSpan result — never reading the
+ * precomputed aggregate trackCharacteristics scores (FR-001, contract §4).
+ * The specific property this whole feature exists to guarantee: two segment
+ * sequences with equal aggregate scores but different real layouts produce
+ * different totals (SC-001).
+ */
+export function simulateLapPhysics(
+  stats: PhysicalStats,
+  segments: readonly TrackSegment[],
+): { totalSeconds: number; phases: LapPhaseBreakdown[] } {
+  const corners = segments
+    .map((segment, index) => ({ segment, index }))
+    .filter((entry): entry is { segment: Extract<TrackSegment, { kind: "corner" }>; index: number } =>
+      entry.segment.kind === "corner");
+  const straights = segments
+    .map((segment, index) => ({ segment, index }))
+    .filter((entry): entry is { segment: Extract<TrackSegment, { kind: "straight" }>; index: number } =>
+      entry.segment.kind === "straight");
+
+  const cornerCount = corners.length;
+  const arcLengths = corners.map((entry) => cornerArcLength(entry.segment.turnDegrees));
+  const entryLengths = arcLengths.map((length) => length * CORNER_ENTRY_RATIO);
+  const exitLengths = arcLengths.map((length) => length * (1 - CORNER_ENTRY_RATIO));
+  const apexSpeeds = corners.map((entry) => apexSpeed(entry.segment.turnDegrees, stats.corneringSpeed));
+
+  const phases: LapPhaseBreakdown[] = [];
+  let totalSeconds = 0;
+
+  for (let i = 0; i < cornerCount; i += 1) {
+    const previous = (i - 1 + cornerCount) % cornerCount;
+    const distance = exitLengths[previous] + straights[i].segment.length + entryLengths[i];
+    const span = solveSpan(distance, apexSpeeds[previous], apexSpeeds[i], stats);
+    span.phases.forEach((phase) => {
+      phases.push({ phase: phase.kind, segmentIndex: straights[i].index, seconds: phase.seconds });
+      totalSeconds += phase.seconds;
+    });
+  }
+
+  return { totalSeconds, phases };
+}
+
 /**
  * Pure, deterministic track generation (contract §2, FR-002). Accepts only a
  * plain numeric seed and PvP ordinal — never a Run or player-identity object
@@ -214,30 +393,6 @@ export function generateTrack(seed: number, pvpOrdinal: number): Track {
     points: deriveTrackPoints(segments),
     characteristics: trackCharacteristics(segments),
   };
-}
-
-/**
- * A build's Power/Chassis lean over its *installed* items only — storage
- * items are excluded, matching their existing inert-unless-activeWhileStored
- * treatment elsewhere in simulation (research.md Decision 5, FR-006).
- */
-export function buildTrackLean(build: Build): number {
-  const installed = build.slots
-    .map((slot) => slot.item)
-    .filter((item): item is ItemDefinition => Boolean(item));
-  const powerCount = installed.filter((item) => item.installationCategory === "power").length;
-  const chassisCount = installed.filter((item) => item.installationCategory === "chassis").length;
-  const total = powerCount + chassisCount;
-  return total === 0 ? 0 : (powerCount - chassisCount) / total;
-}
-
-/** A track's Power/Chassis bias, paired with buildTrackLean for the trackFit fold (research.md Decision 5). */
-export function trackBias(characteristics: TrackCharacteristics): number {
-  return (characteristics.powerDemand - characteristics.corneringDemand) / 100;
-}
-
-export function trackFitPercent(build: Build, characteristics: TrackCharacteristics): number {
-  return buildTrackLean(build) * trackBias(characteristics) * TRACK_FIT_MAX_PERCENT;
 }
 
 function segmentLengths(points: readonly { x: number; y: number }[]): number[] {

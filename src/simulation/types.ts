@@ -1,4 +1,5 @@
 import type { PlayerLap } from "./laps";
+import type { PhysicalStats } from "./tracks";
 
 // Shared simulation types (data-model.md). Deliberately minimal/illustrative —
 // the real item/component taxonomy is a later feature's responsibility
@@ -88,6 +89,30 @@ export interface ItemDefinition {
   // --- Feature 014: tag-targeted synergy behavior ---
   /** Optional, defaults to empty. Independent of `buff` — the two never interact. */
   synergyEffects?: readonly SynergyEffect[];
+
+  // --- Feature 021: arcade physics simulation ---
+  /** Optional, additive to timeModifier — deltas to a build's four physical stats. */
+  physics?: ItemPhysicsContribution;
+}
+
+// --- Feature 021: arcade physics simulation -------------------------------
+
+/** A held item's contribution to a build's PhysicalStats (021 data-model.md). */
+export interface ItemPhysicsContribution {
+  accelerationDelta?: number;
+  topSpeedDelta?: number;
+  brakingPowerDelta?: number;
+  corneringSpeedDelta?: number;
+}
+
+export type LapPhaseKind = "accelerating" | "cruising" | "braking" | "apex";
+
+/** One named portion of a simulated lap's time (021 data-model.md). */
+export interface LapPhaseBreakdown {
+  phase: LapPhaseKind;
+  /** Index into the track's own segments array this phase occurred within/around. */
+  segmentIndex: number;
+  seconds: number;
 }
 
 // --- Feature 014: tag-targeted synergy behavior --------------------------
@@ -301,8 +326,14 @@ export interface LapBreakdown {
   firedItems: FiredItem[];
   /** Complete computation evidence. Optional for legacy constructed fixtures. */
   contributions?: ContributionEvidence[];
-  /** 018-track-generation: present only when simulatePlayerLaps was called with a track. */
-  trackFit?: { appliedPercent: number; appliedSeconds: number };
+  /**
+   * 021-arcade-physics-simulation: present only when populated by the
+   * caller — runPresentation.ts's toLegacyContestResult is the only
+   * production code that constructs a LapBreakdown from a PlayerLap, and
+   * it must copy this field through explicitly (021 tasks.md T029a,
+   * /speckit.analyze finding I1) for run.history to carry it at all.
+   */
+  physics?: { stats: PhysicalStats; phases: LapPhaseBreakdown[] };
 }
 
 /** The output of resolving a contest (contracts/simulation-contract.md). */

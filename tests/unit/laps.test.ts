@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ITEM_POOL } from "../../src/content/sample-data";
 import { firesOnLap, simulatePlayerLaps } from "../../src/simulation/laps";
-import { generateTrack } from "../../src/simulation/tracks";
+import { generateTrack, simulateLapPhysics, STOCK_PHYSICAL_STATS } from "../../src/simulation/tracks";
 import {
   LAP_COUNT,
   MIN_LAP_TIME,
@@ -731,8 +731,10 @@ describe("authored synergy example items (014 US1/US2, sample-data.ts)", () => {
   });
 });
 
-// 018-track-generation: simulatePlayerLaps's optional track parameter and
-// trackFit fold (data-model.md, contract §5).
+// 018-track-generation: simulatePlayerLaps's optional track parameter
+// (021-arcade-physics-simulation replaced 018's original trackFit fold with
+// real physics — see the "PlayerLap.physics inspectability" and
+// "build-vs-track payoff" describe blocks further down).
 
 function powerHeavyBuild(): Build {
   return vehicleBuild([
@@ -740,24 +742,6 @@ function powerHeavyBuild(): Build {
     testItem({ id: "th-p2", name: "Power 2", price: 0, timeModifier: -1, cooldown: 1, installationCategory: "power" }),
     testItem({ id: "th-c1", name: "Chassis 1", price: 0, timeModifier: -1, cooldown: 1, installationCategory: "chassis" }),
   ]);
-}
-
-function chassisHeavyBuild(): Build {
-  return vehicleBuild([
-    testItem({ id: "th-c1", name: "Chassis 1", price: 0, timeModifier: -1, cooldown: 1, installationCategory: "chassis" }),
-    testItem({ id: "th-c2", name: "Chassis 2", price: 0, timeModifier: -1, cooldown: 1, installationCategory: "chassis" }),
-    testItem({ id: "th-p1", name: "Power 1", price: 0, timeModifier: -1, cooldown: 1, installationCategory: "power" }),
-  ]);
-}
-
-function findBiasedTrack(direction: "power" | "cornering") {
-  for (let seed = 0; seed < 100; seed += 1) {
-    const track = generateTrack(seed, 1);
-    const diff = track.characteristics.powerDemand - track.characteristics.corneringDemand;
-    if (direction === "power" && diff > 15) return track;
-    if (direction === "cornering" && diff < -15) return track;
-  }
-  throw new Error(`no ${direction}-biased track found in a 100-seed sample`);
 }
 
 describe("simulatePlayerLaps omitted-track parity (T025, FR-007)", () => {
@@ -768,47 +752,209 @@ describe("simulatePlayerLaps omitted-track parity (T025, FR-007)", () => {
     expect(simulatePlayerLaps(emptyBuild())).toEqual(simulatePlayerLaps(emptyBuild(), LAP_COUNT));
   });
 
-  it("omits trackFit entirely when no track is supplied", () => {
+  it("omits physics entirely when no track is supplied", () => {
     const laps = simulatePlayerLaps(powerHeavyBuild());
-    laps.forEach((lap) => expect(lap.trackFit).toBeUndefined());
+    laps.forEach((lap) => expect(lap.physics).toBeUndefined());
   });
 });
 
-describe("simulatePlayerLaps track-fit fold (T026, contract §5)", () => {
-  it("makes a Power-leaning build faster on a powerDemand-heavy track and slower on a corneringDemand-heavy one", () => {
-    const powerTrack = findBiasedTrack("power");
-    const corneringTrack = findBiasedTrack("cornering");
-    const build = powerHeavyBuild();
-    const baseline = simulatePlayerLaps(build)[0].time;
+// 021-arcade-physics-simulation Polish (T031-T034): 018's buildTrackLean/
+// trackFit ratio-based fold is fully removed, not deprecated — superseded
+// by the real physics simulation, already covered end-to-end by the
+// "PlayerLap.physics inspectability" and "build-vs-track payoff" describe
+// blocks below (US2/US3). No replacement needed here beyond the parity
+// test above.
 
-    expect(simulatePlayerLaps(build, LAP_COUNT, powerTrack)[0].time).toBeLessThan(baseline);
-    expect(simulatePlayerLaps(build, LAP_COUNT, corneringTrack)[0].time).toBeGreaterThan(baseline);
+// 021-arcade-physics-simulation: stock-build physics wired into
+// simulatePlayerLaps (T012-T015, US1).
+describe("simulatePlayerLaps stock-build physics (T012-T015, US1)", () => {
+  it("for a build with zero physics-stat items, the physics-derived component matches simulateLapPhysics(STOCK_PHYSICAL_STATS, track.segments)", () => {
+    const track = generateTrack(5, 1);
+    const expected = simulateLapPhysics(STOCK_PHYSICAL_STATS, track.segments);
+    const lap = simulatePlayerLaps(emptyBuild(), LAP_COUNT, track)[0];
+
+    // The physics contribution is additive on top of the (empty-build) item
+    // total, which is exactly BASELINE_CAR.baseLapTime for an empty build.
+    expect(lap.time).toBeCloseTo(emptyBuild().car.baseLapTime + expected.totalSeconds, 9);
   });
 
-  it("reverses for a Chassis-leaning build", () => {
-    const powerTrack = findBiasedTrack("power");
-    const corneringTrack = findBiasedTrack("cornering");
-    const build = chassisHeavyBuild();
-    const baseline = simulatePlayerLaps(build)[0].time;
+  it("two generated tracks with equal characteristics but different real segments produce different lap times for the same stock build (SC-001, end-to-end)", () => {
+    const trackA = generateTrack(0, 1);
+    const trackB = generateTrack(0, 2);
+    expect(trackA.characteristics).toEqual(trackB.characteristics);
 
-    expect(simulatePlayerLaps(build, LAP_COUNT, powerTrack)[0].time).toBeGreaterThan(baseline);
-    expect(simulatePlayerLaps(build, LAP_COUNT, corneringTrack)[0].time).toBeLessThan(baseline);
+    const timeA = simulatePlayerLaps(emptyBuild(), LAP_COUNT, trackA)[0].time;
+    const timeB = simulatePlayerLaps(emptyBuild(), LAP_COUNT, trackB)[0].time;
+    expect(timeA).not.toBeCloseTo(timeB, 6);
   });
 
-  it("sees trackFit.appliedPercent === 0 on every lap for a neutral/empty build, regardless of track", () => {
-    const track = generateTrack(3, 1);
-    const laps = simulatePlayerLaps(emptyBuild(), LAP_COUNT, track);
-    laps.forEach((lap) => expect(lap.trackFit?.appliedPercent).toBe(0));
+  it("never reaches top speed on a straight too short to both reach it and brake down for the next corner", () => {
+    // Deliberately tiny straights between moderate corners — too little
+    // distance to accelerate up to STOCK_PHYSICAL_STATS.topSpeed and still
+    // brake back down in time. simulateLapPhysics zips corners/straights
+    // positionally by kind, so this doesn't need real closure (turnDegrees
+    // summing to 360) — just matching corner/straight counts.
+    const tightSegments = [
+      { kind: "straight" as const, length: 1 },
+      { kind: "corner" as const, turnDegrees: 30, direction: "left" as const },
+      { kind: "straight" as const, length: 1 },
+      { kind: "corner" as const, turnDegrees: 30, direction: "left" as const },
+    ];
+    const result = simulateLapPhysics(STOCK_PHYSICAL_STATS, tightSegments);
+    const everyPeakBelowTopSpeed = result.phases.every((phase) => phase.phase !== "cruising");
+
+    expect(everyPeakBelowTopSpeed).toBe(true);
+    expect(result.totalSeconds).toBeGreaterThan(0);
+    expect(Number.isFinite(result.totalSeconds)).toBe(true);
   });
 
-  it("records the applied effect as a new inspectable field, not silently folded into resultingLapTime", () => {
-    const track = generateTrack(3, 1);
-    const lap = simulatePlayerLaps(powerHeavyBuild(), LAP_COUNT, track)[0];
+  it("produces deeply equal results for identical (build, track) inputs across repeated calls", () => {
+    const track = generateTrack(9, 3);
+    const first = simulatePlayerLaps(emptyBuild(), LAP_COUNT, track);
+    const second = simulatePlayerLaps(emptyBuild(), LAP_COUNT, track);
+    expect(second).toEqual(first);
+  });
+});
 
-    expect(lap.trackFit).toEqual({
-      appliedPercent: expect.any(Number),
-      appliedSeconds: expect.any(Number),
-    });
-    expect(lap.trackFit!.appliedPercent).not.toBe(0);
+// 021-arcade-physics-simulation: zero-regression guard (T018-T020, US4) —
+// proven before US2 adds item-driven physics behavior.
+describe("simulatePlayerLaps zero regression for timeModifier-only items (T019, FR-008)", () => {
+  it("a timeModifier-only item contributes its exact flat seconds delta whether or not a track is supplied", () => {
+    // Balanced Power/Chassis — a leftover from when this test needed to
+    // stay neutral against 018's trackFit fold before Polish removed it;
+    // harmless to keep as the build shape now.
+    const build = vehicleBuild([
+      testItem({ id: "reg-p1", name: "Power 1", price: 0, timeModifier: -1, cooldown: 1, installationCategory: "power" }),
+      testItem({ id: "reg-c1", name: "Chassis 1", price: 0, timeModifier: -1, cooldown: 1, installationCategory: "chassis" }),
+    ]);
+    const track = generateTrack(7, 2);
+    const withoutTrack = simulatePlayerLaps(build)[0].time;
+    const withTrack = simulatePlayerLaps(build, LAP_COUNT, track)[0].time;
+    const physicsSeconds = simulateLapPhysics(STOCK_PHYSICAL_STATS, track.segments).totalSeconds;
+
+    expect(withTrack - physicsSeconds).toBeCloseTo(withoutTrack, 9);
+  });
+});
+
+// 021-arcade-physics-simulation: items express real physical stats
+// (T021-T024, US2) — the actual build-vs-track payoff.
+function findPhysicsBiasedTrack(direction: "power" | "cornering") {
+  for (let seed = 0; seed < 100; seed += 1) {
+    const track = generateTrack(seed, 1);
+    const diff = track.characteristics.powerDemand - track.characteristics.corneringDemand;
+    if (direction === "power" && diff > 15) return track;
+    if (direction === "cornering" && diff < -15) return track;
+  }
+  throw new Error(`no ${direction}-biased track found in a 100-seed sample`);
+}
+
+describe("simulatePlayerLaps item-driven PhysicalStats (T021, US2)", () => {
+  it("an item's physics deltas measurably change the physics-derived lap time relative to an identical build without it", () => {
+    const track = generateTrack(11, 2);
+    const boosted = vehicleBuild([
+      testItem({
+        id: "phys-accel-1", name: "Turbo", price: 0, timeModifier: 0,
+        physics: { accelerationDelta: 30 },
+      }),
+    ]);
+    const plain = vehicleBuild();
+
+    const boostedTime = simulatePlayerLaps(boosted, LAP_COUNT, track)[0].time;
+    const plainTime = simulatePlayerLaps(plain, LAP_COUNT, track)[0].time;
+    expect(boostedTime).toBeLessThan(plainTime);
+  });
+
+  it("excludes an inactive stored item's physics deltas (matching the existing active-item filtering convention)", () => {
+    const track = generateTrack(11, 2);
+    const buildWithInactiveStorage = vehicleBuild(
+      [],
+      [testItem({
+        id: "phys-stored-1", name: "Stashed Turbo", price: 0, timeModifier: 0,
+        physics: { accelerationDelta: 500 }, activeWhileStored: false,
+      })],
+    );
+    const plain = vehicleBuild();
+
+    const storedTime = simulatePlayerLaps(buildWithInactiveStorage, LAP_COUNT, track)[0].time;
+    const plainTime = simulatePlayerLaps(plain, LAP_COUNT, track)[0].time;
+    expect(storedTime).toBeCloseTo(plainTime, 9);
+  });
+});
+
+describe("simulatePlayerLaps build-vs-track payoff (T022-T024, US2, SC-002)", () => {
+  it("a cornering-speed item is a bigger net time gain on a corner-dominant track than on a power-dominant one", () => {
+    const powerTrack = findPhysicsBiasedTrack("power");
+    const corneringTrack = findPhysicsBiasedTrack("cornering");
+    const buildWithoutItem = vehicleBuild();
+    const buildWithItem = vehicleBuild([
+      testItem({
+        id: "phys-corner-1", name: "Sport Suspension", price: 0, timeModifier: 0,
+        physics: { corneringSpeedDelta: 30 },
+      }),
+    ]);
+
+    const gainOnPower = simulatePlayerLaps(buildWithoutItem, LAP_COUNT, powerTrack)[0].time
+      - simulatePlayerLaps(buildWithItem, LAP_COUNT, powerTrack)[0].time;
+    const gainOnCornering = simulatePlayerLaps(buildWithoutItem, LAP_COUNT, corneringTrack)[0].time
+      - simulatePlayerLaps(buildWithItem, LAP_COUNT, corneringTrack)[0].time;
+
+    expect(gainOnCornering).toBeGreaterThan(gainOnPower);
+  });
+
+  it("an item trading cornering speed for top speed nets differently across tracks with different real segment layouts, not just different aggregate scores", () => {
+    // generateTrack(0, 1) / generateTrack(0, 2): verified equal
+    // trackCharacteristics, genuinely different real segments (021 T005).
+    const trackA = generateTrack(0, 1);
+    const trackB = generateTrack(0, 2);
+    expect(trackA.characteristics).toEqual(trackB.characteristics);
+
+    const tradeBuild = vehicleBuild([
+      testItem({
+        id: "phys-trade-1", name: "Aero Kit", price: 0, timeModifier: 0,
+        physics: { corneringSpeedDelta: 20, topSpeedDelta: -10 },
+      }),
+    ]);
+    const plainBuild = vehicleBuild();
+
+    const deltaOnA = simulatePlayerLaps(tradeBuild, LAP_COUNT, trackA)[0].time
+      - simulatePlayerLaps(plainBuild, LAP_COUNT, trackA)[0].time;
+    const deltaOnB = simulatePlayerLaps(tradeBuild, LAP_COUNT, trackB)[0].time
+      - simulatePlayerLaps(plainBuild, LAP_COUNT, trackB)[0].time;
+
+    expect(deltaOnA).not.toBeCloseTo(deltaOnB, 6);
+  });
+});
+
+// 021-arcade-physics-simulation: full inspectability (T027-T028, US3).
+describe("PlayerLap.physics inspectability (T027-T028, US3, SC-004)", () => {
+  it("reports the build's resolved PhysicalStats and a phase breakdown that sums exactly to the lap's physics-derived time", () => {
+    const track = generateTrack(4, 1);
+    const build = vehicleBuild([
+      testItem({
+        id: "phys-insp-1", name: "Turbo", price: 0, timeModifier: 0,
+        physics: { accelerationDelta: 15 },
+      }),
+    ]);
+    const lap = simulatePlayerLaps(build, LAP_COUNT, track)[0];
+
+    expect(lap.physics).toBeDefined();
+    expect(lap.physics!.stats.acceleration).toBeCloseTo(STOCK_PHYSICAL_STATS.acceleration + 15, 9);
+    const summed = lap.physics!.phases.reduce((sum, phase) => sum + phase.seconds, 0);
+    const expectedPhysicsSeconds = simulateLapPhysics(lap.physics!.stats, track.segments).totalSeconds;
+    expect(summed).toBeCloseTo(expectedPhysicsSeconds, 9);
+  });
+
+  it("still reports a real, non-empty phase breakdown for a build with zero physics-stat items", () => {
+    const track = generateTrack(4, 1);
+    const lap = simulatePlayerLaps(emptyBuild(), LAP_COUNT, track)[0];
+
+    expect(lap.physics).toBeDefined();
+    expect(lap.physics!.stats).toEqual(STOCK_PHYSICAL_STATS);
+    expect(lap.physics!.phases.length).toBeGreaterThan(0);
+  });
+
+  it("omits physics entirely when no track is supplied", () => {
+    const lap = simulatePlayerLaps(emptyBuild())[0];
+    expect(lap.physics).toBeUndefined();
   });
 });

@@ -7,7 +7,7 @@ import {
 import { resolveInstallation } from "./slots";
 import { resolveSynergyEffects } from "./synergy";
 import { applyTierBonus } from "./tiering";
-import { trackFitPercent, type Track } from "./tracks";
+import { simulateLapPhysics, STOCK_PHYSICAL_STATS, type PhysicalStats, type Track } from "./tracks";
 import {
   LAP_COUNT,
   MIN_LAP_TIME,
@@ -17,6 +17,7 @@ import {
   type ContributionEvidence,
   type FiredItem,
   type InstallationResolution,
+  type LapPhaseBreakdown,
   type OfferedItem,
   type SynergyResolution,
 } from "./types";
@@ -25,8 +26,8 @@ export interface PlayerLap {
   time: number;
   firedItems: FiredItem[];
   contributions: ContributionEvidence[];
-  /** 018-track-generation: present only when simulatePlayerLaps was called with a track. */
-  trackFit?: { appliedPercent: number; appliedSeconds: number };
+  /** 021-arcade-physics-simulation: present only when simulatePlayerLaps was called with a track. */
+  physics?: { stats: PhysicalStats; phases: LapPhaseBreakdown[] };
 }
 
 interface LocatedItem {
@@ -91,14 +92,39 @@ function installationBehaviorSource(installation: InstallationResolution): strin
   return installation.appliedInstallationBehavior?.description ?? installation.baseBehavior.description;
 }
 
+/** Every resolved stat stays strictly positive, even under large negative item deltas (021 data-model.md Validation Invariant 3). */
+const MIN_PHYSICAL_STAT = 1;
+
+/**
+ * A build's resolved PhysicalStats: the stock baseline plus every active
+ * held item's own ItemPhysicsContribution, summed directly — never a ratio
+ * or count of items (021 research.md Decision 6, contract §1). Storage
+ * items excluded unless active, matching every other per-lap fold's
+ * existing active-item filtering convention.
+ */
+function resolvePhysicalStats(activeItems: readonly OfferedItem[]): PhysicalStats {
+  const totals = activeItems.reduce(
+    (sum, item) => ({
+      acceleration: sum.acceleration + (item.physics?.accelerationDelta ?? 0),
+      topSpeed: sum.topSpeed + (item.physics?.topSpeedDelta ?? 0),
+      brakingPower: sum.brakingPower + (item.physics?.brakingPowerDelta ?? 0),
+      corneringSpeed: sum.corneringSpeed + (item.physics?.corneringSpeedDelta ?? 0),
+    }),
+    { acceleration: 0, topSpeed: 0, brakingPower: 0, corneringSpeed: 0 },
+  );
+
+  return {
+    acceleration: Math.max(MIN_PHYSICAL_STAT, STOCK_PHYSICAL_STATS.acceleration + totals.acceleration),
+    topSpeed: Math.max(MIN_PHYSICAL_STAT, STOCK_PHYSICAL_STATS.topSpeed + totals.topSpeed),
+    brakingPower: Math.max(MIN_PHYSICAL_STAT, STOCK_PHYSICAL_STATS.brakingPower + totals.brakingPower),
+    corneringSpeed: Math.max(MIN_PHYSICAL_STAT, STOCK_PHYSICAL_STATS.corneringSpeed + totals.corneringSpeed),
+  };
+}
+
 export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: Track): PlayerLap[] {
   // Computed once per build, before the per-lap loop — composition doesn't
   // vary lap to lap (014-item-synergy-tags research.md Decision 3).
   const synergyResolution = resolveSynergyEffects(build);
-  // 018-track-generation: a build's own composition doesn't vary lap to lap
-  // either, so its track-fit percentage is computed once, not re-derived
-  // per lap (research.md Decision 5).
-  const fitPercent = track ? trackFitPercent(build, track.characteristics) : 0;
   const locatedItems: LocatedItem[] = [
     ...build.slots.flatMap((slot, index) => {
       if (!slot.item) return [];
@@ -126,6 +152,11 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: T
   const activeLocatedItems = locatedItems.filter(({ active }) => active);
   const activeItems = activeLocatedItems.map(({ item }) => item);
   const allHeldItems = locatedItems.map(({ item }) => item);
+  // 021-arcade-physics-simulation: a build's own physical stats don't vary
+  // lap to lap either — resolved once (research.md Decision 6), from the
+  // same active-item set every other per-lap fold already uses.
+  const physicsStats = resolvePhysicalStats(activeItems);
+  const physicsResult = track ? simulateLapPhysics(physicsStats, track.segments) : undefined;
   let stackingState: StackingState = {};
 
   return Array.from({ length: lapCount }, (_, index) => {
@@ -246,16 +277,17 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: T
       evidence.resultingLapTime = resultingLapTime;
     });
 
-    // 018-track-generation: track-fit is a whole-lap scale applied after
-    // every existing fold (tier, installation, synergy, buffs, clamp) — a
-    // build/car-level effect, not attributable to any single held item
-    // (research.md Decision 5).
-    const finalTime = track ? resultingLapTime * (1 - fitPercent / 100) : resultingLapTime;
-    const trackFit = track
-      ? { appliedPercent: fitPercent, appliedSeconds: finalTime - resultingLapTime }
+    // 021-arcade-physics-simulation: the real physics simulation is a
+    // whole-lap addition applied after every existing fold (tier,
+    // installation, synergy, buffs, clamp) — a build/car-level effect, not
+    // attributable to any single held item (research.md Decision 6).
+    // Supersedes 018's buildTrackLean/trackFit ratio-based fold entirely.
+    const finalTime = physicsResult ? resultingLapTime + physicsResult.totalSeconds : resultingLapTime;
+    const physics = physicsResult
+      ? { stats: physicsStats, phases: physicsResult.phases }
       : undefined;
 
-    return { time: finalTime, firedItems, contributions, trackFit };
+    return { time: finalTime, firedItems, contributions, physics };
   });
 }
 
