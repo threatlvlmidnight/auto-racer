@@ -62,6 +62,20 @@ they're looking at from the items alone, not just the vehicle silhouette.
 Today's 20-item `ITEM_POOL` is retired, not extended — this is a fresh
 pool per the feature's own scope, not additive.
 
+`021-arcade-physics-simulation` landed after this spec's original draft
+and is the mechanism that makes character identity legible: every item's
+core performance effect (the part that makes a car meaningfully faster or
+slower, not a buff-amplifier) MUST be authored through `ItemDefinition`'s
+existing optional `physics` field (`ItemPhysicsContribution` — deltas to
+`acceleration`/`topSpeed`/`brakingPower`/`corneringSpeed`), not through
+the legacy flat `timeModifier` alone. This is the concrete, testable form
+of this session's own governing principle — "all stats that affect
+performance flow from the build" — and it is what lets a character's pool
+read as thematically distinct in a way a player can *feel* on track, not
+just read in a tooltip: a pool that leans on `brakingPower`/
+`corneringSpeed` drives differently, and finishes differently on
+different track shapes, than one that leans on `acceleration`/`topSpeed`.
+
 **Why this priority**: This is the actual payoff the whole feature exists
 for — real character identity through items — and is inseparable from US1
 (a gated pool with generic-feeling content defeats the purpose).
@@ -84,6 +98,12 @@ read side by side.
    just `id`/`name` strings) — distinct `synergyTags`, distinct balance of
    direct vs. buff items, distinct flavor consistent with that entrant's
    authored `approach`/`strategyDirections`.
+3. **Given** any entrant's exclusive pool, **When** every item's `physics`
+   contribution is summed, **Then** the pool's net lean across the four
+   `PhysicalStats` is distinct from every other entrant's pool, and that
+   lean is consistent with the entrant's authored `approach`/
+   `strategyDirections` (e.g. a defensively-flavored entrant's pool nets
+   toward `brakingPower`/`corneringSpeed` rather than raw `topSpeed`).
 
 ---
 
@@ -195,7 +215,9 @@ vehicle-origin pool.
   without breaking any existing consumer of `ItemDefinition` (FR-008 of
   `018`/`019` established this "no new required field" convention; this
   feature follows it for the same reason — minimize blast radius on
-  existing simulation code).
+  existing simulation code). This includes reusing `021`'s already-optional
+  `physics` field for FR-009 below — that field exists and is optional
+  today, so authoring it on 60 new items introduces no new required field.
 - **FR-003**: A player's standard reward-draft and Parts Supplier offers
   (including restocks) MUST be drawn only from the Neutral pool plus their
   own entrant's exclusive pool — never another entrant's exclusive pool —
@@ -218,6 +240,20 @@ vehicle-origin pool.
 - **FR-008**: Draft/selection determinism MUST be preserved — identical
   `(run seed, stage)` inputs MUST always produce identical offers, exactly
   as today's `drawItem`/`generateEncounterChoices` already guarantee.
+- **FR-009**: Every authored item whose purpose is a direct performance
+  effect (not a buff-amplifier, per the existing `buff`/`synergyEffects`
+  mechanisms) MUST express that effect through `ItemDefinition.physics`
+  (`ItemPhysicsContribution` deltas to `acceleration`/`topSpeed`/
+  `brakingPower`/`corneringSpeed`) rather than through `timeModifier`
+  alone. `timeModifier` on such items MAY remain `0`; it is not removed
+  (FR-002), only no longer the primary mechanism for new content.
+- **FR-010**: Each entrant's 15-item exclusive pool MUST have a net
+  `physics` lean — summing every item's `ItemPhysicsContribution` in the
+  pool MUST NOT be stat-neutral, and that net lean MUST be distinct across
+  all 4 entrants (no two entrants' pools MUST net-favor the exact same
+  stat or stat pair) — the mechanism that makes US2's "reads as
+  thematically distinct" claim concretely testable rather than
+  subjective.
 
 ### Key Entities
 
@@ -232,6 +268,12 @@ vehicle-origin pool.
 - **Cross-Pollination Encounter**: a new in-run encounter whose offer set
   is drawn from one other entrant's exclusive pool for that single
   encounter only — does not persist or widen the player's standard pool.
+- **Physical Stat Contribution**: an item's `physics` field
+  (`ItemPhysicsContribution`, authored by `021`) — deltas to
+  `acceleration`/`topSpeed`/`brakingPower`/`corneringSpeed`. The primary
+  mechanism through which a new item's performance identity is expressed
+  (FR-009); a pool's summed contributions define that entrant's stat lean
+  (FR-010).
 
 ## Success Criteria *(mandatory)*
 
@@ -250,6 +292,10 @@ vehicle-origin pool.
 - **SC-004**: A cross-pollination encounter, when triggered, offers items
   from exactly one other entrant's pool, verified deterministic across
   repeated resolution with the same seed.
+- **SC-005**: Summing each entrant's 15-item exclusive pool's `physics`
+  contributions produces 4 distinct, non-neutral net stat leans (per
+  FR-010) — computable directly from the authored catalog, no simulation
+  required.
 
 ## Assumptions
 
@@ -258,7 +304,9 @@ vehicle-origin pool.
   origin labels already authored in `entrants.ts`) are authored during
   implementation, not enumerated in this spec — mirrors how `018` left
   exact scoring constants as an implementer's choice, tasked out in
-  `tasks.md` rather than fixed here.
+  `tasks.md` rather than fixed here. This now extends to which specific
+  stat(s) each entrant's pool leans toward (FR-010) — the spec requires a
+  distinct, non-neutral lean per entrant, not which stat it is.
 - The 4 entrant-to-origin mapping is already fixed and 1:1 (Mercer/
   Coachworks/Highwheel, Soto/Velodrome/Needle, Rook/Fieldworks/Lark, Voss/
   Backroads/Hush) — this feature reuses that existing mapping, it does not
@@ -267,5 +315,7 @@ vehicle-origin pool.
   placement within the 12-stage schedule is a balance-pass decision for
   `plan.md`, not fixed here — this spec only requires that it exists and
   behaves per FR-004.
-- `018-track-generation`'s `trackFit` and `019-async-ghost-pool`'s
+- `018-track-generation`'s track generation and `019-async-ghost-pool`'s
   `GHOST_POOL` require no changes — neither reads item pool membership.
+  (`018`'s original `trackFit` mechanic no longer exists — `021` replaced
+  it outright with the real physics simulation this spec now builds on.)
