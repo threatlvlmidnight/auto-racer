@@ -1,5 +1,67 @@
 # Handoff
 
+## Latest session — feature 024 complete, feature 026 visual pass in progress
+
+**Updated**: 2026-08-12 after the first feature-026 implementation and visual
+review loop.
+
+### Current state
+
+- Feature 024's item-stat presentation work is implemented and integrated.
+- Feature 025 is documented but has not been implemented.
+- Feature 026 now has production-intent garage, environment, entrant, vehicle,
+  and representative item-family artwork plus its first runtime integration.
+- The runtime renders a true 1600×900 backing canvas while preserving the
+  established 800×450 scene coordinate system with a 2× camera. All Phaser text
+  textures render at matching 2× resolution.
+- Entrant selection, Title, Reward Draft, Parts Supplier, garage preparation,
+  race, result, and Test Day surfaces have received initial visual-system work.
+- Item cards no longer show procedural icons. Compact cards cap visible effect
+  lines and direct the player to a persistent details panel for overflow.
+- Acquisition screens open with no automatic selection. Clicking/tapping an
+  item opens details; selecting it again or pressing Escape closes details.
+- Shared UI uses deep racing green, German silver, porcelain, and Italian red.
+  Brass is reserved primarily for credits/material meaning rather than generic
+  frames and actions. The font stack is now a narrow mechanical sans serif.
+- The temporary event-facing title treatment is **The Motor Age** / **The
+  inaugural 1901 championship** / **Build the machine. Make history.** The final
+  commercial game title remains open.
+- Latest verification: `npm run build`, `npm test`, and `npm run lint` pass;
+  **762/762 tests passing**.
+
+### Start here next session
+
+1. **Post-race track summary**: Results need to report track composition—not
+   only the track name. At minimum expose corner count and straight count, with
+   other useful authored/derived track statistics as appropriate, so players
+   can understand why acceleration, top speed, braking, or cornering builds did
+   or did not perform. Determine the authoritative source in track/simulation
+   data and carry immutable evidence into results rather than inferring from UI.
+2. **Visual running order versus standings**: Investigate an apparent mismatch
+   between the order cars appear around the rendered track and the calculated
+   standings. Compare `nCarFrameStateAt`, track progress interpolation,
+   lap/progress ordering, finish handling, marker placement, and standings-row
+   sorting. Diagnose and test the cause before changing contest math.
+3. Continue manual feature-026 visual review after those investigations. The
+   asset inventory and known pre-1.0 debt are in
+   `specs/026-visual-ui-upgrade/asset-manifest.md`.
+
+### Important visual implementation files
+
+- `src/scenes/layout.ts` — 1600×900 backing canvas, 2× camera, and automatic
+  high-density Phaser text textures.
+- `src/scenes/demoTheme.ts` — current shared colors, fonts, panels, and buttons.
+- `src/scenes/itemVisuals.ts` / `itemPresentation.ts` — compact card and full
+  inspector hierarchy.
+- `src/scenes/PrepareScene.ts` — Reward Draft/Supplier selection, details,
+  placement, and acquisition layout.
+- `src/scenes/ContestScene.ts` — race markers, track progress, and standings;
+  central to the next-session order mismatch investigation.
+- `src/scenes/ResultScene.ts` / `resultFormatting.ts` — next home for the track
+  composition summary.
+
+---
+
 **Last updated**: 2026-08-12, feature `020-character-item-pools` complete.
 
 **State**: `main` is in sync with `origin/main` through `e08a158`

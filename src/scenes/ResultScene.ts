@@ -8,7 +8,8 @@ import {
   standingsRow,
   timesLabel,
 } from "./resultFormatting";
-import { createItemCard, enableItemTooltip } from "./itemVisuals";
+import { createItemCard, createItemInspector } from "./itemVisuals";
+import { resolvedItemEvidence, type ItemPresentationContext } from "./itemPresentation";
 import { continueRunFromResult } from "./runPresentation";
 import {
   addDemoBackdrop,
@@ -17,6 +18,7 @@ import {
   DISPLAY_FONT,
   UI_FONT,
 } from "./demoTheme";
+import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
 
 const STANDINGS_ROW_HEIGHT = 13;
 
@@ -32,12 +34,15 @@ export class ResultScene extends Phaser.Scene {
   private result!: NCarContestResult;
   private run!: Run;
   private encounterId!: string;
+  private selectedItem?: OfferedItem;
+  private itemInspector?: Phaser.GameObjects.Container;
 
   constructor() {
     super("ResultScene");
   }
 
   create(data: { result?: NCarContestResult; run?: Run; encounterId?: string }): void {
+    configureHiDpiScene(this);
     if (!data.result || !data.run || !data.encounterId) {
       this.scene.start("RunScene", { unavailable: true });
       return;
@@ -45,8 +50,8 @@ export class ResultScene extends Phaser.Scene {
     this.result = data.result;
     this.run = data.run;
     this.encounterId = data.encounterId;
-    const { width } = this.scale;
-    addDemoBackdrop(this, "race-day", 0.73);
+    const width = LOGICAL_WIDTH;
+    addDemoBackdrop(this, "scene-finish-line", 0.6);
     addRunStamp(this, this.run);
 
     this.add
@@ -81,7 +86,7 @@ export class ResultScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.renderStandings(width, 106);
-    this.renderItemRow(width * 0.27, 250, "INSTALLED", this.result.board, "#ffdd77");
+    this.renderItemRow(width * 0.27, 250, "INSTALLED", this.result.board, "#d7e4e7");
     this.renderItemRow(width * 0.73, 250, "WORKSHOP STORAGE", this.result.storage, "#8fd8ff");
   }
 
@@ -130,7 +135,27 @@ export class ResultScene extends Phaser.Scene {
         iconSize: 44,
         layout: "column",
       }).setInteractive({ useHandCursor: true });
-      enableItemTooltip(this, card, item);
+      card.on("pointerdown", () => {
+        this.selectedItem = item;
+        this.renderItemInspector();
+      });
     });
+  }
+
+  private renderItemInspector(): void {
+    this.itemInspector?.destroy();
+    const player = this.result.cars.find((car) => car.role === "player");
+    const lap = player?.laps[player.laps.length - 1];
+    const physical = lap?.physics?.itemContributions?.find((entry) => entry.sourceItemId === this.selectedItem?.id);
+    const context: ItemPresentationContext = {
+      surface: "result",
+      tier: physical?.tier ?? 1,
+      lapEvidence: this.selectedItem && physical
+        ? resolvedItemEvidence(this.selectedItem, { kind: "physical", evidence: physical }) : undefined,
+    };
+    if (!this.selectedItem) return;
+    this.itemInspector = createItemInspector(this, LOGICAL_WIDTH / 2, 350, this.selectedItem, context, {
+      width: LOGICAL_WIDTH - 48, height: 84,
+    }).setDepth(80);
   }
 }

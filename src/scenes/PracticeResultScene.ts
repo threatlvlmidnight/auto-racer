@@ -19,6 +19,10 @@ import {
   type PracticeFocusHandle,
 } from "./demoTheme";
 import { practiceComparisonModel, practiceEvidenceModel, practiceResultControlPlan } from "./practicePresentation";
+import { createItemCard, createItemInspector } from "./itemVisuals";
+import { resolvedItemEvidence, unresolvedPhysicalEvidence } from "./itemPresentation";
+import type { OfferedItem } from "../simulation/types";
+import { configureHiDpiScene, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "./layout";
 
 export interface PracticeResultSceneData {
   run?: Run;
@@ -29,12 +33,14 @@ export class PracticeResultScene extends Phaser.Scene {
   private run?: Run;
   private session?: PracticeSession;
   private focusRing?: PracticeFocusHandle;
+  private itemInspector?: Phaser.GameObjects.Container;
 
   constructor() {
     super("PracticeResultScene");
   }
 
   create(data: PracticeResultSceneData = {}): void {
+    configureHiDpiScene(this);
     if (!data.run || !data.session?.result) {
       this.scene.start("TestDayScene");
       return;
@@ -51,18 +57,19 @@ export class PracticeResultScene extends Phaser.Scene {
   private render(): void {
     const result = this.session!.result!;
     const model = practiceEvidenceModel(result.contest, result.reconciliation);
-    const { width, height } = this.scale;
+    const width = LOGICAL_WIDTH;
+    const height = LOGICAL_HEIGHT;
     addDemoBackdrop(this, "race-day", 0.8);
     this.add.text(width / 2, 38, "TEST DAY · UNSCORED", {
       fontFamily: DISPLAY_FONT,
       fontSize: "28px",
       fontStyle: "bold",
-      color: "#f3e5bd",
+      color: "#f1eee5",
     }).setOrigin(0.5);
     this.add.text(width / 2, 82, model.outcome.toUpperCase(), {
       fontFamily: DISPLAY_FONT,
       fontSize: "30px",
-      color: "#ffd166",
+      color: "#d9483f",
     }).setOrigin(0.5);
     this.add.text(width / 2, 130,
       `Player ${model.playerTotal.label} · Rival ${model.rivalTotal.label} · Gap ${model.gap.label}`, {
@@ -87,6 +94,19 @@ export class PracticeResultScene extends Phaser.Scene {
         fontSize: "14px",
         color: model.reconciliation === "RECONCILED" ? "#9fd3b2" : "#e6c1bd",
       }).setOrigin(0.5);
+    const held = [
+      ...this.session!.snapshot.build.slots.flatMap((slot) => slot.item ? [{ item: slot.item, tier: slot.tier }] : []),
+      ...this.session!.snapshot.build.storage.flatMap((position) => position.item ? [{ item: position.item, tier: position.tier }] : []),
+    ];
+    const spacing = Math.min(106, (width - 40) / Math.max(1, held.length));
+    const startX = width / 2 - spacing * (held.length - 1) / 2;
+    held.forEach(({ item, tier }, index) => {
+      const card = createItemCard(this, startX + index * spacing, height - 205, item, {
+        width: Math.min(100, spacing - 4), height: 54, iconSize: 16,
+        context: { surface: "test-day-result", tier },
+      }).setInteractive({ useHandCursor: true });
+      card.on("pointerdown", () => this.showItem(item, tier));
+    });
     this.renderComparison(width, height);
     const plan = practiceResultControlPlan();
     const returnControl = plan.find((entry) => entry.id === "return")!;
@@ -94,6 +114,18 @@ export class PracticeResultScene extends Phaser.Scene {
     const repeatButton = createDemoButton(this, width / 2 - 120, height - 62, repeatControl.label, () => this.repeat(), true, { fontSize: PRACTICE_CONTROL_FONT_SIZE });
     const returnButton = createDemoButton(this, width / 2 + 120, height - 62, returnControl.label, () => this.returnToPreparation(), true, { fontSize: PRACTICE_CONTROL_FONT_SIZE });
     this.focusRing = applyPracticeFocusRing(this, [repeatButton, returnButton]);
+  }
+
+  private showItem(item: OfferedItem, tier: 1 | 2 | 3): void {
+    this.itemInspector?.destroy();
+    const lap = this.session!.result!.contest.lapCount;
+    const legacy = this.session!.result!.contest.contributions?.find((entry) => entry.sourceItemId === item.id && entry.lap === lap);
+    const lapEvidence = item.physics || item.conditionalPhysics?.length
+      ? unresolvedPhysicalEvidence(item, lap, tier)
+      : legacy ? resolvedItemEvidence(item, { kind: "legacy-time", evidence: legacy }) : undefined;
+    this.itemInspector = createItemInspector(this, LOGICAL_WIDTH / 2, 235, item, {
+      surface: "test-day-result", tier, lapEvidence,
+    }, { width: LOGICAL_WIDTH - 48, height: 116 }).setDepth(80);
   }
 
   private renderComparison(width: number, height: number): void {

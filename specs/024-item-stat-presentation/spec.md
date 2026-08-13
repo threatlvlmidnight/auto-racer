@@ -13,6 +13,9 @@
 ### Session 2026-08-12
 
 - Q: How should preview, inspection, and commitment differ across desktop and eventual mobile input? → A: **Hover previews. Selection inspects. Placement commits.** Hover is an optional desktop convenience; clicking, tapping, or keyboard-selecting an item persistently inspects it; the item is committed only when the player places it in a slot or storage. Mouse and touch both support first-class drag-and-drop, while tap/click/keyboard selection followed by choosing a destination remains an equally capable alternative. Selecting an item never commits it by itself.
+- Q: May this presentation feature extend simulation output when existing evidence cannot reconcile an item's physical contribution? → A: **Yes, evidence only.** It may add deterministic, read-only per-item physical-contribution evidence to existing lap/result output, but MUST NOT change any item effect, resolved physical stat, lap time, contest outcome, or placement rule. Presentation consumes that evidence and never reconstructs it by rerunning physics.
+- Q: What should Test Day show while its legacy contest path does not evaluate track-aware physics? → A: Show the same authored item identity/rules and every authoritative legacy contribution fact Test Day does record, while explicitly labeling track-aware physical effects as **not evaluated in this Test Day**. Do not substitute scored-race evidence, stock values, or a hypothetical result. Extending Test Day to track-aware simulation is a separate feature.
+- Q: Does feature 024 own actual high-resolution and portrait scene integration? → A: No. Feature 024 must fit the current 800×450 logical runtime canvas, expose a deterministic layout model for the established desktop/portrait target sizes, and preserve touch-safe interaction semantics. Feature 026 owns changing the game-wide canvas and integrating true high-resolution/portrait scene reflow.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -66,7 +69,8 @@ During a race and on result or Test Day screens, the player can inspect the same
 2. **Given** a conditional effect, **When** an inspected lap contains matching and nonmatching track contexts, **Then** the result distinguishes where the condition activated from where it did not.
 3. **Given** a stacking stat-targeted Buff, **When** two different laps are inspected, **Then** the display shows the correct lap-specific accumulated amplification and resulting targeted stat.
 4. **Given** an item contributed nothing, **When** it is inspected after the race, **Then** it remains present and reports zero contribution or a specific unmet condition, cooldown, inactive-storage, or installation reason.
-5. **Given** multiple items affect the same stat, **When** the result is inspected, **Then** each source remains individually attributable and the effective stat can be reconciled from the displayed evidence.
+5. **Given** multiple items affect the same stat, **When** the result is inspected, **Then** each source remains individually attributable and the effective stat can be reconciled from authoritative per-item physical-contribution evidence recorded during resolution.
+6. **Given** Test Day did not evaluate track-aware physics, **When** a physical-stat item is inspected in Test Day, **Then** its authored rule remains visible and its resolved physical contribution is labeled not evaluated rather than zero or estimated.
 
 ---
 
@@ -84,7 +88,7 @@ Players using mouse, touch, or keyboard can select, inspect, dismiss, and move b
 2. **Given** touch input, **When** the player taps an item, **Then** its full details remain open until the player selects another item or explicitly dismisses them.
 3. **Given** touch input, **When** the player drags an item to a valid destination, **Then** the item follows the gesture, valid destinations are identifiable, and releasing it places and commits the item under the existing placement rules.
 4. **Given** touch input where dragging is difficult or undesirable, **When** the player selects an item and then taps a valid destination, **Then** the resulting placement is identical to drag-and-drop.
-5. **Given** a narrow portrait display, **When** a complex item is inspected, **Then** all consequential effects remain readable through intentional reflow or scrolling rather than clipped text or reduced illegible type.
+5. **Given** the current 800×450 runtime canvas or any desktop/portrait target passed to the feature's layout model, **When** a complex item is inspected, **Then** all consequential effects remain reachable through intentional reflow, paging, or scrolling rather than clipped text or reduced illegible type; feature 026 owns binding non-current target sizes to the game-wide runtime canvas.
 6. **Given** beneficial, harmful, active, inactive, selected, conditional, or unsatisfied states, **When** they are displayed, **Then** text, iconography, or structure distinguishes them in addition to color.
 
 ### Edge Cases
@@ -118,10 +122,10 @@ Players using mouse, touch, or keyboard can select, inspect, dismiss, and move b
 - **FR-011**: Replacement or eviction previews MUST show incoming and outgoing items through the same comparison vocabulary and value formatting.
 - **FR-012**: The system MUST distinguish synergy tags an item carries from Synergy effects it performs; neither may be labeled as the other.
 - **FR-013**: Tiered items MUST show their effective tier and effective tier-adjusted values while retaining access to the underlying authored rule; tier-one values MUST NOT be mislabeled as current effective values.
-- **FR-014**: Race, result, and Test Day inspection MUST preserve the same item identity and authored descriptions used during preparation and add only context-specific resolved evidence.
+- **FR-014**: Race, result, and Test Day inspection MUST preserve the same item identity and authored descriptions used during preparation and add only context-specific authoritative evidence. When Test Day does not evaluate track-aware physics, it MUST label that limitation instead of presenting a resolved physical contribution.
 - **FR-015**: Result inspection MUST retain every held item, including zero-contribution items, and state the contribution or a specific reason the item did not contribute.
-- **FR-016**: Lap-specific inspection MUST accurately show conditional activation, cooldown state, stacking state, targeted amplification, installation state, storage activity, and effective physical stats when those facts affect the inspected lap.
-- **FR-017**: When multiple items affect the same outcome value, the presentation MUST keep each source individually attributable and expose enough evidence to reconcile the resolved value.
+- **FR-016**: Track-aware lap inspection MUST accurately show conditional activation, cooldown state, stacking state, targeted amplification, installation state, storage activity, and effective physical stats when those facts affect the inspected lap. A non-track-aware Test Day lap MUST distinguish unavailable physical evidence from a real zero contribution.
+- **FR-017**: When multiple items affect the same outcome value, resolution MUST record each source's effective physical contribution after tier, installation, Synergy, Buff, and condition handling, and presentation MUST expose enough of that authoritative evidence to reconcile the resolved value without rerunning simulation.
 - **FR-018**: Required item information and inspection actions MUST be available by mouse without hover, touch, and keyboard with visible focus.
 - **FR-019**: Hover MAY provide a convenience preview, but MUST NOT be the sole route to any required item information.
 - **FR-019a**: Selecting an item MUST persistently inspect it without committing any acquisition or build change; commitment MUST occur only when the player places the item in a slot or storage through an established placement interaction.
@@ -129,10 +133,10 @@ Players using mouse, touch, or keyboard can select, inspect, dismiss, and move b
 - **FR-019c**: Touch, pointer, and keyboard users MUST also be able to place an item by selecting it and then choosing a valid destination; this path MUST produce the same authoritative result as drag-and-drop.
 - **FR-019d**: A cancelled drag, an invalid drop, or a gesture that does not cross the drag threshold MUST NOT change the build or commit an acquisition.
 - **FR-020**: Selected, focused, beneficial, harmful, active, inactive, conditional, unsatisfied, Fitted, Flexible, Improvised, and storage-active states MUST use text, iconography, shape, or layout in addition to color.
-- **FR-021**: Item presentations MUST reflow at all supported viewports without clipping consequential information, obscuring interaction targets, or reducing required text below the project's established legibility thresholds.
+- **FR-021**: Item presentations MUST fit the current 800×450 logical runtime canvas without clipping consequential information and MUST provide a pure layout model for the established 1920×1080, 1366×768, 1024×768, and 390×844 targets. Compact text MUST be at least 10 logical pixels, inspector/supporting text at least 11 logical pixels, primary action labels at least 14 logical pixels, and pointer/touch destinations at least 40×32 logical pixels on the current canvas. Feature 026 owns binding the non-current target models to a resized high-resolution runtime canvas.
 - **FR-022**: Item information MUST remain understandable when motion is reduced or absent; animation may reinforce but MUST NOT carry unique meaning.
-- **FR-023**: The feature MUST NOT alter item availability, authored effects, simulation outcomes, economy values, placement legality, tier rules, or contest resolution.
-- **FR-024**: The item-information hierarchy MUST cover Reward Draft, Parts Supplier, garage slots, storage, placement and replacement previews, race playback, scored results, Test Day briefing, Test Day playback, and Test Day results.
+- **FR-023**: The feature MUST NOT alter item availability, authored effects, simulation outcomes, economy values, placement legality, tier rules, or contest resolution. It MAY add deterministic evidence fields that report values already used by resolution, provided regression tests prove all pre-existing outcomes remain identical.
+- **FR-024**: The item-information hierarchy MUST cover Reward Draft, Parts Supplier, garage slots, storage, placement and replacement previews, race playback, scored results, Test Day briefing, Test Day playback, and Test Day results; Test Day surfaces MUST explicitly distinguish recorded legacy evidence from track-aware physical evidence that path did not evaluate.
 
 ### Key Entities
 
@@ -161,7 +165,7 @@ Players using mouse, touch, or keyboard can select, inspect, dismiss, and move b
 
 - Feature 020's 70-item catalog and feature 023's stat-targeted amplification vocabulary are the authoritative content and behavior inputs; this feature presents them but does not redesign or rebalance them.
 - The existing four physical stats remain acceleration, top speed, braking power, and cornering speed for this feature.
-- The current supported viewport and minimum-text requirements established by the garage and Test Day features remain binding.
+- The current runtime remains an 800×450 logical canvas. Feature 024 defines and tests forward-compatible target layout models, while feature 026 owns changing the game-wide canvas/resolution and integrating actual portrait scene reflow.
 - Compact cards use progressive disclosure: they show the facts needed for comparison, while selection opens the complete inspector without navigation away from the current task.
 - Existing placement semantics remain authoritative: mouse and touch users may drag and drop, while touch, pointer, and keyboard users may also select an item and then choose a destination. The inspector supports those flows but does not introduce a separate commit action.
 - Item-specific final artwork is not required for this slice. A consistent icon and stat language may represent items whose bespoke art is not yet available.
@@ -170,7 +174,7 @@ Players using mouse, touch, or keyboard can select, inspect, dismiss, and move b
 
 ## Dependencies and Scope Boundaries
 
-- Depends on the finalized item definitions from `020-character-item-pools` and the resolved stat, condition, synergy, tier, installation, and evidence contracts from features 010, 014, 016, 021, 022, and 023.
+- Depends on the finalized item definitions from `020-character-item-pools` and the resolved stat, condition, synergy, tier, installation, and evidence contracts from features 010, 014, 016, 021, 022, and 023; feature 024 may extend the evidence shape only where those contracts do not yet retain an already-resolved per-item physical contribution.
 - Extends feature 008's shared item-description and race-tooltip goals; it does not remove those behaviors.
-- Does not add new item mechanics, new catalog entries, new art-production requirements, player-configurable display preferences, localization infrastructure, or simulation/economy changes.
+- Does not add new item mechanics, new catalog entries, new art-production requirements, player-configurable display preferences, localization infrastructure, track-aware Test Day resolution, or simulation/economy outcome changes.
 - Does not implement the full `visual-overhaul.md` program; it delivers the item-information portion as one independently playable and testable feature.

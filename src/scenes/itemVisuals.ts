@@ -1,7 +1,13 @@
 import Phaser from "phaser";
 import type { OfferedItem } from "../simulation/types";
+import {
+  compactItemModel,
+  itemInspectorModel,
+  type ItemInspectorModel,
+  type ItemPresentationContext,
+  type PlacementComparisonModel,
+} from "./itemPresentation";
 import { itemVisualDescriptor } from "./itemVisualDescriptor";
-import { itemDetailsLabel } from "./resultFormatting";
 import { DEMO_COLORS, UI_FONT } from "./demoTheme";
 
 export function createItemIcon(
@@ -56,7 +62,7 @@ export function createItemIcon(
       fontSize: "10px",
       fontFamily: UI_FONT,
       color: "#172426",
-      backgroundColor: "#eadcb5",
+      backgroundColor: "#d7e4e7",
       padding: { x: 3, y: 1 },
     })
     .setOrigin(0.5);
@@ -84,69 +90,152 @@ export function createItemCard(
     height: number;
     iconSize?: number;
     layout?: "row" | "column";
+    context?: ItemPresentationContext;
+    selected?: boolean;
+    focused?: boolean;
+    emphasis?: "compact" | "offer";
   },
 ): Phaser.GameObjects.Container {
-  const iconSize = options.iconSize ?? 46;
-  const layout = options.layout ?? "row";
-  const iconX = layout === "row" ? -options.width / 2 + iconSize / 2 : 0;
-  const iconY = layout === "column" ? -12 : 0;
-  const icon = createItemIcon(scene, iconX, iconY, item, iconSize);
+  const model = compactItemModel(item, options.context ?? { surface: "garage-slot", tier: 1 });
+  const offerEmphasis = options.emphasis === "offer";
+  const border = scene.add.rectangle(0, 0, options.width, options.height, 0x172426, 0.94)
+    .setStrokeStyle(options.selected || options.focused ? 3 : 1,
+      options.focused ? 0xd7e4e7 : options.selected ? DEMO_COLORS.italianRedBright : DEMO_COLORS.steel);
+  const nameX = -options.width / 2 + 8;
+  const nameWidth = options.width - 16;
   const name = scene.add
     .text(
-      layout === "row" ? iconX + iconSize / 2 + 8 : 0,
-      layout === "row" ? 0 : iconSize / 2 + 2,
-      item.name,
+      nameX,
+      -options.height / 2 + 4,
+      `${model.name}${model.tierLabel ? `  ${model.tierLabel}` : ""}`,
       {
-        fontSize: layout === "row" ? "11px" : "10px",
+        fontSize: offerEmphasis ? "12px" : "10px",
         fontFamily: UI_FONT,
         fontStyle: "bold",
-        color: "#f3e5bd",
-        align: layout === "row" ? "left" : "center",
-        wordWrap: {
-          width: layout === "row" ? options.width - iconSize - 12 : options.width,
-        },
+        color: "#f1eee5",
+        align: "left",
+        wordWrap: { width: nameWidth },
       },
     )
-    .setOrigin(layout === "row" ? 0 : 0.5, 0.5);
+    .setOrigin(0, 0);
 
-  return scene.add.container(x, y, [icon, name]).setSize(options.width, options.height);
+  const metadata = scene.add.text(-options.width / 2 + 8, -options.height / 2 + (offerEmphasis ? 22 : 18),
+    `${model.categoryLabel} · ${model.originLabel}${model.priceLabel ? ` · ${model.priceLabel}` : ""}`, {
+      fontSize: offerEmphasis ? "10px" : "8px", fontFamily: UI_FONT, color: "#b8c0c2",
+    });
+  const allEffectLines = model.effectLines.map((line) => {
+    const marker = line.direction === "gain" ? "▲" : line.direction === "loss" ? "▼" : "◆";
+    return `${marker} ${line.statLabel} ${line.valueLabel}${line.conditionLabel ? ` · ${line.conditionLabel}` : ""}`;
+  });
+  const visibleLineLimit = 2;
+  const hiddenLineCount = Math.max(0, allEffectLines.length - visibleLineLimit);
+  const effectText = allEffectLines.slice(0, visibleLineLimit).join("\n");
+  const effects = scene.add.text(-options.width / 2 + 8, -options.height / 2 + (offerEmphasis ? 38 : 30), effectText, {
+    fontSize: offerEmphasis ? "11px" : "9px",
+    fontFamily: UI_FONT,
+    color: "#f1eee5",
+    lineSpacing: 1,
+    wordWrap: { width: options.width - 16 },
+    maxLines: visibleLineLimit,
+  });
+
+  const children: Phaser.GameObjects.GameObject[] = [border, name, metadata, effects];
+  if (hiddenLineCount > 0) {
+    children.push(scene.add.text(options.width / 2 - 8, options.height / 2 - 8,
+      `+${hiddenLineCount} MORE · SELECT FOR DETAILS`, {
+        fontSize: offerEmphasis ? "8px" : "7px",
+        fontFamily: UI_FONT,
+        fontStyle: "bold",
+        color: "#b8c0c2",
+        backgroundColor: "#101817",
+        padding: { x: 3, y: 1 },
+      }).setOrigin(1, 1));
+  }
+  const card = scene.add.container(x, y, children).setSize(options.width, options.height);
+  card.setData("accessibilityLabel", model.accessibilityLabel);
+  card.setData("itemModel", model);
+  return card;
 }
 
-export function enableItemTooltip(
+export function createItemInspector(
   scene: Phaser.Scene,
-  target: Phaser.GameObjects.GameObject & Phaser.GameObjects.Components.Transform,
+  x: number,
+  y: number,
   item: OfferedItem,
-  textOverride?: string,
-): void {
-  let tooltip: Phaser.GameObjects.Text | undefined;
+  context: ItemPresentationContext,
+  options: { width: number; height: number },
+): Phaser.GameObjects.Container {
+  return createItemInspectorFromModel(scene, x, y, itemInspectorModel(item, context), options);
+}
 
-  const hide = () => {
-    tooltip?.destroy();
-    tooltip = undefined;
-  };
-
-  target.on("pointerover", (pointer: Phaser.Input.Pointer) => {
-    hide();
-    tooltip = scene.add
-      .text(pointer.x, pointer.y - 16, textOverride ?? itemDetailsLabel(item), {
-        fontSize: "11px",
-        fontFamily: UI_FONT,
-        color: "#f3e5bd",
-        backgroundColor: "#172426",
-        padding: { x: 9, y: 7 },
-        align: "center",
-        wordWrap: { width: 220 },
-      })
-      .setOrigin(0.5, 1)
-      .setDepth(100);
-    tooltip.x = Phaser.Math.Clamp(
-      tooltip.x,
-      tooltip.width / 2 + 8,
-      scene.scale.width - tooltip.width / 2 - 8,
-    );
-    if (tooltip.y - tooltip.height < 8) tooltip.setOrigin(0.5, 0).setY(pointer.y + 16);
+export function createItemInspectorFromModel(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  model: ItemInspectorModel,
+  options: { width: number; height: number },
+): Phaser.GameObjects.Container {
+  const background = scene.add.rectangle(0, 0, options.width, options.height, DEMO_COLORS.ink, 0.97)
+    .setStrokeStyle(2, DEMO_COLORS.silver, 0.85);
+  const title = scene.add.text(-options.width / 2 + 10, -options.height / 2 + 8,
+    `${model.identity.name} · ${model.identity.tierLabel}`, {
+      fontSize: "13px", fontFamily: UI_FONT, fontStyle: "bold", color: "#f1eee5",
+      wordWrap: { width: options.width - 20 },
+    });
+  const identity = scene.add.text(-options.width / 2 + 10, -options.height / 2 + 28,
+    `${model.identity.categoryLabel} · ${model.identity.originLabel}${model.identity.priceLabel ? ` · ${model.identity.priceLabel}` : ""}${model.identity.affordabilityLabel ? ` · ${model.identity.affordabilityLabel}` : ""}`, {
+      fontSize: "10px", fontFamily: UI_FONT, color: "#9eb5c9", wordWrap: { width: options.width - 20 },
+    });
+  const effectLines = model.effects.map((effect) => {
+    const marker = effect.direction === "gain" ? "▲ GAIN" : effect.direction === "loss" ? "▼ LOSS" : "◆ RULE";
+    const tierNote = effect.authoredValueLabel !== effect.effectiveValueLabel ? ` (base ${effect.authoredValueLabel})` : "";
+    return `${marker} · ${effect.statLabel} ${effect.effectiveValueLabel}${tierNote}${effect.conditionLabel ? ` · ${effect.conditionLabel}` : ""}`;
   });
-  target.on("pointerout", hide);
-  target.on("pointerdown", hide);
-  target.once("destroy", hide);
+  const ruleLines = model.rules.map((rule) => `${rule.prefix}: ${rule.text}`);
+  const relationshipLines = model.relationships.map((entry) => `${entry.state.toUpperCase()} · ${entry.explanation}`);
+  const placementLines = model.placement ? [
+    `${model.placement.stateLabel} · ${model.placement.storageActivity === "not-applicable" ? "installed" : `${model.placement.storageActivity} storage`}`,
+    ...model.placement.gainedLabels.map((label) => `Gains: ${label}`),
+    ...model.placement.lostLabels.map((label) => `Loses: ${label}`),
+  ] : [];
+  const resolvedLines = model.resolved ? [
+    `LAP ${model.resolved.lap} · ${model.resolved.evidenceAvailability === "available" ? "RECORDED" : "NOT EVALUATED"}`,
+    ...model.resolved.contributionLines.map((line) => `${line.statLabel}: ${line.effectiveValueLabel}`),
+    ...(model.resolved.inactiveReason ? [model.resolved.inactiveReason] : []),
+  ] : [];
+  const details = scene.add.text(-options.width / 2 + 10, -options.height / 2 + 46,
+    [...effectLines, ...ruleLines, ...placementLines, ...relationshipLines, ...resolvedLines].join("\n"), {
+      fontSize: "11px", fontFamily: UI_FONT, color: "#e6edf0", lineSpacing: 2,
+      wordWrap: { width: options.width - 20 },
+    });
+  const container = scene.add.container(x, y, [background, title, identity, details]).setSize(options.width, options.height);
+  container.setData("accessibilityLabel", model.accessibilityLabel);
+  return container;
+}
+
+export function createPlacementComparisonInspector(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  model: PlacementComparisonModel,
+  options: { width: number; height: number },
+): Phaser.GameObjects.Container {
+  const background = scene.add.rectangle(0, 0, options.width, options.height, DEMO_COLORS.ink, 0.98)
+    .setStrokeStyle(2, model.valid ? 0x74b893 : 0xc95d61);
+  const incoming = model.incoming.effects.map((line) => `${line.directionLabel.toUpperCase()} ${line.statLabel} ${line.effectiveValueLabel}`).join(" · ");
+  const outgoing = model.outgoing
+    ? `OUT: ${model.outgoing.identity.name} · ${model.outgoing.effects.map((line) => `${line.statLabel} ${line.effectiveValueLabel}`).join(" · ")}`
+    : "OUT: Empty destination";
+  const text = scene.add.text(-options.width / 2 + 10, -options.height / 2 + 8, [
+    `${model.disposition.toUpperCase()} → ${model.destinationLabel} · ${model.valid ? "VALID" : "BLOCKED"}`,
+    `IN: ${model.incoming.identity.name} · ${model.incoming.placement?.stateLabel ?? "Stored"} · ${incoming}`,
+    outgoing,
+    model.reasonLabel,
+  ].filter(Boolean).join("\n"), {
+    fontSize: "11px", fontFamily: UI_FONT, color: "#e6edf0", lineSpacing: 2,
+    wordWrap: { width: options.width - 20 },
+  });
+  const container = scene.add.container(x, y, [background, text]).setSize(options.width, options.height);
+  container.setData("accessibilityLabel", text.text);
+  return container;
 }

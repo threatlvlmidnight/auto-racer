@@ -1,35 +1,43 @@
 import Phaser from "phaser";
 import type { Run } from "../simulation/run";
+import type { ProductionBackdropKey } from "./visualAssets";
+import { LOGICAL_WIDTH } from "./layout";
 
 export const DEMO_COLORS = {
-  ink: 0x172426,
-  deepGreen: 0x203d3c,
-  paper: 0xeadcb5,
-  brass: 0xd8b45a,
-  oxblood: 0x9f3038,
-  teal: 0x3f7776,
-  steel: 0x9eb9b3,
-  muted: 0xa99f84,
+  ink: 0x101817,
+  deepGreen: 0x12352d,
+  porcelain: 0xf1eee5,
+  silver: 0xb8c0c2,
+  steel: 0x74858a,
+  italianRed: 0xb83232,
+  italianRedBright: 0xd9483f,
+  brass: 0xc6a15b,
+  muted: 0x8d9997,
 } as const;
 
-export const DISPLAY_FONT = "Georgia, serif";
-export const UI_FONT = "Trebuchet MS, sans-serif";
+export const DISPLAY_FONT = "DIN Condensed, Avenir Next Condensed, Arial Narrow, Helvetica Neue, sans-serif";
+export const UI_FONT = "Avenir Next Condensed, Arial Narrow, Helvetica Neue, Arial, sans-serif";
 
 export function addDemoBackdrop(
   scene: Phaser.Scene,
-  key: "championship-paddock" | "workshop" | "race-day",
+  key: "championship-paddock" | "workshop" | "race-day" | ProductionBackdropKey,
   overlayAlpha = 0.62,
 ): void {
-  scene.add.image(400, 225, key).setDisplaySize(800, 450).setDepth(-100);
+  const image = scene.add.image(400, 225, key).setDepth(-100);
+  // Cover-fit instead of stretching 16:9 masters. This also keeps the helper
+  // valid if a later art revision uses a slightly different source crop.
+  const source = image.texture.getSourceImage() as { width: number; height: number };
+  const scale = Math.max(800 / source.width, 450 / source.height);
+  image.setDisplaySize(source.width * scale, source.height * scale);
   scene.add.rectangle(400, 225, 800, 450, DEMO_COLORS.ink, overlayAlpha).setDepth(-99);
   const frame = scene.add.graphics().setDepth(90);
-  frame.lineStyle(2, DEMO_COLORS.brass, 0.65).strokeRect(10, 10, 780, 430);
-  frame.lineStyle(1, DEMO_COLORS.paper, 0.28).strokeRect(15, 15, 770, 420);
+  frame.lineStyle(2, DEMO_COLORS.silver, 0.62).strokeRect(10, 10, 780, 430);
+  frame.lineStyle(1, DEMO_COLORS.porcelain, 0.25).strokeRect(15, 15, 770, 420);
 }
 
 export function addHeaderBand(scene: Phaser.Scene): void {
   scene.add.rectangle(400, 50, 800, 100, DEMO_COLORS.ink, 0.86).setDepth(-20);
-  scene.add.rectangle(400, 99, 800, 2, DEMO_COLORS.brass, 0.8).setDepth(-19);
+  scene.add.rectangle(400, 99, 800, 2, DEMO_COLORS.italianRed, 0.9).setDepth(-19);
 }
 
 /**
@@ -48,9 +56,9 @@ export function addRunStamp(scene: Phaser.Scene, run: Run): Phaser.GameObjects.T
     fontFamily: UI_FONT,
     fontSize: "11px",
     fontStyle: "bold",
-    color: "#eadcb5",
+    color: "#f1eee5",
   }).setDepth(92);
-  const creditsText = scene.add.text(scene.scale.width - 24, 22, `${run.credits} CREDITS`, {
+  const creditsText = scene.add.text(LOGICAL_WIDTH - 24, 22, `${run.credits} CREDITS`, {
     fontFamily: UI_FONT,
     fontSize: "11px",
     fontStyle: "bold",
@@ -69,7 +77,7 @@ export function addPaperPanel(
 ): Phaser.GameObjects.Rectangle {
   return scene.add
     .rectangle(x, y, width, height, DEMO_COLORS.ink, alpha)
-    .setStrokeStyle(2, DEMO_COLORS.brass, 0.75);
+    .setStrokeStyle(2, DEMO_COLORS.silver, 0.72);
 }
 
 export interface DemoButtonOptions {
@@ -93,14 +101,14 @@ export function createDemoButton(
     fontFamily: UI_FONT,
     fontSize: options.fontSize ?? "14px",
     fontStyle: "bold",
-    color: enabled ? "#172426" : "#77766d",
-    backgroundColor: enabled ? "#d8b45a" : "#454a45",
+    color: enabled ? "#f7f3e9" : "#77817f",
+    backgroundColor: enabled ? "#b83232" : "#303a39",
     padding: { x: 15, y: 8 },
   }).setOrigin(0.5);
   if (enabled) {
     button.setInteractive({ useHandCursor: true });
-    button.on("pointerover", () => button.setBackgroundColor("#ead58d"));
-    button.on("pointerout", () => button.setBackgroundColor("#d8b45a"));
+    button.on("pointerover", () => button.setBackgroundColor("#d9483f"));
+    button.on("pointerout", () => button.setBackgroundColor("#b83232"));
     if (options.repeatable) button.on("pointerdown", action);
     else button.once("pointerdown", action);
   }

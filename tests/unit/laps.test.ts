@@ -30,6 +30,31 @@ function catalogItem(id: string): OfferedItem {
 }
 
 describe("simulatePlayerLaps", () => {
+  it("records outcome-neutral per-item physical contribution evidence", () => {
+    const item = testItem({
+      id: "physical-evidence",
+      name: "Physical Evidence",
+      price: 1,
+      timeModifier: 0,
+      physics: { accelerationDelta: 13, topSpeedDelta: -1 },
+    });
+    const track = generateTrack(11, 2);
+    const lap = simulatePlayerLaps(vehicleBuild([item]), 1, track)[0];
+    const evidence = lap.physics?.itemContributions?.find((entry) => entry.sourceItemId === item.id);
+
+    expect(evidence).toMatchObject({
+      lap: 1,
+      sourceLocation: { area: "board", index: 0 },
+      tier: 1,
+      installationState: "fitted",
+      active: true,
+      flatResolvedDelta: { accelerationDelta: 13, topSpeedDelta: -1 },
+      conditionalResolvedDeltas: [],
+    });
+    expect(lap.physics?.stats.acceleration).toBe(STOCK_PHYSICAL_STATS.acceleration + 13);
+    expect(lap.physics?.stats.topSpeed).toBe(STOCK_PHYSICAL_STATS.topSpeed - 1);
+  });
+
   it("emits complete per-held-item source, trigger, buff, storage, and timing evidence", () => {
     const lap = simulatePlayerLaps(buffDependentPracticeBuild())[0];
 

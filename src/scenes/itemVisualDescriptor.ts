@@ -5,6 +5,7 @@ export type ItemVisualKind = "direct" | "flat-buff" | "stacking-buff" | "count-s
 
 export interface ItemVisualDescriptor {
   kind: ItemVisualKind;
+  category: "power" | "chassis";
   performance: boolean;
   cooldown: number;
   activeWhileStored: boolean;
@@ -19,6 +20,7 @@ export function itemVisualDescriptor(item: OfferedItem): ItemVisualDescriptor {
 
   return {
     kind,
+    category: item.installationCategory,
     performance: item.identityTag === "performance",
     cooldown: item.cooldown ?? 1,
     activeWhileStored: item.activeWhileStored === true,

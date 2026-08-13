@@ -42,7 +42,14 @@ describe("complete 70-item catalog", () => {
     const track = generateTrack(33, 2);
     const guestLaps = simulatePlayerLaps(guest, 10, track);
     const homeLaps = simulatePlayerLaps(home, 10, track);
-    expect(guestLaps.map(({ time, physics }) => ({ time, physics })))
-      .toEqual(homeLaps.map(({ time, physics }) => ({ time, physics })));
+    const comparableOutcome = ({ time, physics }: (typeof guestLaps)[number]) => ({
+      time,
+      physics: physics && { stats: physics.stats, phases: physics.phases },
+    });
+    expect(guestLaps.map(comparableOutcome)).toEqual(homeLaps.map(comparableOutcome));
+
+    // Provenance remains specific to the build that supplied the item.
+    expect(guestLaps[0]?.physics?.itemContributions?.[0]?.slotId).not
+      .toBe(homeLaps[0]?.physics?.itemContributions?.[0]?.slotId);
   });
 });

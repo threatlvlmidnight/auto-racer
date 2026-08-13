@@ -31,6 +31,7 @@ import {
   DISPLAY_FONT,
   UI_FONT,
 } from "./demoTheme";
+import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
 
 export class RunScene extends Phaser.Scene {
   private run!: Run;
@@ -40,6 +41,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   create(data: { run?: Run; unavailable?: boolean } = {}): void {
+    configureHiDpiScene(this);
     // A run only ever arrives here already created by entrant confirmation
     // (feature 010 US1). Reaching the hub with no run is not a cue to invent
     // one — it routes back to deliberate selection.
@@ -77,8 +79,9 @@ export class RunScene extends Phaser.Scene {
 
   private render(): void {
     const model = runPresentation(this.run);
-    const { width } = this.scale;
-    addDemoBackdrop(this, "championship-paddock", 0.69);
+    const width = LOGICAL_WIDTH;
+    addDemoBackdrop(this, this.run.activeEncounter?.type === "sponsor-meeting"
+      ? "scene-sponsor-negotiation" : "scene-route-headquarters", 0.58);
     addHeaderBand(this);
     this.add.text(width / 2, 36, "1901 Auto Race Championship", {
       fontSize: "24px",
@@ -90,7 +93,7 @@ export class RunScene extends Phaser.Scene {
       fontSize: "18px",
       fontFamily: UI_FONT,
       fontStyle: "bold",
-      color: "#f3e5bd",
+      color: "#f1eee5",
     }).setOrigin(0.5);
 
     this.add.text(width - 24, 24, model.statusLabel, {
@@ -153,7 +156,7 @@ export class RunScene extends Phaser.Scene {
         fontSize: "11px",
         fontFamily: UI_FONT,
         fontStyle: "bold",
-        color: stage.state === "completed" ? "#74c69d" : stage.state === "unavailable" ? "#68747c" : "#ffd166",
+        color: stage.state === "completed" ? "#82c9aa" : stage.state === "unavailable" ? "#68747c" : "#d9483f",
         align: "center",
       }).setOrigin(0.5);
     });
@@ -212,11 +215,14 @@ export class RunScene extends Phaser.Scene {
     model.choices.forEach((choice, index) => {
       const x = width * (index === 0 ? 0.3 : 0.7);
       addPaperPanel(this, x, 250, 292, 174, 0.88);
-      this.add.text(x, 200, choice.type.replace(/-/g, " ").toUpperCase(), {
+      const choiceLabel = choice.type === "cross-pollination"
+        ? "RIVAL INTEL"
+        : choice.type.replace(/-/g, " ").toUpperCase();
+      this.add.text(x, 200, choiceLabel, {
         fontSize: "18px",
         fontFamily: DISPLAY_FONT,
         fontStyle: "bold",
-        color: "#f3e5bd",
+        color: "#f1eee5",
       }).setOrigin(0.5);
       this.add.text(x, 245, choice.summary, {
         fontSize: "13px",

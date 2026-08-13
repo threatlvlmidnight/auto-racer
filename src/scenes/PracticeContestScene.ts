@@ -17,6 +17,10 @@ import {
   type PracticeFocusHandle,
 } from "./demoTheme";
 import { practiceContestControlPlan, practiceEvidenceModel } from "./practicePresentation";
+import { createItemCard, createItemInspector } from "./itemVisuals";
+import { resolvedItemEvidence, unresolvedPhysicalEvidence } from "./itemPresentation";
+import type { OfferedItem } from "../simulation/types";
+import { configureHiDpiScene, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "./layout";
 
 export interface PracticeContestSceneData {
   run?: Run;
@@ -34,12 +38,15 @@ export class PracticeContestScene extends Phaser.Scene {
   private lapText?: Phaser.GameObjects.Text;
   private evidenceText?: Phaser.GameObjects.Text;
   private focusRing?: PracticeFocusHandle;
+  private selectedItem?: { item: OfferedItem; tier: 1 | 2 | 3 };
+  private itemInspector?: Phaser.GameObjects.Container;
 
   constructor() {
     super("PracticeContestScene");
   }
 
   create(data: PracticeContestSceneData = {}): void {
+    configureHiDpiScene(this);
     if (!data.run || !data.session?.result) {
       this.scene.start("TestDayScene");
       return;
@@ -59,6 +66,7 @@ export class PracticeContestScene extends Phaser.Scene {
     if (!result || this.paused) return;
     this.elapsedSeconds += delta / 1000 * this.speed;
     const frame = frameStateAt(result.playback, result.contest, this.elapsedSeconds, this.lastLap);
+    const lapChanged = this.lastLap !== frame.player.lapIndex;
     this.lastLap = frame.player.lapIndex;
     const visibleLap = Math.min(frame.player.lapIndex + 1, result.contest.lapCount);
     this.lapText?.setText(`Lap ${visibleLap}/${result.contest.lapCount} · live gap ${signed(frame.liveGap)}s`);
@@ -68,22 +76,24 @@ export class PracticeContestScene extends Phaser.Scene {
     this.evidenceText?.setText(lap
       ? `Player ${lap.playerTime.toFixed(2)}s · Rival ${lap.rivalTime.toFixed(2)}s\n${evidenceSummary(contributions)}`
       : "Awaiting lap evidence");
+    if (lapChanged && this.selectedItem) this.showItem(this.selectedItem.item, this.selectedItem.tier, visibleLap);
     if (frame.player.finished && frame.ghost.finished) this.finish();
   }
 
   private render(): void {
-    const { width, height } = this.scale;
+    const width = LOGICAL_WIDTH;
+    const height = LOGICAL_HEIGHT;
     addDemoBackdrop(this, "race-day", 0.72);
     this.add.text(width / 2, 38, "TEST DAY", {
       fontFamily: DISPLAY_FONT,
       fontSize: "28px",
       fontStyle: "bold",
-      color: "#f3e5bd",
+      color: "#f1eee5",
     }).setOrigin(0.5);
     this.add.text(width / 2, 72, "UNSCORED · deterministic playback", {
       fontFamily: UI_FONT,
       fontSize: "16px",
-      color: "#ffd166",
+      color: "#d9483f",
     }).setOrigin(0.5);
     this.lapText = this.add.text(width / 2, 126, "Lap 1/10 · live gap +0.00s", {
       fontFamily: UI_FONT,
@@ -97,6 +107,22 @@ export class PracticeContestScene extends Phaser.Scene {
       align: "center",
       wordWrap: { width: Math.min(680, width - 48) },
     }).setOrigin(0.5);
+    const held = [
+      ...this.session!.snapshot.build.slots.flatMap((slot) => slot.item ? [{ item: slot.item, tier: slot.tier }] : []),
+      ...this.session!.snapshot.build.storage.flatMap((position) => position.item ? [{ item: position.item, tier: position.tier }] : []),
+    ];
+    const spacing = Math.min(106, (width - 40) / Math.max(1, held.length));
+    const startX = width / 2 - spacing * (held.length - 1) / 2;
+    held.forEach(({ item, tier }, index) => {
+      const card = createItemCard(this, startX + index * spacing, 290, item, {
+        width: Math.min(100, spacing - 4), height: 58, iconSize: 18,
+        context: { surface: "test-day-lap", tier },
+      }).setInteractive({ useHandCursor: true });
+      card.on("pointerdown", () => {
+        this.selectedItem = { item, tier };
+        this.showItem(item, tier, Math.max(1, this.lastLap + 1));
+      });
+    });
     this.statusText = this.add.text(width / 2, height - 116, "PLAYING · 1x", {
       fontFamily: UI_FONT,
       fontSize: "14px",
@@ -110,6 +136,17 @@ export class PracticeContestScene extends Phaser.Scene {
       createDemoButton(this, width / 2 + 210, height - 66, plan[3].label, () => this.skip(), true, { fontSize: PRACTICE_CONTROL_FONT_SIZE }),
     ];
     this.focusRing = applyPracticeFocusRing(this, buttons);
+  }
+
+  private showItem(item: OfferedItem, tier: 1 | 2 | 3, lap: number): void {
+    this.itemInspector?.destroy();
+    const legacy = this.session!.result!.contest.contributions?.find((entry) => entry.sourceItemId === item.id && entry.lap === lap);
+    const lapEvidence = item.physics || item.conditionalPhysics?.length
+      ? unresolvedPhysicalEvidence(item, lap, tier)
+      : legacy ? resolvedItemEvidence(item, { kind: "legacy-time", evidence: legacy }) : undefined;
+    this.itemInspector = createItemInspector(this, LOGICAL_WIDTH / 2, 218, item, {
+      surface: "test-day-lap", tier, lapEvidence,
+    }, { width: LOGICAL_WIDTH - 48, height: 112 }).setDepth(80);
   }
 
   private togglePause(): void {

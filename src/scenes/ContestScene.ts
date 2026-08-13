@@ -16,9 +16,11 @@ import {
 } from "../simulation/types";
 import type { Run } from "../simulation/run";
 import { standingsRows } from "./contestFormatting";
-import { createItemCard, enableItemTooltip } from "./itemVisuals";
+import { createItemCard, createItemInspector } from "./itemVisuals";
+import { resolvedItemEvidence, type ItemPresentationContext } from "./itemPresentation";
 import { contestSceneInput, raceLapLabel } from "./runPresentation";
 import { addDemoBackdrop, addRunStamp, DISPLAY_FONT, UI_FONT } from "./demoTheme";
+import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
 
 const BOARD_SLOT_WIDTH = 190;
 const BOARD_SLOT_HEIGHT = 58;
@@ -56,12 +58,15 @@ export class ContestScene extends Phaser.Scene {
   private previousFinishedCarIds: string[] = [];
   private run?: Run;
   private encounterId?: string;
+  private selectedItem?: OfferedItem;
+  private itemInspector?: Phaser.GameObjects.Container;
 
   constructor() {
     super("ContestScene");
   }
 
   create(data: { run?: Run; encounterId?: string }): void {
+    configureHiDpiScene(this);
     if (!data.run || !data.encounterId) {
       this.scene.start("RunScene", { unavailable: true });
       return;
@@ -118,6 +123,7 @@ export class ContestScene extends Phaser.Scene {
     if (player.progress.lapIndex !== this.lastRenderedPlayerLapIndex) {
       this.lastRenderedPlayerLapIndex = player.progress.lapIndex;
       frame.newCallouts.forEach((event) => this.flashBoardItem(event.item.id));
+      this.renderItemInspector();
     }
 
     if (frame.allFinished) {
@@ -132,16 +138,16 @@ export class ContestScene extends Phaser.Scene {
   }
 
   private renderTrack(board: (OfferedItem | null)[], lapCount: number): void {
-    const { width } = this.scale;
+    const width = LOGICAL_WIDTH;
     const track = this.schedule!.track;
-    addDemoBackdrop(this, "race-day", 0.28);
+    addDemoBackdrop(this, "scene-road-circuit", 0.22);
     addRunStamp(this, this.run!);
     this.add
       .text(width / 2, 34, "CONTEST", {
         fontSize: "28px",
         fontFamily: DISPLAY_FONT,
         fontStyle: "bold",
-        color: "#f3e5bd",
+        color: "#f1eee5",
       })
       .setOrigin(0.5);
     this.add
@@ -149,7 +155,7 @@ export class ContestScene extends Phaser.Scene {
         fontSize: "12px",
         fontFamily: UI_FONT,
         fontStyle: "bold",
-        color: "#d8b45a",
+        color: "#d9483f",
       })
       .setOrigin(0.5);
 
@@ -253,13 +259,13 @@ export class ContestScene extends Phaser.Scene {
     this.boardHighlights.clear();
     const totalWidth =
       SLOT_CAPACITY * BOARD_SLOT_WIDTH + (SLOT_CAPACITY - 1) * BOARD_SLOT_GAP;
-    const startX = (this.scale.width - totalWidth) / 2 + BOARD_SLOT_WIDTH / 2;
+    const startX = (LOGICAL_WIDTH - totalWidth) / 2 + BOARD_SLOT_WIDTH / 2;
 
-    this.add.text((this.scale.width - totalWidth) / 2, 365, "THE HIGHWHEEL · INSTALLED", {
+    this.add.text((LOGICAL_WIDTH - totalWidth) / 2, 365, "THE HIGHWHEEL · INSTALLED", {
       fontSize: "12px",
       fontFamily: UI_FONT,
       fontStyle: "bold",
-      color: "#d8b45a",
+      color: "#d7e4e7",
     });
 
     Array.from({ length: SLOT_CAPACITY }, (_, index) => board[index] ?? null).forEach(
@@ -291,9 +297,29 @@ export class ContestScene extends Phaser.Scene {
         }).setInteractive({
           useHandCursor: true,
         });
-        enableItemTooltip(this, card, item);
+        card.on("pointerdown", () => {
+          this.selectedItem = item;
+          this.renderItemInspector();
+        });
       },
     );
+  }
+
+  private renderItemInspector(): void {
+    this.itemInspector?.destroy();
+    this.itemInspector = undefined;
+    if (!this.selectedItem || !this.result) return;
+    const player = this.result.cars.find((car) => car.role === "player");
+    const lapIndex = Phaser.Math.Clamp(this.lastRenderedPlayerLapIndex, 0, Math.max(0, (player?.laps.length ?? 1) - 1));
+    const physical = player?.laps[lapIndex]?.physics?.itemContributions?.find((entry) => entry.sourceItemId === this.selectedItem!.id);
+    const context: ItemPresentationContext = {
+      surface: "race-lap",
+      tier: physical?.tier ?? 1,
+      lapEvidence: physical ? resolvedItemEvidence(this.selectedItem, { kind: "physical", evidence: physical }) : undefined,
+    };
+    this.itemInspector = createItemInspector(this, LOGICAL_WIDTH / 2, 304, this.selectedItem, context, {
+      width: LOGICAL_WIDTH - 48, height: 112,
+    }).setDepth(80);
   }
 
   private flashBoardItem(itemId: string): void {

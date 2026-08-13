@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { canEnterEntrantSelection } from "../simulation/run";
 import { createDemoButton, DEMO_COLORS, DISPLAY_FONT, UI_FONT } from "./demoTheme";
+import { configureHiDpiScene } from "./layout";
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -8,26 +9,27 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.add.image(400, 225, "title-race").setDisplaySize(800, 450);
+    configureHiDpiScene(this);
+    this.add.image(400, 225, "scene-race-start").setDisplaySize(800, 450);
     this.add.rectangle(400, 225, 800, 450, DEMO_COLORS.ink, 0.28);
     this.add.rectangle(400, 104, 800, 164, DEMO_COLORS.ink, 0.78);
-    this.add.rectangle(400, 186, 800, 3, DEMO_COLORS.brass, 0.9);
+    this.add.rectangle(400, 186, 800, 2, DEMO_COLORS.silver, 0.82);
 
-    this.add.text(400, 34, "NEW YEAR'S DAY · 1901", {
+    this.add.text(400, 34, "THE INAUGURAL 1901 CHAMPIONSHIP", {
       fontFamily: UI_FONT,
       fontSize: "12px",
       fontStyle: "bold",
-      color: "#d8b45a",
+      color: "#d9483f",
     }).setOrigin(0.5);
-    this.add.text(400, 78, "THE FIRST AUTO RACE", {
+    this.add.text(400, 78, "THE MOTOR AGE", {
       fontFamily: DISPLAY_FONT,
       fontSize: "38px",
       fontStyle: "bold",
-      color: "#f3e5bd",
+      color: "#f1eee5",
       stroke: "#172426",
       strokeThickness: 4,
     }).setOrigin(0.5);
-    this.add.text(400, 132, "Four builders. Any machine. One finish line.", {
+    this.add.text(400, 132, "Build the machine. Make history.", {
       fontFamily: UI_FONT,
       fontSize: "16px",
       color: "#dce4d8",
@@ -43,7 +45,7 @@ export class TitleScene extends Phaser.Scene {
     this.add.text(400, 414, "DEMONSTRATION BUILD", {
       fontFamily: UI_FONT,
       fontSize: "10px",
-      color: "#eadcb5",
+      color: "#b8c0c2",
     }).setOrigin(0.5);
   }
 }

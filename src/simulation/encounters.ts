@@ -80,7 +80,7 @@ export interface SponsorResolution {
 const ENCOUNTER_SUMMARIES = {
   "parts-supplier": "Buy any affordable parts; one restock costs 1 credit.",
   "reward-draft": "Choose one of three weighted rewards or decline all.",
-  "cross-pollination": "Inspect three parts from another entrant's exclusive workshop.",
+  "cross-pollination": "Choose a part from another origin's experimental catalog.",
   "sponsor-meeting": "Take 2 credits now or accept a 7-credit race objective.",
 } as const;
 

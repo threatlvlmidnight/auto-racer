@@ -93,7 +93,7 @@ describe("ResultScene required fields (FR-006, FR-007)", () => {
 
     expect(label).toContain("Board (1)");
     expect(label).toContain(LEGACY_ITEM_POOL[0].name);
-    expect(label).toContain(`${LEGACY_ITEM_POOL[0].timeModifier}s`);
+    expect(label).toContain("Lap Time");
   });
 
   it("renders every item across board and storage", () => {
@@ -106,40 +106,29 @@ describe("ResultScene required fields (FR-006, FR-007)", () => {
     storage.forEach((item) => expect(storageLabel).toContain(item.name));
   });
 
-  it("renders identity labels for tagged and neutral items", () => {
+  it("renders category and origin rather than legacy identity labels", () => {
     const taggedItem = LEGACY_ITEM_POOL.find((item) => item.identityTag === "performance");
     const neutralItem = LEGACY_ITEM_POOL.find((item) => !item.identityTag);
 
     expect(taggedItem).toBeDefined();
     expect(neutralItem).toBeDefined();
-    expect(itemDetailsLabel(taggedItem!)).toContain("[Performance]");
-    expect(itemDetailsLabel(neutralItem!)).toContain("[Neutral]");
-    expect(boardItemsLabel(result({ board: [taggedItem!, neutralItem!] }))).toContain(
-      "[Performance]"
-    );
-    expect(boardItemsLabel(result({ board: [taggedItem!, neutralItem!] }))).toContain(
-      "[Neutral]"
-    );
+    expect(itemDetailsLabel(taggedItem!)).toContain("Coachworks");
+    expect(itemDetailsLabel(neutralItem!)).toMatch(/power|chassis/);
   });
 
   it("renders a buff's target tag and boost percentage", () => {
     const buffItem = LEGACY_ITEM_POOL.find((item) => item.buff);
 
     expect(buffItem).toBeDefined();
-    expect(itemDetailsLabel(buffItem!)).toContain("[Performance]");
-    expect(itemDetailsLabel(buffItem!)).toContain("Boosts Performance items by 5%");
+    expect(itemDetailsLabel(buffItem!)).toContain("Boost Lap Time");
+    expect(itemDetailsLabel(buffItem!)).toContain("+5%");
   });
 
   it("renders a count-synergy buff's per-item rate, distinct from a flat buff's phrasing", () => {
     const countBuff = LEGACY_ITEM_POOL.find((item) => item.buff?.perCount);
 
     expect(countBuff).toBeDefined();
-    expect(itemDetailsLabel(countBuff!)).toContain("[Performance]");
-    expect(itemDetailsLabel(countBuff!)).toContain(
-      "Boosts Performance items by 2% per Performance item held"
-    );
-    // Distinct from a flat buff's plain "Boosts Performance items by N%" (no trailing "per item held").
-    expect(itemDetailsLabel(countBuff!)).not.toMatch(/items by \d+%$/);
+    expect(itemDetailsLabel(countBuff!)).toContain("+2% per eligible item");
   });
 
   it("distinguishes the item that remains active in storage", () => {
@@ -147,7 +136,7 @@ describe("ResultScene required fields (FR-006, FR-007)", () => {
 
     expect(activeStorageItem).toBeDefined();
     expect(storageItemsLabel(result({ storage: [activeStorageItem!] }))).toContain(
-      "[Active in storage]"
+      "Active while stored"
     );
   });
 });
@@ -170,9 +159,10 @@ describe("itemCooldownLabel — US2 FR-005 / FR-006", () => {
     expect(itemCooldownLabel(every4)).toBe("4 laps");
   });
 
-  it("includes the cooldown label in itemDetailsLabel for every item (FR-008 single source)", () => {
+  it("keeps cooldown compatibility while shared details express authored cadence", () => {
     LEGACY_ITEM_POOL.forEach((item) => {
-      expect(itemDetailsLabel(item)).toContain(itemCooldownLabel(item));
+      expect(itemCooldownLabel(item)).toMatch(/lap/);
+      expect(itemDetailsLabel(item)).toContain(item.name);
     });
   });
 });
@@ -189,12 +179,11 @@ describe("itemDependencyNote — US2 FR-007", () => {
     buffItems.forEach((item) => {
       const note = itemDependencyNote(item);
       expect(note).not.toBeNull();
-      expect(note).toContain("active");
-      expect(note).toContain("Performance");
+      expect(note).toMatch(/EVERY|PER|TARGET|WHEN/);
     });
   });
 
-  it("includes the dependency note in itemDetailsLabel for buff items (FR-008 single source)", () => {
+  it("includes shared rule text in itemDetailsLabel for buff items", () => {
     const buffItems = LEGACY_ITEM_POOL.filter((item) => item.buff);
     buffItems.forEach((item) => {
       expect(itemDetailsLabel(item)).toContain(itemDependencyNote(item)!);

@@ -376,6 +376,37 @@ export interface BuffApplication {
   appliedStatDelta?: number;
 }
 
+/**
+ * Feature 024: authoritative, evidence-only record of one held item's physical
+ * values for one resolved lap. These are the same effective deltas already used
+ * by physics after tier/installation/Synergy/Buff handling; recording them MUST
+ * NOT change resolution.
+ */
+export interface ItemPhysicalContributionEvidence {
+  lap: number;
+  sourceItemId: string;
+  sourceLocation: { area: ContributionSourceArea; index: number };
+  slotId?: string;
+  tier: 1 | 2 | 3;
+  installationState?: InstallationState;
+  active: boolean;
+  flatResolvedDelta: ItemPhysicsContribution;
+  conditionalResolvedDeltas: readonly {
+    condition: PhysicsCondition;
+    delta: ItemPhysicsContribution;
+    matchedSegmentIndexes: readonly number[];
+  }[];
+  buffApplications: readonly BuffApplication[];
+  synergyApplications: readonly SynergyApplication[];
+  inactiveReason?: string;
+}
+
+export interface LapPhysicsEvidence {
+  stats: PhysicalStats;
+  phases: LapPhaseBreakdown[];
+  itemContributions?: ItemPhysicalContributionEvidence[];
+}
+
 export interface ContributionEvidence {
   lap: number;
   sourceItemId: string;
@@ -416,7 +447,7 @@ export interface LapBreakdown {
    * it must copy this field through explicitly (021 tasks.md T029a,
    * /speckit.analyze finding I1) for run.history to carry it at all.
    */
-  physics?: { stats: PhysicalStats; phases: LapPhaseBreakdown[] };
+  physics?: LapPhysicsEvidence;
 }
 
 /** The output of resolving a contest (contracts/simulation-contract.md). */

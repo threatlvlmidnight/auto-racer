@@ -25,14 +25,14 @@ import type { OfferedItem, SlotType } from "../simulation/types";
 import type { PracticeOriginInput, ProtectedPreparationOrigin } from "../simulation/practice";
 import type { DuplicateResolution } from "../simulation/tiering";
 import {
-  garageItemInspector,
+  garageInstallationPresentation,
   garageSlotModels,
   garageStorageModels,
   garageVehicleHeader,
   previewAcquisitionResolution,
-  type GarageItemInspector,
 } from "./garagePresentation";
-import { createItemCard, enableItemTooltip } from "./itemVisuals";
+import { createItemCard, createItemInspector, createPlacementComparisonInspector } from "./itemVisuals";
+import { placementComparisonModel, type ItemPresentationContext } from "./itemPresentation";
 import {
   addDemoBackdrop,
   addHeaderBand,
@@ -41,6 +41,8 @@ import {
   DISPLAY_FONT,
   UI_FONT,
 } from "./demoTheme";
+import { GARAGE_BACKDROP_BY_ENTRANT } from "./visualAssets";
+import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
 
 /** Pre-commit outcome text for an offer that duplicates a held item (016-duplicate-item-tiering FR-011). */
 function resolutionOutcomeLabel(resolution: DuplicateResolution): string | null {
@@ -50,29 +52,46 @@ function resolutionOutcomeLabel(resolution: DuplicateResolution): string | null 
 }
 
 const SLOT_WIDTH = 190;
-const SLOT_HEIGHT = 66;
+const OFFER_WIDTH = 220;
+const OFFER_HEIGHT = 116;
+const SLOT_HEIGHT = 52;
 const SLOT_GAP = 22;
-const BOARD_Y = 255;
-const STORAGE_Y = 365;
+const BOARD_Y = 350;
+const STORAGE_Y = 420;
+const INSPECTOR_Y = 260;
+const INSPECTOR_HEIGHT = 92;
 
 export class PrepareScene extends Phaser.Scene {
   private run?: Run;
   private objects: Phaser.GameObjects.GameObject[] = [];
   private selectedOfferId: string | null = null;
+  private selectedItemId: string | null = null;
+  private selectedContext: ItemPresentationContext | null = null;
+  private selectedSource: GarageSource | null = null;
   private statusMessage: string | null = null;
+  private keyboardItems: { card: Phaser.GameObjects.Container; activate: () => void }[] = [];
+  private keyboardDestinations: { destination: GarageDestination; slotType: SlotType | null }[] = [];
+  private keyboardItemIndex = -1;
+  private keyboardDestinationIndex = -1;
 
   constructor() {
     super("PrepareScene");
   }
 
   create(data: { run?: Run; originState?: ProtectedPreparationOrigin }): void {
+    configureHiDpiScene(this);
     const run = data.run;
     if (!run?.activeEncounter) {
       this.scene.start("RunScene", { unavailable: true });
       return;
     }
     this.run = run;
-    this.selectedOfferId = data.originState?.selection ?? null;
+    // Acquisition surfaces always open unselected. Returning from Test Day or
+    // entering a new shop must not force the inspector over the board.
+    this.selectedOfferId = null;
+    this.selectedItemId = null;
+    this.selectedSource = null;
+    this.selectedContext = null;
     this.statusMessage = null;
     if (run.activeEncounter.type !== "reward-draft"
       && run.activeEncounter.type !== "cross-pollination"
@@ -80,15 +99,35 @@ export class PrepareScene extends Phaser.Scene {
       this.scene.start("RunScene", { run });
       return;
     }
-    addDemoBackdrop(this, "workshop", 0.7);
+    addDemoBackdrop(this, GARAGE_BACKDROP_BY_ENTRANT[run.identity.entrantId], 0.52);
     addHeaderBand(this);
     this.add.image(400, 303, `vehicle-${run.identity.vehicleId}`).setDisplaySize(360, 180).setAlpha(0.1);
     this.render();
+    this.input.keyboard?.on("keydown-TAB", (event: KeyboardEvent) => {
+      event.preventDefault();
+      if (this.keyboardItems.length === 0) return;
+      this.keyboardItemIndex = (this.keyboardItemIndex + (event.shiftKey ? -1 : 1) + this.keyboardItems.length) % this.keyboardItems.length;
+      this.keyboardItems.forEach(({ card }, index) => card.setAlpha(index === this.keyboardItemIndex ? 0.78 : 1));
+      this.statusMessage = `FOCUS · ${this.keyboardItems[this.keyboardItemIndex].card.getData("accessibilityLabel")}`;
+    });
+    this.input.keyboard?.on("keydown-SPACE", (event: KeyboardEvent) => {
+      event.preventDefault();
+      this.keyboardItems[this.keyboardItemIndex]?.activate();
+    });
+    this.input.keyboard?.on("keydown-RIGHT", () => this.navigateDestination(1));
+    this.input.keyboard?.on("keydown-LEFT", () => this.navigateDestination(-1));
+    this.input.keyboard?.on("keydown-ENTER", () => {
+      const entry = this.keyboardDestinations[this.keyboardDestinationIndex];
+      if (entry && (this.selectedOfferId || this.selectedSource)) this.commitSelectedDestination(entry.destination);
+    });
+    this.input.keyboard?.on("keydown-ESC", () => this.clearSelection());
   }
 
   private render(): void {
     this.objects.forEach((object) => object.destroy());
     this.objects = [];
+    this.keyboardItems = [];
+    this.keyboardDestinations = [];
     const run = this.run!;
     const encounter = run.activeEncounter!;
     const supplier = encounter.type === "parts-supplier";
@@ -102,27 +141,33 @@ export class PrepareScene extends Phaser.Scene {
       : null;
     const guestName = guestPayload ? entrantById(guestPayload.guestEntrantId)?.name : null;
     const title = supplier ? "Parts Supplier"
-      : guestPayload ? `Guest Workshop · ${guestName ?? guestPayload.guestEntrantId}` : "Reward Draft";
-    this.track(this.add.text(this.scale.width / 2, 54, title, {
+      : guestPayload ? `Rival Intel · ${guestName ?? guestPayload.guestEntrantId}` : "Reward Draft";
+    this.track(this.add.text(LOGICAL_WIDTH / 2, 42, title, {
       fontSize: "22px",
       fontFamily: DISPLAY_FONT,
       fontStyle: "bold",
-      color: "#f3e5bd",
+      color: "#f1eee5",
     }).setOrigin(0.5).setDepth(20));
+    if (guestPayload) {
+      this.track(this.add.text(LOGICAL_WIDTH / 2, 60, "Choose one experimental part from another origin", {
+        fontSize: "11px", fontFamily: UI_FONT, color: "#9eb5c9",
+      }).setOrigin(0.5).setDepth(20));
+    }
 
     if (supplier) this.renderSupplier(encounter.payload as PartsSupplierPayload);
     else this.renderReward(encounter.payload as RewardDraftPayload | CrossPollinationPayload);
-    this.createControl(680, 170, "TEST DAY", () => this.openTestDay());
+    this.createControl(680, 204, "TEST DAY", () => this.openTestDay());
     this.renderSlots(header.label, header.topologyLabel);
     this.renderStorage(header.storageLabel);
+    this.renderSelectedInspector();
 
     if (this.statusMessage) {
-      this.track(this.add.text(this.scale.width / 2, STORAGE_Y + SLOT_HEIGHT / 2 + 22, this.statusMessage, {
+      this.track(this.add.text(LOGICAL_WIDTH / 2, STORAGE_Y + SLOT_HEIGHT / 2 + 22, this.statusMessage, {
         fontSize: "12px",
         fontFamily: UI_FONT,
         color: "#d9a7a7",
         align: "center",
-        wordWrap: { width: this.scale.width - 80 },
+        wordWrap: { width: LOGICAL_WIDTH - 80 },
       }).setOrigin(0.5));
     }
   }
@@ -130,9 +175,9 @@ export class PrepareScene extends Phaser.Scene {
   private renderReward(payload: RewardDraftPayload | CrossPollinationPayload): void {
     payload.offers.forEach((offer, index) => {
       const resolution = previewAcquisitionResolution(this.run!.build, offer.item);
-      this.createDraggableOffer(170 + index * 230, 95, offer.id, offer.item, true, false, resolution);
+      this.createDraggableOffer(150 + index * 250, 124, offer.id, offer.item, true, false, resolution);
     });
-    this.createControl(400, 170, "Decline all", () => {
+    this.createControl(400, 204, "Decline all", () => {
       const next = declineReward(this.run!, this.run!.activeEncounter!.id, Math.random);
       this.scene.start("RunScene", { run: next });
     });
@@ -146,17 +191,17 @@ export class PrepareScene extends Phaser.Scene {
       }).setOrigin(0.5));
     }
     payload.stock.forEach((entry, index) => {
-      const x = 170 + index * 230;
+      const x = 150 + index * 250;
       const affordable = entry.item.price <= this.run!.credits;
       const resolution = previewAcquisitionResolution(this.run!.build, entry.item);
-      this.createDraggableOffer(x, 95, entry.id, entry.item, entry.state === "available" && affordable, entry.state === "purchased", resolution);
+      this.createDraggableOffer(x, 124, entry.id, entry.item, entry.state === "available" && affordable, entry.state === "purchased", resolution);
       if (entry.state === "available") this.createLockToggle(x, entry);
     });
-    this.createControl(300, 170, payload.restockUsed ? "Restock used" : "Restock · 1 credit", () => {
+    this.createControl(300, 204, payload.restockUsed ? "Restock used" : "Restock · 1 credit", () => {
       this.run = restockSupplier(this.run!, this.run!.activeEncounter!.id, Math.random);
       this.render();
     }, { enabled: !payload.restockUsed && !payload.unavailable && this.run!.credits >= 1 });
-    this.createControl(500, 170, "Leave Supplier", () => {
+    this.createControl(500, 204, "Leave Supplier", () => {
       const next = leaveSupplier(this.run!, this.run!.activeEncounter!.id, Math.random);
       this.scene.start("RunScene", { run: next });
     });
@@ -171,22 +216,55 @@ export class PrepareScene extends Phaser.Scene {
     purchased: boolean,
     resolution: DuplicateResolution,
   ): void {
-    const background = this.add.rectangle(0, 0, SLOT_WIDTH, 84, purchased ? 0x26352f : 0x433b24)
-      .setStrokeStyle(2, enabled ? 0xffdd77 : 0x5d666b);
-    const itemCard = createItemCard(this, 0, -10, item, { width: SLOT_WIDTH - 18, height: 48, iconSize: 40 });
+    const background = this.add.rectangle(0, 0, OFFER_WIDTH, OFFER_HEIGHT, purchased ? 0x1f3a34 : 0x152522, 0.98)
+      .setStrokeStyle(2, enabled ? 0x9aa7aa : 0x4c595b);
+    const context: ItemPresentationContext = {
+      surface: this.run!.activeEncounter!.type === "parts-supplier" ? "supplier-offer" : "reward-offer",
+      tier: 1,
+      priceVisible: true,
+      credits: this.run!.credits,
+    };
+    const itemCard = createItemCard(this, 0, -6, item, {
+      width: OFFER_WIDTH - 12,
+      height: 92,
+      iconSize: 34,
+      context,
+      selected: this.selectedOfferId === offerId,
+      emphasis: "offer",
+    });
     const outcome = resolutionOutcomeLabel(resolution);
     const status = purchased ? "Purchased" : `${item.price} credits${enabled ? "" : " · unavailable"}`;
-    const label = this.add.text(0, 29, outcome ? `${status} · ${outcome}` : status, {
-      fontSize: "11px",
+    const label = this.add.text(0, 45, outcome ? `${status} · ${outcome}` : status, {
+      fontSize: "12px",
       fontFamily: UI_FONT,
-      color: purchased ? "#74c69d" : enabled ? "#ffe39a" : "#858f95",
+      color: purchased ? "#82c9aa" : enabled ? "#f1eee5" : "#858f95",
     }).setOrigin(0.5);
-    const card = this.add.container(x, y, [background, itemCard, label]).setSize(SLOT_WIDTH, 84);
+    const card = this.add.container(x, y, [background, itemCard, label]).setSize(OFFER_WIDTH, OFFER_HEIGHT);
     this.track(card);
-    enableItemTooltip(this, card, item, this.offerInspectorText(item));
     if (!enabled) return;
     card.setInteractive({ useHandCursor: true });
-    card.on("pointerdown", () => { this.selectedOfferId = offerId; });
+    card.on("pointerdown", () => {
+      if (this.selectedOfferId === offerId) {
+        this.clearSelection();
+        return;
+      }
+      this.selectedOfferId = offerId;
+      this.selectedSource = null;
+      this.selectedItemId = item.id;
+      this.selectedContext = context;
+      this.renderSelectedInspector();
+    });
+    this.keyboardItems.push({ card, activate: () => {
+      if (this.selectedOfferId === offerId) {
+        this.clearSelection();
+        return;
+      }
+      this.selectedOfferId = offerId;
+      this.selectedSource = null;
+      this.selectedItemId = item.id;
+      this.selectedContext = context;
+      this.renderSelectedInspector();
+    } });
     if (resolution.kind === "new") {
       this.input.setDraggable(card);
       card.on("drag", (_pointer: Phaser.Input.Pointer, dragX: number, dragY: number) => card.setPosition(dragX, dragY));
@@ -208,11 +286,11 @@ export class PrepareScene extends Phaser.Scene {
    *  still-available offer; a purchased one is already reroll-exempt. */
   private createLockToggle(x: number, entry: StockEntry): void {
     const label = this.add
-      .text(x + SLOT_WIDTH / 2 - 4, 95 - 42 + 3, entry.locked ? "LOCKED" : "LOCK", {
+      .text(x + OFFER_WIDTH / 2 - 4, 124 - OFFER_HEIGHT / 2 + 4, entry.locked ? "LOCKED" : "LOCK", {
         fontSize: "8px",
         fontFamily: UI_FONT,
         fontStyle: "bold",
-        color: entry.locked ? "#7cfc00" : "#d8b45a",
+        color: entry.locked ? "#82c9aa" : "#d9483f",
         backgroundColor: "#171d21",
         padding: { x: 3, y: 1 },
       })
@@ -239,6 +317,10 @@ export class PrepareScene extends Phaser.Scene {
         return;
       }
       this.run = purchaseStock(this.run!, encounter.id, offerId, destination);
+      this.selectedOfferId = null;
+      this.selectedItemId = null;
+      this.selectedSource = null;
+      this.selectedContext = null;
       this.statusMessage = null;
       this.render();
     } catch (error) {
@@ -254,24 +336,28 @@ export class PrepareScene extends Phaser.Scene {
     // original fixed width. Size slots to the available canvas so no slot is
     // clipped at either edge, capped so the three-slot storage row is unchanged.
     const margin = 24;
-    const available = this.scale.width - margin * 2;
+    const available = LOGICAL_WIDTH - margin * 2;
     const slotWidth = Math.min(
       SLOT_WIDTH,
       Math.floor((available - (slots.length - 1) * SLOT_GAP) / slots.length),
     );
     const totalWidth = slots.length * slotWidth + (slots.length - 1) * SLOT_GAP;
-    const startX = (this.scale.width - totalWidth) / 2 + slotWidth / 2;
+    const startX = (LOGICAL_WIDTH - totalWidth) / 2 + slotWidth / 2;
     this.track(this.add.text(startX - slotWidth / 2, BOARD_Y - SLOT_HEIGHT / 2 - 24, `${label} · ${topologyLabel}`, {
       fontSize: "13px",
       fontFamily: UI_FONT,
       fontStyle: "bold",
-      color: "#ffdd77",
+      color: "#d7e4e7",
     }));
     slots.forEach((slot, index) => {
       const x = startX + index * (slotWidth + SLOT_GAP);
       const destination: GarageDestination = { area: "vehicle", slotId: slot.slotId };
       const zone = this.add.zone(x, BOARD_Y, slotWidth, SLOT_HEIGHT).setRectangleDropZone(slotWidth, SLOT_HEIGHT);
       zone.setData("destination", destination);
+      zone.setInteractive({ useHandCursor: true });
+      zone.on("pointerover", () => this.previewDestination(destination, slot.slotType));
+      zone.on("pointerdown", () => this.commitSelectedDestination(destination));
+      this.keyboardDestinations.push({ destination, slotType: slot.slotType });
       this.track(zone);
       this.track(this.add.rectangle(x, BOARD_Y, slotWidth, SLOT_HEIGHT, slot.occupied ? 0x263640 : 0x171d21)
         .setStrokeStyle(2, slot.occupied ? 0x6f91a8 : 0x45515a));
@@ -297,13 +383,13 @@ export class PrepareScene extends Phaser.Scene {
   private renderStorage(label: string): void {
     const positions = garageStorageModels(this.run!.build);
     const margin = 24;
-    const available = this.scale.width - margin * 2;
+    const available = LOGICAL_WIDTH - margin * 2;
     const slotWidth = Math.min(
       SLOT_WIDTH,
       Math.floor((available - (positions.length - 1) * SLOT_GAP) / positions.length),
     );
     const totalWidth = positions.length * slotWidth + (positions.length - 1) * SLOT_GAP;
-    const startX = (this.scale.width - totalWidth) / 2 + slotWidth / 2;
+    const startX = (LOGICAL_WIDTH - totalWidth) / 2 + slotWidth / 2;
     this.track(this.add.text(startX - slotWidth / 2, STORAGE_Y - SLOT_HEIGHT / 2 - 24, label, {
       fontSize: "13px",
       fontFamily: UI_FONT,
@@ -315,6 +401,10 @@ export class PrepareScene extends Phaser.Scene {
       const destination: GarageDestination = { area: "storage", index: position.index };
       const zone = this.add.zone(x, STORAGE_Y, slotWidth, SLOT_HEIGHT).setRectangleDropZone(slotWidth, SLOT_HEIGHT);
       zone.setData("destination", destination);
+      zone.setInteractive({ useHandCursor: true });
+      zone.on("pointerover", () => this.previewDestination(destination, null));
+      zone.on("pointerdown", () => this.commitSelectedDestination(destination));
+      this.keyboardDestinations.push({ destination, slotType: null });
       this.track(zone);
       this.track(this.add.rectangle(x, STORAGE_Y, slotWidth, SLOT_HEIGHT, position.occupied ? 0x263640 : 0x171d21)
         .setStrokeStyle(2, position.occupied ? 0x6f91a8 : 0x45515a));
@@ -344,22 +434,54 @@ export class PrepareScene extends Phaser.Scene {
     x: number,
     y: number,
     item: OfferedItem,
-    source: GarageSource,
+    source: Extract<GarageSource, { area: "vehicle" | "storage" }>,
     slotWidth: number,
     stateLabel: string | null,
     slotType: SlotType | null,
     tier: 1 | 2 | 3,
   ): void {
-    const card = createItemCard(this, x, y, item, { width: slotWidth - 16, height: SLOT_HEIGHT - 8 })
+    const context: ItemPresentationContext = {
+      surface: source.area === "storage" ? "storage" : "garage-slot",
+      tier,
+      priceVisible: false,
+      installation: garageInstallationPresentation(item, slotType),
+    };
+    const card = createItemCard(this, x, y, item, {
+      width: slotWidth - 10,
+      height: SLOT_HEIGHT - 4,
+      iconSize: 20,
+      context,
+      selected: this.selectedItemId === item.id,
+    })
       .setInteractive({ useHandCursor: true });
     this.track(card);
-    enableItemTooltip(this, card, item, this.inspectorText(garageItemInspector(item, slotType, this.run!.credits, this.run!.build)));
+    card.on("pointerdown", () => {
+      if ((this.selectedOfferId || this.selectedSource) && JSON.stringify(this.selectedSource) !== JSON.stringify(source)) {
+        const destination: GarageDestination = source.area === "vehicle"
+          ? { area: "vehicle", slotId: source.slotId }
+          : { area: "storage", index: source.index };
+        this.commitSelectedDestination(destination);
+        return;
+      }
+      this.selectedOfferId = null;
+      this.selectedSource = source;
+      this.selectedItemId = item.id;
+      this.selectedContext = context;
+      this.renderSelectedInspector();
+    });
+    this.keyboardItems.push({ card, activate: () => {
+      this.selectedOfferId = null;
+      this.selectedSource = source;
+      this.selectedItemId = item.id;
+      this.selectedContext = context;
+      this.renderSelectedInspector();
+    } });
     if (tier > 1) {
       this.track(this.add.text(x - slotWidth / 2 + 4, y - SLOT_HEIGHT / 2 + 3, `★${tier}`, {
         fontSize: "10px",
         fontFamily: UI_FONT,
         fontStyle: "bold",
-        color: "#ffdd77",
+        color: "#d7e4e7",
         backgroundColor: "#171d21",
         padding: { x: 3, y: 1 },
       }).setOrigin(0, 0));
@@ -387,7 +509,7 @@ export class PrepareScene extends Phaser.Scene {
           fontSize: "8px",
           fontFamily: UI_FONT,
           fontStyle: "bold",
-          color: "#d8b45a",
+          color: "#d9483f",
           backgroundColor: "#171d21",
           padding: { x: 3, y: 1 },
         })
@@ -404,6 +526,9 @@ export class PrepareScene extends Phaser.Scene {
   private sellHeldItemAt(source: Extract<GarageSource, { area: "vehicle" | "storage" }>): void {
     try {
       this.run = sellHeldItem(this.run!, this.run!.activeEncounter!.id, source);
+      this.selectedItemId = null;
+      this.selectedSource = null;
+      this.selectedContext = null;
       this.statusMessage = null;
       this.render();
     } catch (error) {
@@ -423,8 +548,68 @@ export class PrepareScene extends Phaser.Scene {
     const result = commitGarageCommand({ build }, { source, destination, replacement });
     if (result.kind !== "committed") return;
     this.run = { ...this.run!, build: result.build };
+    this.selectedSource = destination.area === "vehicle"
+      ? { area: "vehicle", slotId: destination.slotId }
+      : { area: "storage", index: destination.index };
+    const moved = this.selectedItem();
+    if (moved) {
+      const slotType = destination.area === "vehicle"
+        ? this.run.build.slots.find((slot) => slot.slotId === destination.slotId)?.slotType ?? null : null;
+      this.selectedContext = {
+        surface: destination.area === "vehicle" ? "garage-slot" : "storage",
+        tier: this.selectedContext?.tier ?? 1,
+        installation: garageInstallationPresentation(moved, slotType),
+      };
+    }
     this.statusMessage = null;
     this.render();
+  }
+
+  private previewDestination(destination: GarageDestination, slotType: SlotType | null): void {
+    const item = this.selectedItem();
+    if (!item || (!this.selectedOfferId && !this.selectedSource)) return;
+    this.selectedContext = {
+      ...(this.selectedContext ?? { surface: "placement-preview" as const }),
+      surface: "placement-preview",
+      installation: garageInstallationPresentation(item, slotType),
+    };
+    const source: GarageSource = this.selectedSource ?? { area: "offer", offerId: this.selectedOfferId! };
+    const garageContext = {
+      build: this.run!.build,
+      offers: source.area === "offer" ? [{ id: source.offerId, item }] : undefined,
+    };
+    let preview = previewGarageCommand(garageContext, { source, destination, replacement: "none" });
+    if (this.selectedSource && preview.occupant) {
+      preview = previewGarageCommand(garageContext, { source, destination, replacement: "swap" });
+    }
+    if (this.selectedSource) {
+      this.statusMessage = preview.reason && preview.reason !== "requires-confirmation"
+        ? "That destination is unavailable."
+        : `${preview.disposition.toUpperCase()} · ${this.selectedContext.installation?.stateLabel ?? "Stored"}`;
+    }
+    this.objects.filter((object) => object.getData?.("feature024Inspector") === true).forEach((object) => object.destroy());
+    const comparison = placementComparisonModel(preview, {
+      preview, incomingItem: item, outgoingItem: preview.occupant,
+      incomingContext: this.selectedContext,
+      outgoingContext: { surface: "placement-preview", tier: 1 },
+    });
+    const inspector = createPlacementComparisonInspector(this, LOGICAL_WIDTH / 2, INSPECTOR_Y, comparison, {
+      width: LOGICAL_WIDTH - 48, height: INSPECTOR_HEIGHT,
+    }).setDepth(75);
+    inspector.setData("feature024Inspector", true);
+    this.track(inspector);
+  }
+
+  private commitSelectedDestination(destination: GarageDestination): void {
+    if (this.selectedSource) this.moveHeldItem(this.selectedSource, destination);
+    else if (this.selectedOfferId) this.acquireOffer(this.selectedOfferId, destination);
+  }
+
+  private navigateDestination(direction: -1 | 1): void {
+    if ((!this.selectedOfferId && !this.selectedSource) || this.keyboardDestinations.length === 0) return;
+    this.keyboardDestinationIndex = (this.keyboardDestinationIndex + direction + this.keyboardDestinations.length) % this.keyboardDestinations.length;
+    const entry = this.keyboardDestinations[this.keyboardDestinationIndex];
+    this.previewDestination(entry.destination, entry.slotType);
   }
 
   private createControl(x: number, y: number, label: string, action: () => void, options: { enabled?: boolean } = {}): void {
@@ -448,33 +633,44 @@ export class PrepareScene extends Phaser.Scene {
     this.scene.start("TestDayScene", { run: this.run, origin });
   }
 
-  /** Shared lines every inspector tooltip shows regardless of destination. */
-  private inspectorText(inspector: GarageItemInspector): string {
-    const effectLine = inspector.tier > 1
-      ? `${inspector.effectiveEffectLabel} (★${inspector.tier}, base ${inspector.baseEffectLabel}) · ${inspector.cooldownLabel}`
-      : `${inspector.baseEffectLabel} · ${inspector.cooldownLabel}`;
-    const lines = [
-      `${inspector.name} [${inspector.originLabel} · ${inspector.categoryLabel}]`,
-      effectLine,
-      `${inspector.priceLabel}${inspector.affordable ? "" : " · unaffordable"} · ${inspector.storageBehaviorLabel}`,
-    ];
-    if (inspector.installationState) {
-      lines.push(`Installation: ${inspector.installationState}`);
-      if (inspector.gainedBehaviorLabel) lines.push(inspector.gainedBehaviorLabel);
-      if (inspector.lostBehaviorLabel) lines.push(`Loses: ${inspector.lostBehaviorLabel}`);
-      if (inspector.noAdditionalConsequenceLabel) lines.push(inspector.noAdditionalConsequenceLabel);
+  private selectedItem(): OfferedItem | null {
+    const encounter = this.run?.activeEncounter;
+    if (this.selectedOfferId && encounter) {
+      const offers = encounter.type === "parts-supplier"
+        ? (encounter.payload as PartsSupplierPayload).stock
+        : encounter.type === "reward-draft" || encounter.type === "cross-pollination"
+          ? (encounter.payload as RewardDraftPayload | CrossPollinationPayload).offers
+          : [];
+      const offered = offers.find((entry) => entry.id === this.selectedOfferId)?.item;
+      if (offered) return offered;
     }
-    inspector.synergyEffects.forEach((effect) => {
-      lines.push(`${effect.targetLabel} synergy: ${effect.currentValueLabel}`);
-    });
-    return lines.join("\n");
+    if (!this.selectedItemId) return null;
+    return this.run!.build.slots.find((slot) => slot.item?.id === this.selectedItemId)?.item
+      ?? this.run!.build.storage.find((position) => position.item?.id === this.selectedItemId)?.item
+      ?? null;
   }
 
-  /** An offer has no destination yet, so both possible installation outcomes
-   *  are disclosed up front instead of resolving just one. */
-  private offerInspectorText(item: OfferedItem): string {
-    const base = this.inspectorText(garageItemInspector(item, null, this.run!.credits, this.run!.build));
-    return `${base}\n${item.fittedBehavior.description}\n${item.improvisedBehavior.description}`;
+  private renderSelectedInspector(): void {
+    this.objects.filter((object) => object.getData?.("feature024Inspector") === true)
+      .forEach((object) => object.destroy());
+    this.objects = this.objects.filter((object) => object.active);
+    const item = this.selectedItem();
+    if (!item || !this.selectedContext) return;
+    const inspector = createItemInspector(this, LOGICAL_WIDTH / 2, INSPECTOR_Y, item, this.selectedContext, {
+      width: LOGICAL_WIDTH - 48,
+      height: INSPECTOR_HEIGHT,
+    }).setDepth(75);
+    inspector.setData("feature024Inspector", true);
+    this.track(inspector);
+  }
+
+  private clearSelection(): void {
+    this.selectedOfferId = null;
+    this.selectedSource = null;
+    this.selectedItemId = null;
+    this.selectedContext = null;
+    this.statusMessage = null;
+    this.render();
   }
 
   private track<T extends Phaser.GameObjects.GameObject>(object: T): T {

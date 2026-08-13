@@ -19,6 +19,7 @@ import type {
   VehicleBuild,
 } from "../simulation/types";
 import { itemVisualDescriptor } from "./itemVisualDescriptor";
+import type { InstallationPresentation } from "./itemPresentation";
 
 // Pure presentation models for the named-vehicle garage. These format the
 // authoritative build and the pure garage preview — they never recompute
@@ -273,6 +274,29 @@ export function garageItemInspector(
     synergyEffects: (item.synergyEffects ?? []).map((effect) => synergyEffectDisplay(item, effect, build)),
     tier,
     effectiveEffectLabel: effectLabel(applyTierBonus(item, tier)),
+  };
+}
+
+export function garageInstallationPresentation(
+  item: ItemDefinition,
+  slotType: SlotType | null,
+): InstallationPresentation {
+  if (slotType === null) {
+    return {
+      state: "stored", stateLabel: "Stored", activeBehavior: [], inactiveBehavior: [],
+      gainedLabels: item.activeWhileStored ? ["Race effects remain active"] : [],
+      lostLabels: item.activeWhileStored ? [] : ["Race effects are inert while stored"],
+      storageActivity: item.activeWhileStored ? "active" : "inert",
+    };
+  }
+  const resolution = resolveInstallation(item, slotType);
+  return {
+    state: resolution.state,
+    stateLabel: INSTALLATION_LABELS[resolution.state] as InstallationPresentation["stateLabel"],
+    activeBehavior: [], inactiveBehavior: [],
+    gainedLabels: resolution.appliedInstallationBehavior ? [resolution.appliedInstallationBehavior.description] : [],
+    lostLabels: resolution.lostFittedBehavior ? [resolution.lostFittedBehavior.description] : [],
+    storageActivity: "not-applicable",
   };
 }
 

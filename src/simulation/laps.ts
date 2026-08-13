@@ -13,7 +13,13 @@ import {
 import { resolveInstallation } from "./slots";
 import { resolveSynergyEffects } from "./synergy";
 import { applyTierBonus } from "./tiering";
-import { simulateLapPhysics, STOCK_PHYSICAL_STATS, type PhysicalStats, type Track } from "./tracks";
+import {
+  matchesPhysicsCondition,
+  simulateLapPhysics,
+  STOCK_PHYSICAL_STATS,
+  type PhysicalStats,
+  type Track,
+} from "./tracks";
 import {
   LAP_COUNT,
   MIN_LAP_TIME,
@@ -25,7 +31,8 @@ import {
   type FiredItem,
   type InstallationResolution,
   type ItemPhysicsContribution,
-  type LapPhaseBreakdown,
+  type ItemPhysicalContributionEvidence,
+  type LapPhysicsEvidence,
   type OfferedItem,
   type StatTarget,
   type SynergyResolution,
@@ -36,7 +43,7 @@ export interface PlayerLap {
   firedItems: FiredItem[];
   contributions: ContributionEvidence[];
   /** 021-arcade-physics-simulation: present only when simulatePlayerLaps was called with a track. */
-  physics?: { stats: PhysicalStats; phases: LapPhaseBreakdown[] };
+  physics?: LapPhysicsEvidence;
 }
 
 interface LocatedItem {
@@ -49,6 +56,7 @@ interface LocatedItem {
   installation?: InstallationResolution;
   /** Feature 014: synergy effects contributing to this slot's item, for attribution. */
   synergy?: SynergyResolution;
+  tier: 1 | 2 | 3;
 }
 
 export function firesOnLap(cooldown: number, lap: number): boolean {
@@ -228,6 +236,7 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: T
         slotId: slot.slotId,
         installation,
         synergy: synergy && synergy.applications.length > 0 ? synergy : undefined,
+        tier: slot.tier,
       }];
     }),
     ...build.storage.flatMap((position, index) => position.item
@@ -236,6 +245,7 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: T
         area: "storage" as const,
         index,
         active: position.item.activeWhileStored === true,
+        tier: position.tier,
       }]
       : []),
   ];
@@ -404,8 +414,46 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: T
     }
 
     const finalTime = physicsResult ? resultingLapTime + physicsResult.totalSeconds : resultingLapTime;
+    const itemContributions: ItemPhysicalContributionEvidence[] = physicsResult
+      ? locatedItems.map((located) => {
+        const boostedFlat = located.active && located.item.physics
+          ? scaleAllStats(located.item.physics, lapBoosts.boostsByStat)
+          : {};
+        const conditionals = located.active
+          ? (located.item.conditionalPhysics ?? []).map((entry) => {
+            const delta = scaleAllStats(entry.delta, lapBoosts.boostsByStat);
+            const affectedStats = new Set(Object.keys(entry.delta));
+            const matchedSegmentIndexes = [...new Set(physicsResult!.phases.flatMap((phase) => {
+              const segment = track!.segments[phase.segmentIndex];
+              const conditionMatches = segment?.kind === "corner"
+                && matchesPhysicsCondition(entry.condition, segment.turnDegrees);
+              const contributionMatches = (phase.conditionalMatches ?? []).some((match) =>
+                match.sourceItemId === located.item.id && affectedStats.has(match.stat));
+              return conditionMatches && contributionMatches ? [phase.segmentIndex] : [];
+            }))];
+            return { condition: entry.condition, delta, matchedSegmentIndexes };
+          })
+          : [];
+        const incomingBuffs = contributions.flatMap((entry) => entry.buffApplications)
+          .filter((application) => application.targetItemId === located.item.id);
+        return {
+          lap,
+          sourceItemId: located.item.id,
+          sourceLocation: { area: located.area, index: located.index },
+          slotId: located.slotId,
+          tier: located.tier,
+          installationState: located.installation?.state,
+          active: located.active,
+          flatResolvedDelta: boostedFlat,
+          conditionalResolvedDeltas: conditionals,
+          buffApplications: incomingBuffs,
+          synergyApplications: located.synergy?.applications ?? [],
+          inactiveReason: located.active ? undefined : "Stored item is inactive in this build.",
+        };
+      })
+      : [];
     const physics = physicsResult && physicsStats
-      ? { stats: physicsStats, phases: physicsResult.phases }
+      ? { stats: physicsStats, phases: physicsResult.phases, itemContributions }
       : undefined;
 
     return { time: finalTime, firedItems, contributions, physics };

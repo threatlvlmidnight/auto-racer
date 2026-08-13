@@ -1,5 +1,5 @@
-import { isCountSynergyBuff } from "../simulation/buffs";
 import type { CarResult, NCarContestResult, OfferedItem } from "../simulation/types";
+import { compactItemModel, itemInspectorModel } from "./itemPresentation";
 
 // Pure formatting helpers for ResultScene (User Story 1's outcome banner,
 // User Story 2's legibility data — FR-006/FR-007; extended by
@@ -71,19 +71,14 @@ export function standingsRow(car: CarResult): string {
 }
 
 export function itemIdentityLabel(item: OfferedItem): string {
-  return item.identityTag === "performance" ? "Performance" : "Neutral";
+  const model = compactItemModel(item, { surface: "result", tier: 1 });
+  return `${model.categoryLabel} · ${model.originLabel}`;
 }
 
 export function itemEffectLabel(item: OfferedItem): string {
-  if (item.buff) {
-    if (isCountSynergyBuff(item)) {
-      return `Boosts ${itemIdentityLabel(item)} items by ${item.buff.boostPercent}% per ${itemIdentityLabel(item)} item held`;
-    }
-    return `Boosts ${itemIdentityLabel(item)} items by ${item.buff.boostPercent}%`;
-  }
-
-  const modifier = item.timeModifier > 0 ? `+${item.timeModifier}` : `${item.timeModifier}`;
-  return `${modifier}s`;
+  return compactItemModel(item, { surface: "result", tier: 1 }).effectLines
+    .map((line) => `${line.directionLabel}: ${line.statLabel} ${line.valueLabel}${line.conditionLabel ? ` · ${line.conditionLabel}` : ""}`)
+    .join("; ");
 }
 
 /** "1 lap" for always-firing items; "N laps" otherwise. */
@@ -94,16 +89,12 @@ export function itemCooldownLabel(item: OfferedItem): string {
 
 /** Dependency note for buff items; null for direct items. */
 export function itemDependencyNote(item: OfferedItem): string | null {
-  if (!item.buff) return null;
-  return `Requires an active ${itemIdentityLabel(item)} item to have any effect`;
+  const inspector = itemInspectorModel(item, { surface: "result", tier: 1 });
+  return inspector.rules.length > 0 ? inspector.rules.map((rule) => `${rule.prefix}: ${rule.text}`).join(" · ") : null;
 }
 
 export function itemDetailsLabel(item: OfferedItem): string {
-  const storageStatus = item.activeWhileStored ? " [Active in storage]" : "";
-  const cooldown = `${itemCooldownLabel(item)} cooldown`;
-  const dependency = itemDependencyNote(item);
-  const base = `${item.name} [${itemIdentityLabel(item)}]${storageStatus} — ${itemEffectLabel(item)} · ${cooldown}`;
-  return dependency ? `${base}\n${dependency}` : base;
+  return itemInspectorModel(item, { surface: "result", tier: 1 }).accessibilityLabel;
 }
 
 function itemSectionLabel(title: string, items: OfferedItem[]): string {
