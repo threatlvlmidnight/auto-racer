@@ -1,7 +1,13 @@
 import {
   computeBoostsForLap,
+  DELTA_KEY_FOR_STAT,
+  hasDeltaForStat,
   isCountSynergyBuff,
+  isValueScaledBuff,
   matchingDirectItemCount,
+  matchingStatItemCount,
+  sumFittedValue,
+  type PhysicalStatTarget,
   type StackingState,
 } from "./buffs";
 import { resolveInstallation } from "./slots";
@@ -18,8 +24,10 @@ import {
   type ContributionEvidence,
   type FiredItem,
   type InstallationResolution,
+  type ItemPhysicsContribution,
   type LapPhaseBreakdown,
   type OfferedItem,
+  type StatTarget,
   type SynergyResolution,
 } from "./types";
 
@@ -48,17 +56,50 @@ export function firesOnLap(cooldown: number, lap: number): boolean {
 }
 
 /**
- * Adds a percent delta to an item's own numeric effect: percentage points
- * directly onto a buff's boostPercent (matching Fitted/Improvised's
- * buffBoostPercent convention), or a proportional scale of a direct item's
- * own timeModifier (014-item-synergy-tags contract §3).
+ * Scales every present delta field DELTA_KEY_FOR_STAT knows about — an
+ * item's own flat physics field, and every conditionalPhysics entry's own
+ * delta — by `percent`, using the same value + value*(percent/100) pattern
+ * as the legacy timeModifier fold (023-stat-targeted-amplifiers contract
+ * §3). Fields the item doesn't carry are left untouched.
  */
-function foldPercentDelta(item: OfferedItem, percent: number): OfferedItem {
+function scaleStatDelta(delta: ItemPhysicsContribution, stat: PhysicalStatTarget, percent: number): ItemPhysicsContribution {
+  const deltaKey = DELTA_KEY_FOR_STAT[stat];
+  const value = delta[deltaKey];
+  if (value === undefined || percent === 0) return delta;
+  return { ...delta, [deltaKey]: value + value * (percent / 100) };
+}
+
+function applyStatPercent(item: OfferedItem, stat: PhysicalStatTarget, percent: number): OfferedItem {
   if (percent === 0) return item;
-  if (item.buff) {
-    return { ...item, buff: { ...item.buff, boostPercent: item.buff.boostPercent + percent } };
+  const physics = item.physics ? scaleStatDelta(item.physics, stat, percent) : item.physics;
+  const conditionalPhysics = item.conditionalPhysics?.map((contribution) => ({
+    ...contribution,
+    delta: scaleStatDelta(contribution.delta, stat, percent),
+  }));
+  return { ...item, physics, conditionalPhysics: conditionalPhysics ?? item.conditionalPhysics };
+}
+
+/**
+ * Adds a percent delta to an item's own numeric effect(s), one StatTarget key
+ * at a time: "time" percentage points directly onto a buff's boostPercent
+ * (matching Fitted/Improvised's buffBoostPercent convention) or a
+ * proportional scale of a direct item's own timeModifier (014-item-synergy-
+ * tags contract §3); any physical-stat key scales that item's own physics/
+ * conditionalPhysics deltas the same multiplicative way
+ * (023-stat-targeted-amplifiers contract §3).
+ */
+function foldPercentDelta(item: OfferedItem, percentByStat: Partial<Record<StatTarget, number>>): OfferedItem {
+  let result = item;
+  const timePercent = percentByStat.time ?? 0;
+  if (timePercent !== 0) {
+    result = result.buff
+      ? { ...result, buff: { ...result.buff, boostPercent: result.buff.boostPercent + timePercent } }
+      : { ...result, timeModifier: result.timeModifier + result.timeModifier * (timePercent / 100) };
   }
-  return { ...item, timeModifier: item.timeModifier + item.timeModifier * (percent / 100) };
+  (Object.keys(DELTA_KEY_FOR_STAT) as PhysicalStatTarget[]).forEach((stat) => {
+    result = applyStatPercent(result, stat, percentByStat[stat] ?? 0);
+  });
+  return result;
 }
 
 /**
@@ -102,15 +143,28 @@ const MIN_PHYSICAL_STAT = 1;
  * or count of items (021 research.md Decision 6, contract §1). Storage
  * items excluded unless active, matching every other per-lap fold's
  * existing active-item filtering convention.
+ *
+ * 023-stat-targeted-amplifiers: `boostsByStat` (a specific lap's
+ * accumulated Buff percent per stat — usually empty) scales each item's own
+ * flat delta before summing. Called fresh every lap (research.md Decision
+ * 5) — with an all-zero `boostsByStat`, `value * (1 + 0/100)` is IEEE754-
+ * exact, so this reduces to the pre-feature once-per-build computation
+ * byte-for-byte (verified by US3's regression tests, not merely assumed).
  */
-function resolvePhysicalStats(activeItems: readonly OfferedItem[]): PhysicalStats {
+function resolvePhysicalStats(
+  activeItems: readonly OfferedItem[],
+  boostsByStat: Partial<Record<PhysicalStatTarget, number>>,
+): PhysicalStats {
   const totals = activeItems.reduce(
-    (sum, item) => ({
-      acceleration: sum.acceleration + (item.physics?.accelerationDelta ?? 0),
-      topSpeed: sum.topSpeed + (item.physics?.topSpeedDelta ?? 0),
-      brakingPower: sum.brakingPower + (item.physics?.brakingPowerDelta ?? 0),
-      corneringSpeed: sum.corneringSpeed + (item.physics?.corneringSpeedDelta ?? 0),
-    }),
+    (sum, item) => {
+      const scaled = item.physics ? scaleAllStats(item.physics, boostsByStat) : undefined;
+      return {
+        acceleration: sum.acceleration + (scaled?.accelerationDelta ?? 0),
+        topSpeed: sum.topSpeed + (scaled?.topSpeedDelta ?? 0),
+        brakingPower: sum.brakingPower + (scaled?.brakingPowerDelta ?? 0),
+        corneringSpeed: sum.corneringSpeed + (scaled?.corneringSpeedDelta ?? 0),
+      };
+    },
     { acceleration: 0, topSpeed: 0, brakingPower: 0, corneringSpeed: 0 },
   );
 
@@ -122,6 +176,17 @@ function resolvePhysicalStats(activeItems: readonly OfferedItem[]): PhysicalStat
   };
 }
 
+/** Applies every stat's own boostsByStat percent to a single delta object, once per stat key. */
+function scaleAllStats(
+  delta: ItemPhysicsContribution,
+  boostsByStat: Partial<Record<PhysicalStatTarget, number>>,
+): ItemPhysicsContribution {
+  return (Object.keys(DELTA_KEY_FOR_STAT) as PhysicalStatTarget[]).reduce(
+    (result, stat) => scaleStatDelta(result, stat, boostsByStat[stat] ?? 0),
+    delta,
+  );
+}
+
 /**
  * 022-contextual-physics-effects: flattens every active held item's own
  * conditionalPhysics entries into one list (order-preserving, no
@@ -129,12 +194,21 @@ function resolvePhysicalStats(activeItems: readonly OfferedItem[]): PhysicalStat
  * resolvePhysicalStats's own active-item filtering. Stamps each entry with
  * its owning item's real id (US3 inspectability, FR-006) — authored content
  * never sets sourceItemId itself.
+ *
+ * 023-stat-targeted-amplifiers: each contribution's own delta is scaled by
+ * `boostsByStat` the same way resolvePhysicalStats scales flat deltas
+ * (contract §3 — a stat-targeted amplifier reaches both).
  */
 function resolveConditionalPhysicsContributions(
   activeItems: readonly OfferedItem[],
+  boostsByStat: Partial<Record<PhysicalStatTarget, number>>,
 ): ConditionalPhysicsContribution[] {
   return activeItems.flatMap((item) =>
-    (item.conditionalPhysics ?? []).map((contribution) => ({ ...contribution, sourceItemId: item.id })));
+    (item.conditionalPhysics ?? []).map((contribution) => ({
+      ...contribution,
+      sourceItemId: item.id,
+      delta: scaleAllStats(contribution.delta, boostsByStat),
+    })));
 }
 
 export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: Track): PlayerLap[] {
@@ -168,19 +242,16 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: T
   const activeLocatedItems = locatedItems.filter(({ active }) => active);
   const activeItems = activeLocatedItems.map(({ item }) => item);
   const allHeldItems = locatedItems.map(({ item }) => item);
-  // 021-arcade-physics-simulation: a build's own physical stats don't vary
-  // lap to lap either — resolved once (research.md Decision 6), from the
-  // same active-item set every other per-lap fold already uses.
-  const physicsStats = resolvePhysicalStats(activeItems);
-  const conditionalPhysicsContributions = resolveConditionalPhysicsContributions(activeItems);
-  const physicsResult = track
-    ? simulateLapPhysics(physicsStats, track.segments, conditionalPhysicsContributions)
-    : undefined;
+  // 020-character-item-pools: "fitted" means vehicle slots specifically —
+  // storage is excluded even when activeWhileStored, matching the term's
+  // existing meaning throughout this codebase. Composition doesn't vary
+  // lap to lap, so this is computed once, like synergyResolution above.
+  const fittedValue = sumFittedValue(locatedItems.filter(({ area }) => area === "board").map(({ item }) => item));
   let stackingState: StackingState = {};
 
   return Array.from({ length: lapCount }, (_, index) => {
     const lap = index + 1;
-    const lapBoosts = computeBoostsForLap(activeItems, allHeldItems, lap, stackingState);
+    const lapBoosts = computeBoostsForLap(activeItems, allHeldItems, lap, stackingState, fittedValue);
     stackingState = lapBoosts.stackingState;
     const firedItems: FiredItem[] = [];
     const contributions: ContributionEvidence[] = [];
@@ -199,14 +270,16 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: T
         triggerState = "inactive-storage";
         reason = "Stored item is inactive in this build.";
       } else if (item.buff) {
-        const matchingTargets = activeItems.filter(
-          (candidate) => !candidate.buff && candidate.identityTag === item.identityTag,
-        );
+        const targetStat = item.buff.targetStat ?? "time";
+        const matchingTargets = targetStat === "time"
+          ? activeItems.filter((candidate) => !candidate.buff && candidate.identityTag === item.identityTag)
+          : activeItems.filter((candidate) => candidate !== item && hasDeltaForStat(candidate, targetStat));
         const appliedPercent = buffPercentFor(
           item,
           activeItemIndex,
           allHeldItems,
           lapBoosts.stackingState,
+          fittedValue,
         );
         const applicationType = effectKind === "flat-buff"
           ? "flat"
@@ -216,7 +289,11 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: T
           targetItemId: target.id,
           type: applicationType,
           appliedPercent,
-          appliedSeconds: target.timeModifier * appliedPercent / 100,
+          targetStat,
+          appliedSeconds: targetStat === "time" ? target.timeModifier * appliedPercent / 100 : 0,
+          appliedStatDelta: targetStat === "time"
+            ? undefined
+            : totalDeltaForStat(target, targetStat) * appliedPercent / 100,
         }));
         const fires = effectKind === "count-buff"
           || item.cooldown === undefined
@@ -243,7 +320,15 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: T
         triggerState = resultingContribution === 0 ? "zero" : "fired";
         reason = resultingContribution === 0 ? "Effect fired with zero contribution." : null;
         buffApplications = activeItems
-          .filter((candidate) => candidate.buff && candidate.identityTag === item.identityTag)
+          // 023-stat-targeted-amplifiers: this branch's resultingContribution
+          // is computed purely from boostsByTag (never boostsByStat), so
+          // only genuinely time-targeted buffs actually influenced it — a
+          // stat-targeted buff that happens to also carry a matching
+          // identityTag contributed nothing here and must not be listed.
+          .filter((candidate) =>
+            candidate.buff
+            && (candidate.buff.targetStat ?? "time") === "time"
+            && candidate.identityTag === item.identityTag)
           .map((source) => {
             const sourceKind = effectKindFor(source);
             const appliedPercent = buffPercentFor(
@@ -251,6 +336,7 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: T
               activeItems.indexOf(source),
               allHeldItems,
               lapBoosts.stackingState,
+              fittedValue,
             );
             return {
               sourceItemId: source.id,
@@ -259,6 +345,7 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: T
                 ? "flat" as const
                 : sourceKind === "stacking-buff" ? "stacking" as const : "count" as const,
               appliedPercent,
+              targetStat: "time" as const,
               appliedSeconds: item.timeModifier * appliedPercent / 100,
             };
           });
@@ -301,8 +388,23 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: T
     // installation, synergy, buffs, clamp) — a build/car-level effect, not
     // attributable to any single held item (research.md Decision 6).
     // Supersedes 018's buildTrackLean/trackFit ratio-based fold entirely.
+    //
+    // 023-stat-targeted-amplifiers: resolved fresh every lap using this
+    // lap's own lapBoosts.boostsByStat (research.md Decision 5/7) — a build
+    // with no lap-varying stat-targeted amplifier has an all-zero
+    // boostsByStat on every lap, which reduces this to the pre-feature
+    // once-per-build computation byte-for-byte (verified by US3).
+    let physicsStats: PhysicalStats | undefined;
+    let physicsResult: ReturnType<typeof simulateLapPhysics> | undefined;
+    if (track) {
+      physicsStats = resolvePhysicalStats(activeItems, lapBoosts.boostsByStat);
+      const conditionalPhysicsContributions =
+        resolveConditionalPhysicsContributions(activeItems, lapBoosts.boostsByStat);
+      physicsResult = simulateLapPhysics(physicsStats, track.segments, conditionalPhysicsContributions);
+    }
+
     const finalTime = physicsResult ? resultingLapTime + physicsResult.totalSeconds : resultingLapTime;
-    const physics = physicsResult
+    const physics = physicsResult && physicsStats
       ? { stats: physicsStats, phases: physicsResult.phases }
       : undefined;
 
@@ -316,17 +418,43 @@ function effectKindFor(item: OfferedItem): ContributionEffectKind {
   return item.cooldown === undefined ? "flat-buff" : "stacking-buff";
 }
 
+/**
+ * 023-stat-targeted-amplifiers: mirrors computeBoostsForLap's own per-item
+ * magnitude computation exactly, so this evidence-layer value never drifts
+ * from what the real simulation actually applied — count-synergy counting
+ * switches from identityTag (matchingDirectItemCount) to stat-delta
+ * eligibility (matchingStatItemCount) for a stat-targeted buff; stacking
+ * still reads the same positionally-keyed stackingState either way.
+ */
 function buffPercentFor(
   item: OfferedItem,
   activeItemIndex: number,
   allHeldItems: OfferedItem[],
   stackingState: StackingState,
+  fittedValue = 0,
 ): number {
   if (!item.buff) return 0;
+  const targetStat = item.buff.targetStat ?? "time";
+  if (isValueScaledBuff(item)) {
+    return item.buff.boostPercent * fittedValue;
+  }
   if (isCountSynergyBuff(item)) {
-    return item.buff.boostPercent * matchingDirectItemCount(allHeldItems, item);
+    return targetStat === "time"
+      ? item.buff.boostPercent * matchingDirectItemCount(allHeldItems, item)
+      : item.buff.boostPercent * matchingStatItemCount(allHeldItems, item, targetStat as PhysicalStatTarget);
   }
   return item.cooldown === undefined
     ? item.buff.boostPercent
     : (stackingState[activeItemIndex] ?? 0);
+}
+
+/** Sums a target's own flat physics delta plus every matching conditionalPhysics delta for one stat. */
+function totalDeltaForStat(item: OfferedItem, stat: PhysicalStatTarget): number {
+  const deltaKey = DELTA_KEY_FOR_STAT[stat];
+  const flat = item.physics?.[deltaKey] ?? 0;
+  const conditional = (item.conditionalPhysics ?? []).reduce(
+    (sum, contribution) => sum + (contribution.delta[deltaKey] ?? 0),
+    0,
+  );
+  return flat + conditional;
 }

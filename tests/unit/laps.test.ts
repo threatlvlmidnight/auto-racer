@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ITEM_POOL } from "../../src/content/sample-data";
+import { LEGACY_ITEM_POOL } from "../fixtures/legacy-item-pool";
 import { firesOnLap, simulatePlayerLaps } from "../../src/simulation/laps";
 import {
   generateTrack,
@@ -26,7 +26,7 @@ function emptyBuild(): Build {
 }
 
 function catalogItem(id: string): OfferedItem {
-  return structuredClone(ITEM_POOL.find((candidate) => candidate.id === id)!);
+  return structuredClone(LEGACY_ITEM_POOL.find((candidate) => candidate.id === id)!);
 }
 
 describe("simulatePlayerLaps", () => {
@@ -451,6 +451,7 @@ describe("simulatePlayerLaps — synergy fold (014-item-synergy-tags, Foundation
         target: { kind: "tag", tag: "gearing" },
         conditionKind: "linear-per-count",
         appliedPercent: 10,
+        targetStat: "time",
         description: source.synergyEffects![0].description,
       },
     ]);
@@ -513,6 +514,7 @@ describe("simulatePlayerLaps — synergy fold (014-item-synergy-tags, Foundation
         target: { kind: "category", category: "power" },
         conditionKind: "exact-other-count",
         appliedPercent: 50,
+        targetStat: "time",
         description: loneItem.synergyEffects![0].description,
       },
     ]);
@@ -592,6 +594,7 @@ describe("simulatePlayerLaps — synergy fold (014-item-synergy-tags, Foundation
         target: { kind: "tag", tag: "avionics" },
         conditionKind: "linear-per-count",
         appliedPercent: 10,
+        targetStat: "time",
         description: source.synergyEffects![0].description,
       },
     ]);
@@ -1170,5 +1173,389 @@ describe("simulatePlayerLaps conditionalPhysics inspectability (T021, T022, T022
     // something (phases/time differ), even though .stats must not reflect it.
     expect(lap.time).not.toBeCloseTo(plainLap.time, 6);
     expect(lap.physics!.stats).toEqual(STOCK_PHYSICAL_STATS);
+  });
+});
+
+// 023-stat-targeted-amplifiers US1 (T011-T014): Buff/Synergy amplify a
+// specific physical stat's resolved delta end to end, instead of only ever
+// multiplying timeModifier.
+describe("simulatePlayerLaps stat-targeted amplification (T011-T014, US1, contract §3)", () => {
+  it("T011: a stat-targeted flat Buff measurably changes a matching held item's resolved PhysicalStats and simulated lap time", () => {
+    const track = generateTrack(11, 2);
+    const accelItem = testItem({
+      id: "t011-accel", name: "Accel Item", price: 0, timeModifier: 0,
+      physics: { accelerationDelta: 20 },
+    });
+    const buff = testItem({
+      id: "t011-buff", name: "Accel Buff", price: 0, timeModifier: 0,
+      buff: { boostPercent: 50, targetStat: "acceleration" },
+    });
+    const alone = simulatePlayerLaps(vehicleBuild([accelItem]), LAP_COUNT, track)[0];
+    const withBuff = simulatePlayerLaps(vehicleBuild([accelItem, buff]), LAP_COUNT, track)[0];
+
+    expect(withBuff.physics!.stats.acceleration).toBeCloseTo(STOCK_PHYSICAL_STATS.acceleration + 30, 9);
+    expect(withBuff.time).not.toBeCloseTo(alone.time, 6);
+  });
+
+  it("T012: a stat-targeted Synergy effect (Boost-Others) measurably changes a matching held item's resolved stat", () => {
+    const track = generateTrack(11, 2);
+    const brakeItem = testItem({
+      id: "t012-brake", name: "Brake Item", price: 0, timeModifier: 0,
+      physics: { brakingPowerDelta: 10 },
+      synergyTags: ["gearing"],
+    });
+    const synergySource = testItem({
+      id: "t012-synergy", name: "Synergy Source", price: 0, timeModifier: 0,
+      synergyEffects: [{
+        target: { kind: "tag", tag: "gearing" },
+        appliesTo: "others",
+        condition: { kind: "linear-per-count", percentPerMatch: 40 },
+        targetStat: "brakingPower",
+        description: "Boosts gearing items' braking power by 40% per match.",
+      }],
+    });
+    const alone = simulatePlayerLaps(vehicleBuild([brakeItem]), LAP_COUNT, track)[0];
+    const withSynergy = simulatePlayerLaps(vehicleBuild([brakeItem, synergySource]), LAP_COUNT, track)[0];
+
+    expect(withSynergy.physics!.stats.brakingPower).toBeCloseTo(STOCK_PHYSICAL_STATS.brakingPower + 14, 9);
+    expect(withSynergy.time).not.toBeCloseTo(alone.time, 6);
+  });
+
+  it("T013: a stat-targeted amplifier whose only held candidate has no delta for the targeted stat contributes exactly 0", () => {
+    const track = generateTrack(11, 2);
+    const noMatchItem = testItem({ id: "t013-nomatch", name: "No Match", price: 0, timeModifier: 0 });
+    const buff = testItem({
+      id: "t013-buff", name: "Accel Buff", price: 0, timeModifier: 0,
+      buff: { boostPercent: 50, targetStat: "acceleration" },
+    });
+    const withBuff = simulatePlayerLaps(vehicleBuild([noMatchItem, buff]), LAP_COUNT, track)[0];
+    const plain = simulatePlayerLaps(vehicleBuild(), LAP_COUNT, track)[0];
+
+    expect(withBuff.physics!.stats).toEqual(plain.physics!.stats);
+  });
+
+  it("T014: a target item under both a stat-targeted Synergy effect and a stat-targeted flat Buff receives compounding, not additive, combination", () => {
+    const track = generateTrack(11, 2);
+    const accelItem = testItem({
+      id: "t014-accel", name: "Accel Item", price: 0, timeModifier: 0,
+      physics: { accelerationDelta: 20 },
+      synergyTags: ["gearing"],
+    });
+    const synergySource = testItem({
+      id: "t014-synergy", name: "Synergy Source", price: 0, timeModifier: 0,
+      synergyEffects: [{
+        target: { kind: "tag", tag: "gearing" },
+        appliesTo: "others",
+        condition: { kind: "linear-per-count", percentPerMatch: 25 },
+        targetStat: "acceleration",
+        description: "Boosts gearing items' acceleration by 25% per match.",
+      }],
+    });
+    const buff = testItem({
+      id: "t014-buff", name: "Accel Buff", price: 0, timeModifier: 0,
+      buff: { boostPercent: 10, targetStat: "acceleration" },
+    });
+    const withBoth = simulatePlayerLaps(vehicleBuild([accelItem, synergySource, buff]), LAP_COUNT, track)[0];
+
+    // base 20 -> synergy folds once (x1.25 = 25) -> buff applies per lap on top (x1.10 = 27.5)
+    const expectedAcceleration = STOCK_PHYSICAL_STATS.acceleration + 27.5;
+    expect(withBoth.physics!.stats.acceleration).toBeCloseTo(expectedAcceleration, 9);
+  });
+});
+
+// 020-character-item-pools: a Buff whose applied percent scales with the
+// summed authored price of fitted (vehicle-slot) items, end to end through
+// simulatePlayerLaps — Evelyn Mercer's "appraiser" chase-card mechanism.
+describe("simulatePlayerLaps value-scaled amplification (020-character-item-pools)", () => {
+  it("scales the applied percent by the summed price of fitted items only, excluding storage", () => {
+    const track = generateTrack(11, 2);
+    const topSpeedItem = testItem({
+      id: "value-topspeed", name: "Top Speed Item", price: 4, timeModifier: 0,
+      physics: { topSpeedDelta: 10 },
+    });
+    const valueBuff = testItem({
+      id: "value-buff", name: "Value Buff", price: 2, timeModifier: 0,
+      buff: { boostPercent: 1, targetStat: "topSpeed", scalesWithFittedValue: true },
+    });
+    const storedDecoy = testItem({ id: "value-stored-decoy", name: "Stored Decoy", price: 100, timeModifier: 0 });
+
+    const boardOnly = simulatePlayerLaps(vehicleBuild([topSpeedItem, valueBuff]), LAP_COUNT, track)[0];
+    const withStoredDecoy = simulatePlayerLaps(
+      vehicleBuild([topSpeedItem, valueBuff], [storedDecoy]),
+      LAP_COUNT,
+      track,
+    )[0];
+
+    // fittedValue = 4 (topSpeedItem) + 2 (valueBuff, includes itself) = 6;
+    // appliedPercent = 1% * 6 = 6% of topSpeedItem's +10 delta = +0.6.
+    expect(boardOnly.physics!.stats.topSpeed).toBeCloseTo(STOCK_PHYSICAL_STATS.topSpeed + 10.6, 9);
+    // A stored (non-fitted) item's huge price must not move fittedValue at all.
+    expect(withStoredDecoy.physics!.stats.topSpeed).toBeCloseTo(boardOnly.physics!.stats.topSpeed, 9);
+  });
+
+  it("reports the value-scaled appliedPercent/appliedStatDelta in ContributionEvidence, matching the real simulation", () => {
+    const track = generateTrack(11, 2);
+    const topSpeedItem = testItem({
+      id: "value-evidence-topspeed", name: "Top Speed Item", price: 4, timeModifier: 0,
+      physics: { topSpeedDelta: 10 },
+    });
+    const valueBuff = testItem({
+      id: "value-evidence-buff", name: "Value Buff", price: 2, timeModifier: 0,
+      buff: { boostPercent: 1, targetStat: "topSpeed", scalesWithFittedValue: true },
+    });
+    const lap = simulatePlayerLaps(vehicleBuild([topSpeedItem, valueBuff]), LAP_COUNT, track)[0];
+    const evidence = lap.contributions!.find((entry) => entry.sourceItemId === valueBuff.id)!;
+
+    expect(evidence.buffApplications).toHaveLength(1);
+    expect(evidence.buffApplications[0]).toMatchObject({
+      targetItemId: topSpeedItem.id,
+      targetStat: "topSpeed",
+      appliedPercent: 6,
+      appliedStatDelta: 0.6,
+    });
+  });
+
+  it("is inert (0% applied) when no other fitted item has a delta for the targeted stat, even with nonzero fittedValue", () => {
+    const track = generateTrack(11, 2);
+    const noMatchItem = testItem({ id: "value-nomatch", name: "No Match", price: 4, timeModifier: 0 });
+    const valueBuff = testItem({
+      id: "value-inert-buff", name: "Value Buff", price: 2, timeModifier: 0,
+      buff: { boostPercent: 1, targetStat: "topSpeed", scalesWithFittedValue: true },
+    });
+    const withBuff = simulatePlayerLaps(vehicleBuild([noMatchItem, valueBuff]), LAP_COUNT, track)[0];
+    const plain = simulatePlayerLaps(vehicleBuild(), LAP_COUNT, track)[0];
+
+    expect(withBuff.physics!.stats).toEqual(plain.physics!.stats);
+  });
+});
+
+// 023-stat-targeted-amplifiers US2 (T021-T023a): stacking stat-targeted
+// growth/decay, end to end, plus Synergy's own lap-invariance guard.
+describe("simulatePlayerLaps stacking stat-targeted amplification (T021-T023a, US2)", () => {
+  it("T021: a stat-targeted stacking Buff with a positive boostPercent produces a strictly larger effective stat at lap 10 than lap 1", () => {
+    const track = generateTrack(11, 2);
+    const accelItem = testItem({
+      id: "t021-accel", name: "Accel Item", price: 0, timeModifier: 0,
+      physics: { accelerationDelta: 10 },
+    });
+    const buff = testItem({
+      id: "t021-buff", name: "Growing Buff", price: 0, timeModifier: 0,
+      cooldown: 2, buff: { boostPercent: 10, targetStat: "acceleration" },
+    });
+    const laps = simulatePlayerLaps(vehicleBuild([accelItem, buff]), LAP_COUNT, track);
+
+    expect(laps[9].physics!.stats.acceleration).toBeGreaterThan(laps[0].physics!.stats.acceleration);
+  });
+
+  it("T022: the same setup with a negative boostPercent produces a strictly smaller effective stat at lap 10 than lap 1", () => {
+    const track = generateTrack(11, 2);
+    const accelItem = testItem({
+      id: "t022-accel", name: "Accel Item", price: 0, timeModifier: 0,
+      physics: { accelerationDelta: 10 },
+    });
+    const buff = testItem({
+      id: "t022-buff", name: "Decaying Buff", price: 0, timeModifier: 0,
+      cooldown: 2, buff: { boostPercent: -10, targetStat: "acceleration" },
+    });
+    const laps = simulatePlayerLaps(vehicleBuild([accelItem, buff]), LAP_COUNT, track);
+
+    expect(laps[9].physics!.stats.acceleration).toBeLessThan(laps[0].physics!.stats.acceleration);
+  });
+
+  it("T023: a build using only flat/count-synergy Buffs and/or Synergy effects (no stacking stat-target) produces PhysicalStats identical across every lap", () => {
+    const track = generateTrack(11, 2);
+    const accelItem = testItem({
+      id: "t023-accel", name: "Accel Item", price: 0, timeModifier: 0,
+      physics: { accelerationDelta: 10 },
+    });
+    const flatBuff = testItem({
+      id: "t023-buff", name: "Flat Buff", price: 0, timeModifier: 0,
+      buff: { boostPercent: 20, targetStat: "acceleration" },
+    });
+    const laps = simulatePlayerLaps(vehicleBuild([accelItem, flatBuff]), LAP_COUNT, track);
+
+    laps.forEach((lap) => {
+      expect(lap.physics!.stats).toEqual(laps[0].physics!.stats);
+    });
+  });
+
+  it("T023a: a stat-targeted Synergy effect stays lap-invariant even alongside an unrelated lap-varying stacking Buff (FR-012, quickstart item 6)", () => {
+    const track = generateTrack(11, 2);
+    const accelItem = testItem({
+      id: "t023a-accel", name: "Accel Item", price: 0, timeModifier: 0,
+      physics: { accelerationDelta: 10 },
+      synergyTags: ["gearing"],
+    });
+    const synergySource = testItem({
+      id: "t023a-synergy", name: "Synergy Source", price: 0, timeModifier: 0,
+      synergyEffects: [{
+        target: { kind: "tag", tag: "gearing" },
+        appliesTo: "others",
+        condition: { kind: "linear-per-count", percentPerMatch: 20 },
+        targetStat: "acceleration",
+        description: "Boosts gearing items' acceleration by 20% per match.",
+      }],
+    });
+    const brakeItem = testItem({
+      id: "t023a-brake", name: "Brake Item", price: 0, timeModifier: 0,
+      physics: { brakingPowerDelta: 10 },
+    });
+    const stackingBuff = testItem({
+      id: "t023a-stackbuff", name: "Stacking Buff", price: 0, timeModifier: 0,
+      cooldown: 2, buff: { boostPercent: 15, targetStat: "brakingPower" },
+    });
+    const laps = simulatePlayerLaps(
+      vehicleBuild([accelItem, synergySource, brakeItem, stackingBuff]), LAP_COUNT, track,
+    );
+
+    // Synergy's own contribution (acceleration) is identical every lap...
+    laps.forEach((lap) => {
+      expect(lap.physics!.stats.acceleration).toBeCloseTo(laps[0].physics!.stats.acceleration, 9);
+    });
+    // ...while the unrelated stacking Buff's own contribution (brakingPower) grows.
+    expect(laps[9].physics!.stats.brakingPower).toBeGreaterThan(laps[0].physics!.stats.brakingPower);
+  });
+});
+
+// 023-stat-targeted-amplifiers US3 (T027-T028): zero-regression guard,
+// checked comprehensively now that US1 (per-lap architecture) and US2
+// (stacking extension) both exist — expected already GREEN, this phase
+// proves it rather than adding new behavior.
+describe("simulatePlayerLaps zero regression for builds with no lap-varying stat-targeted amplifier (T027-T028, US3)", () => {
+  it("T027: a build with tiered items, synergy, and buffs (no targetStat authored anywhere) resolves PhysicalStats identically on every lap", () => {
+    const track = generateTrack(9, 3);
+    const lap = simulatePlayerLaps(buffDependentPracticeBuild(), LAP_COUNT, track);
+
+    lap.forEach((entry) => {
+      expect(entry.physics!.stats).toEqual(lap[0].physics!.stats);
+    });
+    // Sanity: this build only uses legacy time-targeted mechanisms, so its
+    // resolved stats should equal STOCK_PHYSICAL_STATS exactly (no item in
+    // this fixture carries a physics field).
+    expect(lap[0].physics!.stats).toEqual(STOCK_PHYSICAL_STATS);
+  });
+
+  it("T028: a build using only legacy time-targeted Buffs/Synergy produces byte-for-byte identical PlayerLap output to its pre-feature values", () => {
+    const lap = simulatePlayerLaps(buffDependentPracticeBuild())[0];
+
+    // Pinned values from this exact fixture's own pre-existing test
+    // ("emits complete per-held-item source, trigger, buff, storage, and
+    // timing evidence", line ~27 above) — unchanged by this feature.
+    expect(lap.contributions).toHaveLength(6);
+    expect(lap.contributions.find(({ sourceItemId }) => sourceItemId === "item-001")?.buffApplications)
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ sourceItemId: "item-012", targetItemId: "item-001", type: "flat", targetStat: "time" }),
+        expect.objectContaining({ sourceItemId: "item-014", targetItemId: "item-001", type: "stacking", targetStat: "time" }),
+      ]));
+  });
+});
+
+// 023-stat-targeted-amplifiers US4 (T030, T032): BuffApplication identifies
+// which stat it targeted and carries the right kind of applied amount.
+describe("BuffApplication targetStat/appliedStatDelta (T030, US4, contract §5)", () => {
+  it("a stat-targeted Buff application populates targetStat and appliedStatDelta, leaving appliedSeconds at 0", () => {
+    const track = generateTrack(11, 2);
+    const accelItem = testItem({
+      id: "t030-accel", name: "Accel Item", price: 0, timeModifier: 0,
+      physics: { accelerationDelta: 10 },
+    });
+    const buff = testItem({
+      id: "t030-buff", name: "Accel Buff", price: 0, timeModifier: 0,
+      buff: { boostPercent: 50, targetStat: "acceleration" },
+    });
+    const lap = simulatePlayerLaps(vehicleBuild([accelItem, buff]), LAP_COUNT, track)[0];
+    const buffContribution = lap.contributions.find((entry) => entry.sourceItemId === "t030-buff")!;
+
+    expect(buffContribution.buffApplications).toHaveLength(1);
+    const application = buffContribution.buffApplications[0];
+    expect(application.targetStat).toBe("acceleration");
+    expect(application.appliedStatDelta).toBeCloseTo(5, 9);
+    expect(application.appliedSeconds).toBe(0);
+  });
+
+  it("a legacy time-targeted Buff application still populates appliedSeconds, leaving appliedStatDelta undefined", () => {
+    const lap = simulatePlayerLaps(buffDependentPracticeBuild())[0];
+    const application = lap.contributions
+      .find(({ sourceItemId }) => sourceItemId === "item-001")!
+      .buffApplications.find((app) => app.sourceItemId === "item-012")!;
+
+    expect(application.targetStat).toBe("time");
+    expect(application.appliedStatDelta).toBeUndefined();
+    expect(typeof application.appliedSeconds).toBe("number");
+    expect(application.appliedSeconds).not.toBe(0);
+  });
+});
+
+// 023-stat-targeted-amplifiers US4 (T031): SynergyApplication's targetStat
+// threads correctly through simulatePlayerLaps's own contribution evidence,
+// not just resolveSynergyEffects in isolation (already covered by T010).
+describe("ContributionEvidence.synergy targetStat threading (T031, US4)", () => {
+  it("a stat-targeted Synergy application threads targetStat through simulatePlayerLaps's contribution evidence", () => {
+    const track = generateTrack(11, 2);
+    const brakeItem = testItem({
+      id: "t031-brake", name: "Brake Item", price: 0, timeModifier: 0,
+      physics: { brakingPowerDelta: 10 },
+      synergyTags: ["gearing"],
+    });
+    const synergySource = testItem({
+      id: "t031-synergy", name: "Synergy Source", price: 0, timeModifier: 0,
+      synergyEffects: [{
+        target: { kind: "tag", tag: "gearing" },
+        appliesTo: "others",
+        condition: { kind: "linear-per-count", percentPerMatch: 40 },
+        targetStat: "brakingPower",
+        description: "Boosts gearing items' braking power by 40% per match.",
+      }],
+    });
+    const lap = simulatePlayerLaps(vehicleBuild([brakeItem, synergySource]), LAP_COUNT, track)[0];
+    const brakeContribution = lap.contributions.find((entry) => entry.sourceItemId === "t031-brake")!;
+
+    expect(brakeContribution.synergy).toEqual([
+      expect.objectContaining({ sourceItemId: "t031-synergy", targetStat: "brakingPower", appliedPercent: 40 }),
+    ]);
+  });
+});
+
+// 023-stat-targeted-amplifiers US4 (T032): per-lap PlayerLap.physics.stats
+// values are independently traceable to the buff's own authored fields.
+describe("PlayerLap.physics.stats per-lap traceability (T032, US4, SC-006)", () => {
+  it("two different laps' resolved stat differ by an amount computable directly from the buff's own boostPercent/cooldown", () => {
+    const track = generateTrack(11, 2);
+    const accelItem = testItem({
+      id: "t032-accel", name: "Accel Item", price: 0, timeModifier: 0,
+      physics: { accelerationDelta: 10 },
+    });
+    const buff = testItem({
+      id: "t032-buff", name: "Growing Buff", price: 0, timeModifier: 0,
+      cooldown: 2, buff: { boostPercent: 5, targetStat: "acceleration" },
+    });
+    const laps = simulatePlayerLaps(vehicleBuild([accelItem, buff]), LAP_COUNT, track);
+
+    // Authored directly: fires on laps 1, 3, 5, 7, 9 (firesOnLap(2, lap)).
+    // Accumulated boostPercent by lap 1 = 5%; by lap 5 = 15% (three firings).
+    const expectedLap1 = STOCK_PHYSICAL_STATS.acceleration + 10 * 1.05;
+    const expectedLap5 = STOCK_PHYSICAL_STATS.acceleration + 10 * 1.15;
+    expect(laps[0].physics!.stats.acceleration).toBeCloseTo(expectedLap1, 9);
+    expect(laps[4].physics!.stats.acceleration).toBeCloseTo(expectedLap5, 9);
+  });
+});
+
+// 023-stat-targeted-amplifiers US5 (T038): a tiered duplicate's own physics
+// contribution is measurably larger, end to end.
+describe("simulatePlayerLaps tiered physics contribution (T038, US5, SC-005)", () => {
+  it("a tier-3 duplicate's contribution to its own physics stat is measurably larger than a tier-1 copy's", () => {
+    const track = generateTrack(11, 2);
+    const item = testItem({
+      id: "t038-accel", name: "Accel Item", price: 0, timeModifier: 0,
+      physics: { accelerationDelta: 10 },
+    });
+    const tier1Build = vehicleBuild([item]);
+    const tier3Build = vehicleBuild([item]);
+    tier3Build.slots[0].tier = 3;
+
+    const tier1Lap = simulatePlayerLaps(tier1Build, LAP_COUNT, track)[0];
+    const tier3Lap = simulatePlayerLaps(tier3Build, LAP_COUNT, track)[0];
+
+    expect(tier3Lap.physics!.stats.acceleration).toBeGreaterThan(tier1Lap.physics!.stats.acceleration);
   });
 });

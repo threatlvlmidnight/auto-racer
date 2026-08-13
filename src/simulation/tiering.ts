@@ -1,4 +1,4 @@
-import type { ItemDefinition, VehicleBuild } from "./types";
+import type { ItemDefinition, ItemPhysicsContribution, VehicleBuild } from "./types";
 
 export type DuplicateResolution =
   | { kind: "new" }
@@ -44,16 +44,47 @@ function tierResolution(
   return { kind: "tier-upgrade", area, ...position, fromTier: tier, toTier: (tier + 1) as 2 | 3 };
 }
 
+const PHYSICS_DELTA_KEYS = [
+  "accelerationDelta", "topSpeedDelta", "brakingPowerDelta", "corneringSpeedDelta",
+] as const satisfies readonly (keyof ItemPhysicsContribution)[];
+
+/** Scales every present field of one delta object by `percent`, leaving absent fields untouched. */
+function scalePhysicsDelta(delta: ItemPhysicsContribution, percent: number): ItemPhysicsContribution {
+  const scaled = { ...delta };
+  PHYSICS_DELTA_KEYS.forEach((key) => {
+    const value = scaled[key];
+    if (value !== undefined) scaled[key] = value + value * (percent / 100);
+  });
+  return scaled;
+}
+
 /**
  * Boosts an item's own authored effect by TIER_BONUS_PERCENT per tier above
  * tier 1 (016-duplicate-item-tiering contract §3). Never mutates the input
  * item or the shared catalog entry.
+ *
+ * 023-stat-targeted-amplifiers (contract §6): also scales the item's own
+ * `physics`/`conditionalPhysics` deltas by the same percent, uniformly —
+ * no stat-selection of its own, since a tiered item is simply a stronger
+ * copy of whatever it already does (research.md Decision 8).
  */
 export function applyTierBonus(item: ItemDefinition, tier: 1 | 2 | 3): ItemDefinition {
   if (tier === 1) return item;
   const percent = TIER_BONUS_PERCENT * (tier - 1);
-  if (item.buff) {
-    return { ...item, buff: { ...item.buff, boostPercent: item.buff.boostPercent + percent } };
+  let result = item.buff
+    ? { ...item, buff: { ...item.buff, boostPercent: item.buff.boostPercent + percent } }
+    : { ...item, timeModifier: item.timeModifier + item.timeModifier * (percent / 100) };
+  if (result.physics) {
+    result = { ...result, physics: scalePhysicsDelta(result.physics, percent) };
   }
-  return { ...item, timeModifier: item.timeModifier + item.timeModifier * (percent / 100) };
+  if (result.conditionalPhysics) {
+    result = {
+      ...result,
+      conditionalPhysics: result.conditionalPhysics.map((contribution) => ({
+        ...contribution,
+        delta: scalePhysicsDelta(contribution.delta, percent),
+      })),
+    };
+  }
+  return result;
 }

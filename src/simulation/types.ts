@@ -68,6 +68,20 @@ export interface ItemDefinition {
      * Absent/false = existing flat/stacking behavior, governed by cooldown.
      */
     perCount?: boolean;
+    /**
+     * 023-stat-targeted-amplifiers: which stat this buff amplifies.
+     * Absent/"time" = legacy behavior, amplifies timeModifier unchanged.
+     */
+    targetStat?: StatTarget;
+    /**
+     * 020-character-item-pools: if true, this buff's applied boost is
+     * boostPercent multiplied by the summed authored `price` of every
+     * currently fitted item (vehicle slots only — storage excluded,
+     * matching "fitted" terminology exactly, including this item's own
+     * price). A value-scaled buff. Independent of perCount — authoring both
+     * on the same item is not a supported combination.
+     */
+    scalesWithFittedValue?: boolean;
   };
   /** Laps between firings. Buffs without one are flat, always-on buffs. */
   cooldown?: number;
@@ -102,6 +116,15 @@ export interface ItemDefinition {
    */
   conditionalPhysics?: readonly ConditionalPhysicsContribution[];
 }
+
+// --- Feature 023: stat-targeted amplifiers ---------------------------------
+
+/**
+ * Which stat a Buff or SynergyEffect amplifies (023 data-model.md).
+ * "time" is the legacy default — undefined and "time" are always treated
+ * identically wherever this field is read.
+ */
+export type StatTarget = "time" | "acceleration" | "topSpeed" | "brakingPower" | "corneringSpeed";
 
 // --- Feature 021: arcade physics simulation -------------------------------
 
@@ -181,6 +204,12 @@ export interface SynergyEffect {
   condition: SynergyCondition;
   /** Exact inspector text, same convention as ItemBehavior.description. */
   description: string;
+  /**
+   * 023-stat-targeted-amplifiers: which stat this effect amplifies.
+   * Absent/"time" = legacy behavior, amplifies timeModifier unchanged.
+   * Always resolved once per build, never lap-varying (FR-012).
+   */
+  targetStat?: StatTarget;
 }
 
 /** One contributing effect, for attribution (parallel to installation's attribution shape). */
@@ -189,13 +218,20 @@ export interface SynergyApplication {
   target: SynergyTarget;
   conditionKind: SynergyCondition["kind"];
   appliedPercent: number;
+  /** 023-stat-targeted-amplifiers: always present; "time" for legacy applications. */
+  targetStat: StatTarget;
   description: string;
 }
 
 /** Per-slot synergy resolution, keyed by VehicleSlotState.slotId. */
 export interface SynergyResolution {
-  /** Net effect on this slot's item, folded into effectiveItem. */
-  appliedDeltaPercent: number;
+  /**
+   * Net effect on this slot's item, folded into effectiveItem — keyed by
+   * StatTarget since one target item can receive boosts to different stats
+   * from different source items simultaneously (023 research.md Decision 3).
+   * A stat key is present only when at least one application targeted it.
+   */
+  appliedDeltaPercent: Partial<Record<StatTarget, number>>;
   applications: SynergyApplication[];
 }
 
@@ -332,7 +368,12 @@ export interface BuffApplication {
   targetItemId: string;
   type: "flat" | "stacking" | "count";
   appliedPercent: number;
+  /** 023-stat-targeted-amplifiers: always present; "time" for legacy applications. */
+  targetStat: StatTarget;
+  /** Meaningful only when targetStat === "time"; 0 otherwise. */
   appliedSeconds: number;
+  /** 023-stat-targeted-amplifiers: meaningful only when targetStat !== "time". */
+  appliedStatDelta?: number;
 }
 
 export interface ContributionEvidence {

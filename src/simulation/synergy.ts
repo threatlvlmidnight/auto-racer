@@ -1,5 +1,6 @@
 import type {
   ItemDefinition,
+  StatTarget,
   SynergyApplication,
   SynergyCondition,
   SynergyEffect,
@@ -61,6 +62,9 @@ export function resolveSynergyEffects(build: VehicleBuild): Map<string, SynergyR
         target: effect.target,
         conditionKind: effect.condition.kind,
         appliedPercent,
+        // 023-stat-targeted-amplifiers: always resolved once per build,
+        // never lap-varying, regardless of what else the build holds (FR-012).
+        targetStat: effect.targetStat ?? "time",
         description: effect.description,
       };
 
@@ -75,13 +79,15 @@ export function resolveSynergyEffects(build: VehicleBuild): Map<string, SynergyR
   return new Map(
     build.slots.map((slot) => {
       const applications = applicationsBySlot.get(slot.slotId) ?? [];
-      return [
-        slot.slotId,
-        {
-          appliedDeltaPercent: applications.reduce((sum, application) => sum + application.appliedPercent, 0),
-          applications,
-        },
-      ];
+      // 023-stat-targeted-amplifiers: keyed by StatTarget, not one flat sum —
+      // one target item can receive boosts to different stats from
+      // different source items simultaneously (research.md Decision 3).
+      const appliedDeltaPercent: Partial<Record<StatTarget, number>> = {};
+      applications.forEach((application) => {
+        appliedDeltaPercent[application.targetStat] =
+          (appliedDeltaPercent[application.targetStat] ?? 0) + application.appliedPercent;
+      });
+      return [slot.slotId, { appliedDeltaPercent, applications }];
     }),
   );
 }

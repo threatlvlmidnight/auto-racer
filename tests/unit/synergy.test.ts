@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveSynergyEffects } from "../../src/simulation/synergy";
-import type { SynergyEffect } from "../../src/simulation/types";
+import type { StatTarget, SynergyEffect } from "../../src/simulation/types";
 import { testItem, vehicleBuild } from "../fixtures/vehicle-build-fixtures";
 
 function boostOthersByTag(tag: string, percentPerMatch: number): SynergyEffect {
@@ -39,13 +39,14 @@ describe("resolveSynergyEffects — target matching (US1, FR-001)", () => {
     });
     const resolution = resolveSynergyEffects(vehicleBuild([source, target]));
 
-    expect(resolution.get("the-highwheel-slot-2")!.appliedDeltaPercent).toBe(5);
+    expect(resolution.get("the-highwheel-slot-2")!.appliedDeltaPercent).toEqual({ time: 5 });
     expect(resolution.get("the-highwheel-slot-2")!.applications).toEqual([
       {
         sourceItemId: "source",
         target: { kind: "tag", tag: "gearing" },
         conditionKind: "linear-per-count",
         appliedPercent: 5,
+        targetStat: "time",
         description: source.synergyEffects![0].description,
       },
     ]);
@@ -82,8 +83,8 @@ describe("resolveSynergyEffects — target matching (US1, FR-001)", () => {
     });
     const resolution = resolveSynergyEffects(vehicleBuild([source, powerItem, chassisItem]));
 
-    expect(resolution.get("the-highwheel-slot-2")!.appliedDeltaPercent).toBe(8);
-    expect(resolution.get("the-highwheel-slot-3")!.appliedDeltaPercent).toBe(0);
+    expect(resolution.get("the-highwheel-slot-2")!.appliedDeltaPercent).toEqual({ time: 8 });
+    expect(resolution.get("the-highwheel-slot-3")!.appliedDeltaPercent).toEqual({});
   });
 
   it("applies no boost anywhere when no held item shares the target (US1 AS2)", () => {
@@ -104,7 +105,7 @@ describe("resolveSynergyEffects — target matching (US1, FR-001)", () => {
     const resolution = resolveSynergyEffects(vehicleBuild([source, unrelated]));
 
     resolution.forEach((entry) => {
-      expect(entry.appliedDeltaPercent).toBe(0);
+      expect(entry.appliedDeltaPercent).toEqual({});
       expect(entry.applications).toEqual([]);
     });
   });
@@ -122,7 +123,7 @@ describe("resolveSynergyEffects — self-exclusion (FR-006)", () => {
     });
     const resolution = resolveSynergyEffects(vehicleBuild([source]));
 
-    expect(resolution.get("the-highwheel-slot-1")!.appliedDeltaPercent).toBe(0);
+    expect(resolution.get("the-highwheel-slot-1")!.appliedDeltaPercent).toEqual({});
   });
 
   it("excludes the source item from its own self-conditional count", () => {
@@ -136,7 +137,7 @@ describe("resolveSynergyEffects — self-exclusion (FR-006)", () => {
     });
     const resolution = resolveSynergyEffects(vehicleBuild([source]));
 
-    expect(resolution.get("the-highwheel-slot-1")!.appliedDeltaPercent).toBe(50);
+    expect(resolution.get("the-highwheel-slot-1")!.appliedDeltaPercent).toEqual({ time: 50 });
   });
 });
 
@@ -158,6 +159,7 @@ describe("resolveSynergyEffects — exact-other-count condition, including count
         target: { kind: "category", category: "power" },
         conditionKind: "exact-other-count",
         appliedPercent: 50,
+        targetStat: "time",
         description: source.synergyEffects![0].description,
       },
     ]);
@@ -181,7 +183,7 @@ describe("resolveSynergyEffects — exact-other-count condition, including count
     });
     const resolution = resolveSynergyEffects(vehicleBuild([source, otherPower]));
 
-    expect(resolution.get("the-highwheel-slot-1")!.appliedDeltaPercent).toBe(0);
+    expect(resolution.get("the-highwheel-slot-1")!.appliedDeltaPercent).toEqual({});
   });
 
   it("supports non-zero exact counts, not only the lone-item case", () => {
@@ -204,8 +206,8 @@ describe("resolveSynergyEffects — exact-other-count condition, including count
     const resolutionWithTwo = resolveSynergyEffects(vehicleBuild([source, gearA, gearB]));
     const resolutionWithOne = resolveSynergyEffects(vehicleBuild([source, gearA]));
 
-    expect(resolutionWithTwo.get("the-highwheel-slot-1")!.appliedDeltaPercent).toBe(20);
-    expect(resolutionWithOne.get("the-highwheel-slot-1")!.appliedDeltaPercent).toBe(0);
+    expect(resolutionWithTwo.get("the-highwheel-slot-1")!.appliedDeltaPercent).toEqual({ time: 20 });
+    expect(resolutionWithOne.get("the-highwheel-slot-1")!.appliedDeltaPercent).toEqual({});
   });
 });
 
@@ -247,7 +249,7 @@ describe("resolveSynergyEffects — active-slot-only counting (FR-005)", () => {
     });
     const resolution = resolveSynergyEffects(vehicleBuild([target], [storedSource]));
 
-    expect(resolution.get("the-highwheel-slot-1")!.appliedDeltaPercent).toBe(0);
+    expect(resolution.get("the-highwheel-slot-1")!.appliedDeltaPercent).toEqual({});
   });
 });
 
@@ -277,12 +279,65 @@ describe("resolveSynergyEffects — multi-effect composition", () => {
     const resolution = resolveSynergyEffects(vehicleBuild([sourceA, sourceB, target]));
     const targetResolution = resolution.get("the-highwheel-slot-3")!;
 
-    expect(targetResolution.appliedDeltaPercent).toBe(8);
+    expect(targetResolution.appliedDeltaPercent).toEqual({ time: 8 });
     expect(targetResolution.applications).toHaveLength(2);
     expect(targetResolution.applications.map((app) => app.sourceItemId).sort()).toEqual([
       "source-a",
       "source-b",
     ]);
+  });
+});
+
+// 023-stat-targeted-amplifiers US1 (T010): SynergyResolution.appliedDeltaPercent
+// becomes a per-StatTarget map — one target item can receive boosts to
+// different stats from different source items simultaneously.
+describe("resolveSynergyEffects — stat-targeted effects (T010, US1, research.md Decision 3)", () => {
+  it("targetStat defaults to 'time' when a SynergyEffect omits it", () => {
+    const source = testItem({
+      id: "source", name: "Source", price: 1, timeModifier: 0,
+      synergyEffects: [boostOthersByTag("gearing", 5)],
+    });
+    const target = testItem({
+      id: "target", name: "Target", price: 1, timeModifier: -10, synergyTags: ["gearing"],
+    });
+    const resolution = resolveSynergyEffects(vehicleBuild([source, target]));
+
+    expect(resolution.get("the-highwheel-slot-2")!.applications[0].targetStat).toBe("time");
+  });
+
+  it("accumulates a stat-targeted effect's percent under its own StatTarget key", () => {
+    const source = testItem({
+      id: "source", name: "Source", price: 1, timeModifier: 0,
+      synergyEffects: [{ ...boostOthersByTag("gearing", 12), targetStat: "acceleration" }],
+    });
+    const target = testItem({
+      id: "target", name: "Target", price: 1, timeModifier: 0, synergyTags: ["gearing"],
+      physics: { accelerationDelta: 10 },
+    });
+    const resolution = resolveSynergyEffects(vehicleBuild([source, target]));
+
+    expect(resolution.get("the-highwheel-slot-2")!.appliedDeltaPercent).toEqual({ acceleration: 12 });
+  });
+
+  it("a single target item receives boosts to two DIFFERENT stats from two different source items independently", () => {
+    const gearingSource = testItem({
+      id: "gearing-source", name: "Gearing Source", price: 1, timeModifier: 0,
+      synergyEffects: [{ ...boostOthersByTag("gearing", 12), targetStat: "acceleration" }],
+    });
+    const aeroSource = testItem({
+      id: "aero-source", name: "Aero Source", price: 1, timeModifier: 0,
+      synergyEffects: [{ ...boostOthersByTag("aerodynamics", 6), targetStat: "topSpeed" }],
+    });
+    const target = testItem({
+      id: "target", name: "Target", price: 1, timeModifier: 0,
+      synergyTags: ["gearing", "aerodynamics"],
+      physics: { accelerationDelta: 10, topSpeedDelta: 20 },
+    });
+    const resolution = resolveSynergyEffects(vehicleBuild([gearingSource, aeroSource, target]));
+    const targetResolution = resolution.get("the-highwheel-slot-3")!;
+
+    expect(targetResolution.appliedDeltaPercent).toEqual({ acceleration: 12, topSpeed: 6 });
+    expect(targetResolution.applications).toHaveLength(2);
   });
 });
 
@@ -327,5 +382,23 @@ describe("resolveSynergyEffects — determinism (Validation Invariant 3)", () =>
     resolveSynergyEffects(build);
 
     expect(build).toEqual(snapshot);
+  });
+});
+
+// 023-stat-targeted-amplifiers Foundational (T002): SynergyEffect.targetStat
+// coexists with every existing field; undefined and "time" mean the same
+// thing everywhere this field is read.
+describe("SynergyEffect.targetStat shape (T002)", () => {
+  it("is optional and accepts every StatTarget value", () => {
+    const legacyImplicit: SynergyEffect = boostOthersByTag("gearing", 5);
+    const legacyExplicit: SynergyEffect = { ...boostOthersByTag("gearing", 5), targetStat: "time" };
+    const statTargets: StatTarget[] = ["time", "acceleration", "topSpeed", "brakingPower", "corneringSpeed"];
+
+    expect(legacyImplicit.targetStat).toBeUndefined();
+    expect(legacyExplicit.targetStat).toBe("time");
+    statTargets.forEach((target) => {
+      const effect: SynergyEffect = { ...boostOthersByTag("gearing", 5), targetStat: target };
+      expect(effect.targetStat).toBe(target);
+    });
   });
 });

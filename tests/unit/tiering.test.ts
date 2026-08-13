@@ -79,3 +79,46 @@ describe("applyTierBonus (016-duplicate-item-tiering foundational, FR-004)", () 
     expect(DIRECT_ITEM).toEqual(snapshot);
   });
 });
+
+// 023-stat-targeted-amplifiers US5 (T036-T038): applyTierBonus also scales a
+// held item's own physics/conditionalPhysics deltas, closing the same gap
+// for duplicate-copy progression this feature closed for Buff/Synergy.
+describe("applyTierBonus — physics/conditionalPhysics scaling (T036-T038, US5, contract §6)", () => {
+  const PHYSICS_ITEM = testItem({
+    id: "physics-item", name: "Physics Item", price: 4, timeModifier: 0,
+    physics: { accelerationDelta: 10, topSpeedDelta: -4 },
+  });
+  const CONDITIONAL_ITEM = testItem({
+    id: "conditional-item", name: "Conditional Item", price: 4, timeModifier: 0,
+    conditionalPhysics: [{
+      condition: { kind: "corner-tightness", direction: "at-least", turnDegrees: 60 },
+      delta: { brakingPowerDelta: 8 },
+    }],
+  });
+
+  it("T036: scales every present physics delta field by TIER_BONUS_PERCENT * (tier - 1)", () => {
+    const tier2 = applyTierBonus(PHYSICS_ITEM, 2);
+    const tier3 = applyTierBonus(PHYSICS_ITEM, 3);
+
+    expect(tier2.physics!.accelerationDelta).toBeCloseTo(10 * (1 + TIER_BONUS_PERCENT / 100), 9);
+    expect(tier2.physics!.topSpeedDelta).toBeCloseTo(-4 * (1 + TIER_BONUS_PERCENT / 100), 9);
+    expect(tier3.physics!.accelerationDelta).toBeCloseTo(10 * (1 + (TIER_BONUS_PERCENT * 2) / 100), 9);
+  });
+
+  it("T036: is a no-op on physics at tier 1", () => {
+    expect(applyTierBonus(PHYSICS_ITEM, 1).physics).toEqual(PHYSICS_ITEM.physics);
+  });
+
+  it("T037: scales every conditionalPhysics entry's delta field the same way", () => {
+    const tier2 = applyTierBonus(CONDITIONAL_ITEM, 2);
+    expect(tier2.conditionalPhysics![0].delta.brakingPowerDelta).toBeCloseTo(8 * (1 + TIER_BONUS_PERCENT / 100), 9);
+    // The condition itself is untouched.
+    expect(tier2.conditionalPhysics![0].condition).toEqual(CONDITIONAL_ITEM.conditionalPhysics![0].condition);
+  });
+
+  it("never mutates the input item's physics/conditionalPhysics", () => {
+    const snapshot = structuredClone(PHYSICS_ITEM);
+    applyTierBonus(PHYSICS_ITEM, 3);
+    expect(PHYSICS_ITEM).toEqual(snapshot);
+  });
+});
