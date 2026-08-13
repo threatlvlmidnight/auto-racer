@@ -139,22 +139,23 @@ Final-Sprint Tonic, and Tandem Crank.
 
 ## Inez Rook - Fieldworks
 
-**Role**: Expedition engineer, field mechanic, and compulsive rescuer of broken
-machinery
+**Role**: Expedition engineer and experimental vehicle designer
 
-**Signature machine**: *The Lark*, a patched three-wheel machine with a rear
-propeller, mismatched instruments, and components recovered from several
-vehicles that did not survive their original purposes.
+**Signature machine**: *The Lark*, a modular experimental machine whose current
+three-wheel layout, rear propeller, instrument array, and structural test mounts
+let Inez evaluate technologies borrowed from aircraft, industrial machinery,
+and expedition transport in one racing platform.
 
-**Approach to racing**: There is no such thing as the wrong component, only a
-component whose next purpose has not yet been understood. Inez expects a machine
-to change whenever circumstances do.
+**Approach to racing**: No existing vehicle category gets to decide what belongs
+in a racing machine. Inez transfers serious technology across disciplines and
+uses competition to discover combinations that convention would never test.
 
-**Character**: Animated, persuasive, and delighted by mechanical adversity.
-Inez remembers where every salvaged part came from and speaks about troublesome
-components as though defending difficult friends. She trusts unreliable
-machinery completely but is slower to trust people. The championship is her
-first chance to build for joy and personal ambition rather than necessity.
+**Character**: Animated, persuasive, and delighted by an unanswered engineering
+question. Inez is technically confident and audacious without being careless:
+every experiment has a hypothesis, instrumentation, and a reason to exist. She
+is slower to trust people than machines, but the championship is her first
+chance to apply her expedition experience to joyful, open-ended invention and
+personal ambition rather than necessity.
 
 Her past centers on expeditions, remote works, recovery, and practical field
 engineering. Any military history remains background texture rather than the
@@ -162,29 +163,31 @@ source of jokes, weapons, or a combat-centered identity.
 
 **Ecosystem vocabulary**:
 
-- salvage, tools, spare parts, field repairs, fuel, pressure, heat, and cooling;
-- expedition equipment, canvas, rivets, gauges, pumps, propellers, and aviation experiments;
-- adaptation, instability, transformation, storage utility, and emergency measures.
+- aircraft engines, propellers, streamlined canvas, and experimental airflow;
+- pressure-fed fuel systems, cooling jackets, pumps, gauges, and control valves;
+- multi-axle steering, articulated wheel bogies, structural tubing, and test instrumentation;
+- technology transfer, modular prototypes, controlled limits, and cross-disciplinary integration.
 
 **Supported strategy directions**:
 
-- salvage and transformation of unwanted or damaged items;
-- tool, spare-part, and storage-count synergies;
-- heat, pressure, fuel, overclocking, and controlled-risk builds;
-- repair effects that mitigate or profit from instability;
-- stacking experimental improvements;
-- propeller, airflow, and lightweight combinations;
-- hybrid assemblies that connect otherwise unrelated synergy tags.
+- aircraft power, propeller, airflow, and lightweight combinations;
+- three-, four-, or six-wheel tracking and articulated running-gear systems;
+- pressure, heat, cooling, fuel, and instrumented controlled-limit builds;
+- contextual prototypes that excel in particular track conditions while making visible tradeoffs elsewhere;
+- multi-stat and multi-tag assemblies that connect Power and Chassis systems;
+- stacking experimental improvements whose performance envelope grows under observation.
 
-**Economic axis**: **Salvage and adaptation.** Fieldworks extracts value from
-discarded, replaced, unstable, or low-value items. It may repair them, break
-them into useful inputs, or transform them into something with a new function.
-This should encourage opportunistic rebuilding without making destruction the
-only viable Fieldworks plan.
+**Economic axis**: **Prototype development and technology transfer.** Fieldworks
+extracts value from proving that equipment developed for another discipline has
+a competitive application. Experimental instruments, test results, licensing,
+and cross-industry sponsorship may reward players for assembling and validating
+unconventional systems. This axis celebrates invention; it must not imply that
+Inez competes with inferior materials or only succeeds by using discarded parts.
 
-**Example item directions**: Surplus Propeller, Field Repair Kit, Observation
-Balloon Fabric, Portable Fuel Stove, Rivet Gun, Cracked Pressure Gauge, Emergency
-Cooling Flask, and Box of Unmatched Fasteners.
+**Example item directions**: Aircraft Engine Cradle, Variable-Pitch Propeller,
+Streamlined Balloon Fabric, Pressure-Fed Carburetor, Six-Wheel Tracking Bogie,
+Articulated Steering Linkage, Calibrated Pressure Manifold, and Instrumented
+Cooling Jacket.
 
 Flight remains an item effect, visual flourish, or build expression unless a
 later feature explicitly designs a shared movement rule. *The Lark* does not
@@ -192,22 +195,31 @@ bypass laps or use a private simulation model.
 
 ## Nell Voss - Backroads
 
-**Role**: Customs runner, illicit courier, and veteran of races that were never
-officially announced
+**Role**: Customs runner, rulebook engineer, and veteran of races that were
+never officially announced
 
 **Signature machine**: *The Hush*, a low, stripped roadster with shuttered
 lamps, concealed compartments, interchangeable plates, and more fuel capacity
 than its paperwork admits.
 
-**Approach to racing**: Officials have given a name and a rulebook to something
-Nell has done for years. Rules, patrols, bad roads, and other competitors are
-all obstacles to be read, redirected, or escaped.
+**Approach to racing**: Officials enforce written rules, not intentions, and
+rivals defend against expected moves, not every possible one. Nell treats the
+rulebook and accepted racing etiquette as assumptions waiting to be tested. She
+builds to the exact written limit, finds the unguarded interpretation or line,
+and commits before it closes.
 
 **Character**: Watchful, self-possessed, and unexpectedly generous to people
 who keep their word. Nell dislikes romantic stories about outlaws and treats
 illicit work as a trade requiring preparation, nerve, and reliable partners.
-She enjoys embarrassing self-important officials, but her deeper goal is to win
-openly enough that nobody can dismiss her skill as a trick of the night roads.
+She is controlled, opportunistic, and more aggressive than she first appears:
+if an overconfident rival leaves a braking zone or racing line undefended, she
+will commit before anyone else recognizes the opening. Her deeper goal is to
+win openly enough that nobody can dismiss her skill as a trick of the night roads.
+
+Nell's aggression has a firm boundary. She may exploit measurement procedures,
+stretch technical definitions, conceal capacity, pressure a rival into a
+mistake, brake exceptionally late, or use an unfashionable line. She does not
+tamper with another machine, deploy hazards, or deliberately cause a collision.
 
 Backroads draws on smugglers, customs runners, bookmakers, informal road races,
 and illicit transport broadly. It is not tied specifically to American
@@ -222,14 +234,12 @@ Prohibition or one real culture's criminal history.
 
 **Supported strategy directions**:
 
-- contraband value builds that balance useful cargo against a later payout;
-- risk and exposure builds that become lucrative or powerful under pressure;
-- evasion, redirection, and protection from opposing effects;
-- sabotage, distraction, and race-control builds;
-- sudden escape bursts and decisive high-speed laps;
-- information, scouting, and prediction;
+- rulebook engineering through exact counts, exact compositions, declared values, and technical loopholes;
+- late-braking attacks and aggressive corner entry with explicit performance tradeoffs;
+- information builds that identify narrow track or performance opportunities;
+- exposure builds that exchange general safety margin for exceptional pace in a precise situation;
 - wagers and conditional high-roll effects;
-- disguise, copying, or cross-origin access that enables unusual hybrid builds.
+- sudden getaway acceleration and decisive high-speed escape.
 
 **Economic axis**: **Contraband and exposure.** Backroads can acquire illicit
 goods that function as items, appreciate while carried, or sell through fences.
@@ -238,9 +248,9 @@ items can profit from, conceal, redirect, or clear that exposure. Early
 implementations should express these concepts through visible items and effects,
 not a character-only permanent meter.
 
-**Example item directions**: False-Bottom Fuel Tank, Shuttered Headlamp, Forged
-Manifest, Lookout's Whistle, Bookmaker's Ledger, Decoy Crate, Chopped Flywheel,
-and Unmarked Road Map.
+**Example item directions**: Declared Fuel Measure, Removable Inspection
+Ballast, Auxiliary Starting Tank, Adjustable Bodywork Stay, Stamped Compliance
+Plate, Lookout's Timing Board, Late-Braking Equalizer, and Unmarked Route Book.
 
 ## Shared strategic coverage
 
@@ -253,9 +263,9 @@ that every family receive identical item counts.
 | Pace | gearing and roadcraft | sprinting and cadence | overclocking and airflow | escape bursts and shortcuts |
 | Scaling | craftsmanship and matching sets | momentum and stamina | assembly and heat | exposure and carried contraband |
 | Control | stability and positioning | drafting and tempo | smoke, pressure, and disruption | distractions and sabotage |
-| Economy | appraisal and commissions | prizes and acclaim | salvage and transformation | contraband and wagers |
-| Reliability | durable construction | recovery and rhythm | repair and redundancy | evasion and insurance |
-| Risk | weight and costly luxury | exhaustion and sprint timing | instability and overheating | exposure and conditional bets |
+| Economy | appraisal and commissions | prizes and acclaim | prototype development and technology transfer | contraband and wagers |
+| Reliability | durable construction | recovery and rhythm | instrumentation and engineered redundancy | evasion and insurance |
+| Risk | weight and costly luxury | exhaustion and sprint timing | controlled limits and experimental tradeoffs | exposure and conditional bets |
 
 ## Content guardrails
 

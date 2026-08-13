@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ITEM_POOL } from "../../src/content/sample-data";
+import { LEGACY_ITEM_POOL } from "../fixtures/legacy-item-pool";
 import { addItem, evictAndAdd, hasOpenSlot, installedItems } from "../../src/simulation/slots";
 import { type Build } from "../../src/simulation/types";
 import { TEST_SLOT_COUNT, vehicleBuild } from "../fixtures/vehicle-build-fixtures";
@@ -14,10 +14,10 @@ describe("hasOpenSlot", () => {
 
     for (let index = 0; index < TEST_SLOT_COUNT; index += 1) {
       expect(hasOpenSlot(build)).toBe(true);
-      build = addItem(build, ITEM_POOL[index], index);
+      build = addItem(build, LEGACY_ITEM_POOL[index], index);
     }
 
-    expect(installedItems(build)).toEqual(ITEM_POOL.slice(0, TEST_SLOT_COUNT));
+    expect(installedItems(build)).toEqual(LEGACY_ITEM_POOL.slice(0, TEST_SLOT_COUNT));
     expect(hasOpenSlot(build)).toBe(false);
   });
 });
@@ -25,7 +25,7 @@ describe("hasOpenSlot", () => {
 describe("addItem", () => {
   it("returns a new build with the item installed without mutating its inputs", () => {
     const build = emptyBuild();
-    const item = ITEM_POOL[0];
+    const item = LEGACY_ITEM_POOL[0];
     const buildSnapshot = structuredClone(build);
     const itemSnapshot = structuredClone(item);
 
@@ -41,7 +41,7 @@ describe("addItem", () => {
 
   it("preserves the authored slot ID and type of the slot it fills", () => {
     const build = emptyBuild();
-    const result = addItem(build, ITEM_POOL[0], 1);
+    const result = addItem(build, LEGACY_ITEM_POOL[0], 1);
 
     expect(result.slots[1].slotId).toBe(build.slots[1].slotId);
     expect(result.slots[1].slotType).toBe(build.slots[1].slotType);
@@ -58,8 +58,8 @@ describe("addItem", () => {
 
 describe("evictAndAdd", () => {
   it("allows every installed item to be replaced without changing build size", () => {
-    const fullBuild = vehicleBuild(ITEM_POOL.slice(0, TEST_SLOT_COUNT));
-    const offeredItem = ITEM_POOL[TEST_SLOT_COUNT];
+    const fullBuild = vehicleBuild(LEGACY_ITEM_POOL.slice(0, TEST_SLOT_COUNT));
+    const offeredItem = LEGACY_ITEM_POOL[TEST_SLOT_COUNT];
 
     fullBuild.slots.forEach((_slot, evictIndex) => {
       const result = evictAndAdd(fullBuild, evictIndex, offeredItem);
@@ -75,8 +75,8 @@ describe("evictAndAdd", () => {
   });
 
   it("returns a new build and does not mutate the build or offered item", () => {
-    const build = vehicleBuild(ITEM_POOL.slice(0, TEST_SLOT_COUNT));
-    const item = ITEM_POOL[TEST_SLOT_COUNT];
+    const build = vehicleBuild(LEGACY_ITEM_POOL.slice(0, TEST_SLOT_COUNT));
+    const item = LEGACY_ITEM_POOL[TEST_SLOT_COUNT];
     const buildSnapshot = structuredClone(build);
     const itemSnapshot = structuredClone(item);
 

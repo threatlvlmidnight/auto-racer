@@ -1,4 +1,4 @@
-import { ITEM_POOL } from "../../src/content/sample-data";
+import { LEGACY_ITEM_POOL } from "./legacy-item-pool";
 import type {
   PartsSupplierPayload,
   RewardDraftPayload,
@@ -119,7 +119,7 @@ export function supplierPracticeFixture(selected = true): PracticeRunFixture {
   const encounterId = "practice-supplier-encounter";
   const payload: PartsSupplierPayload = {
     kind: "parts-supplier",
-    stock: ITEM_POOL.slice(0, 3).map((stockItem, index) => ({
+    stock: LEGACY_ITEM_POOL.slice(0, 3).map((stockItem, index) => ({
       id: `${encounterId}-stock-${index + 1}`,
       item: structuredClone(stockItem),
       state: index === 0 ? "purchased" : "available",
@@ -127,7 +127,7 @@ export function supplierPracticeFixture(selected = true): PracticeRunFixture {
     })),
     unavailable: false,
     restockUsed: true,
-    purchases: [ITEM_POOL[0].id],
+    purchases: [LEGACY_ITEM_POOL[0].id],
   };
   run.activeEncounter = {
     id: encounterId,
@@ -149,7 +149,7 @@ export function rewardDraftPracticeFixture(selected = true): PracticeRunFixture 
   const encounterId = "practice-reward-encounter";
   const payload: RewardDraftPayload = {
     kind: "reward-draft",
-    offers: ITEM_POOL.slice(3, 6).map((offeredItem, index) => ({
+    offers: LEGACY_ITEM_POOL.slice(3, 6).map((offeredItem, index) => ({
       id: `${encounterId}-offer-${index + 1}`,
       item: structuredClone(offeredItem),
     })),

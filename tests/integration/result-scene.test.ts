@@ -11,7 +11,7 @@ import {
   storageItemsLabel,
   timesLabel,
 } from "../../src/scenes/resultFormatting";
-import { ITEM_POOL } from "../../src/content/sample-data";
+import { LEGACY_ITEM_POOL } from "../fixtures/legacy-item-pool";
 import type { CarResult, NCarContestResult } from "../../src/simulation/types";
 
 // Lighter check (not strict TDD, per constitution's presentation-layer
@@ -89,16 +89,16 @@ describe("ResultScene required fields (FR-006, FR-007)", () => {
   });
 
   it("renders a single board item with its modifier", () => {
-    const label = boardItemsLabel(result({ board: [ITEM_POOL[0]] }));
+    const label = boardItemsLabel(result({ board: [LEGACY_ITEM_POOL[0]] }));
 
     expect(label).toContain("Board (1)");
-    expect(label).toContain(ITEM_POOL[0].name);
-    expect(label).toContain(`${ITEM_POOL[0].timeModifier}s`);
+    expect(label).toContain(LEGACY_ITEM_POOL[0].name);
+    expect(label).toContain(`${LEGACY_ITEM_POOL[0].timeModifier}s`);
   });
 
   it("renders every item across board and storage", () => {
-    const board = ITEM_POOL.slice(0, 2);
-    const storage = ITEM_POOL.slice(2, 3);
+    const board = LEGACY_ITEM_POOL.slice(0, 2);
+    const storage = LEGACY_ITEM_POOL.slice(2, 3);
     const boardLabel = boardItemsLabel(result({ board, storage }));
     const storageLabel = storageItemsLabel(result({ board, storage }));
 
@@ -107,8 +107,8 @@ describe("ResultScene required fields (FR-006, FR-007)", () => {
   });
 
   it("renders identity labels for tagged and neutral items", () => {
-    const taggedItem = ITEM_POOL.find((item) => item.identityTag === "performance");
-    const neutralItem = ITEM_POOL.find((item) => !item.identityTag);
+    const taggedItem = LEGACY_ITEM_POOL.find((item) => item.identityTag === "performance");
+    const neutralItem = LEGACY_ITEM_POOL.find((item) => !item.identityTag);
 
     expect(taggedItem).toBeDefined();
     expect(neutralItem).toBeDefined();
@@ -123,7 +123,7 @@ describe("ResultScene required fields (FR-006, FR-007)", () => {
   });
 
   it("renders a buff's target tag and boost percentage", () => {
-    const buffItem = ITEM_POOL.find((item) => item.buff);
+    const buffItem = LEGACY_ITEM_POOL.find((item) => item.buff);
 
     expect(buffItem).toBeDefined();
     expect(itemDetailsLabel(buffItem!)).toContain("[Performance]");
@@ -131,7 +131,7 @@ describe("ResultScene required fields (FR-006, FR-007)", () => {
   });
 
   it("renders a count-synergy buff's per-item rate, distinct from a flat buff's phrasing", () => {
-    const countBuff = ITEM_POOL.find((item) => item.buff?.perCount);
+    const countBuff = LEGACY_ITEM_POOL.find((item) => item.buff?.perCount);
 
     expect(countBuff).toBeDefined();
     expect(itemDetailsLabel(countBuff!)).toContain("[Performance]");
@@ -143,7 +143,7 @@ describe("ResultScene required fields (FR-006, FR-007)", () => {
   });
 
   it("distinguishes the item that remains active in storage", () => {
-    const activeStorageItem = ITEM_POOL.find((item) => item.activeWhileStored);
+    const activeStorageItem = LEGACY_ITEM_POOL.find((item) => item.activeWhileStored);
 
     expect(activeStorageItem).toBeDefined();
     expect(storageItemsLabel(result({ storage: [activeStorageItem!] }))).toContain(
@@ -154,24 +154,24 @@ describe("ResultScene required fields (FR-006, FR-007)", () => {
 
 describe("itemCooldownLabel — US2 FR-005 / FR-006", () => {
   it("returns '1 lap' for an item with no authored cooldown (fires every lap)", () => {
-    const flatBuff = ITEM_POOL.find((item) => item.buff && item.cooldown === undefined)!;
+    const flatBuff = LEGACY_ITEM_POOL.find((item) => item.buff && item.cooldown === undefined)!;
     expect(itemCooldownLabel(flatBuff)).toBe("1 lap");
   });
 
   it("returns '1 lap' for an item with cooldown: 1", () => {
-    const everyLap = ITEM_POOL.find((item) => item.cooldown === 1)!;
+    const everyLap = LEGACY_ITEM_POOL.find((item) => item.cooldown === 1)!;
     expect(itemCooldownLabel(everyLap)).toBe("1 lap");
   });
 
   it("returns 'N laps' for an item with cooldown > 1", () => {
-    const every2 = ITEM_POOL.find((item) => item.cooldown === 2)!;
-    const every4 = ITEM_POOL.find((item) => item.cooldown === 4)!;
+    const every2 = LEGACY_ITEM_POOL.find((item) => item.cooldown === 2)!;
+    const every4 = LEGACY_ITEM_POOL.find((item) => item.cooldown === 4)!;
     expect(itemCooldownLabel(every2)).toBe("2 laps");
     expect(itemCooldownLabel(every4)).toBe("4 laps");
   });
 
   it("includes the cooldown label in itemDetailsLabel for every item (FR-008 single source)", () => {
-    ITEM_POOL.forEach((item) => {
+    LEGACY_ITEM_POOL.forEach((item) => {
       expect(itemDetailsLabel(item)).toContain(itemCooldownLabel(item));
     });
   });
@@ -179,12 +179,12 @@ describe("itemCooldownLabel — US2 FR-005 / FR-006", () => {
 
 describe("itemDependencyNote — US2 FR-007", () => {
   it("returns null for a direct (non-buff) item", () => {
-    const directItem = ITEM_POOL.find((item) => !item.buff)!;
+    const directItem = LEGACY_ITEM_POOL.find((item) => !item.buff)!;
     expect(itemDependencyNote(directItem)).toBeNull();
   });
 
   it("returns a non-null note for every buff item", () => {
-    const buffItems = ITEM_POOL.filter((item) => item.buff);
+    const buffItems = LEGACY_ITEM_POOL.filter((item) => item.buff);
     expect(buffItems.length).toBeGreaterThan(0);
     buffItems.forEach((item) => {
       const note = itemDependencyNote(item);
@@ -195,14 +195,14 @@ describe("itemDependencyNote — US2 FR-007", () => {
   });
 
   it("includes the dependency note in itemDetailsLabel for buff items (FR-008 single source)", () => {
-    const buffItems = ITEM_POOL.filter((item) => item.buff);
+    const buffItems = LEGACY_ITEM_POOL.filter((item) => item.buff);
     buffItems.forEach((item) => {
       expect(itemDetailsLabel(item)).toContain(itemDependencyNote(item)!);
     });
   });
 
   it("does not include a dependency note in itemDetailsLabel for direct items", () => {
-    const directItems = ITEM_POOL.filter((item) => !item.buff);
+    const directItems = LEGACY_ITEM_POOL.filter((item) => !item.buff);
     directItems.forEach((item) => {
       expect(itemDetailsLabel(item)).not.toContain("Requires");
     });

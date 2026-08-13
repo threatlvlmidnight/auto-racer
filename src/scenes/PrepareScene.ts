@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { ITEM_POOL } from "../content/sample-data";
+import { entrantById } from "../content/entrants";
 import {
   acceptReward,
   declineReward,
@@ -10,6 +10,7 @@ import {
   toggleLock,
   type PartsSupplierPayload,
   type RewardDraftPayload,
+  type CrossPollinationPayload,
   type StockEntry,
 } from "../simulation/encounters";
 import { RunTransitionError, type Run } from "../simulation/run";
@@ -73,7 +74,9 @@ export class PrepareScene extends Phaser.Scene {
     this.run = run;
     this.selectedOfferId = data.originState?.selection ?? null;
     this.statusMessage = null;
-    if (run.activeEncounter.type !== "reward-draft" && run.activeEncounter.type !== "parts-supplier") {
+    if (run.activeEncounter.type !== "reward-draft"
+      && run.activeEncounter.type !== "cross-pollination"
+      && run.activeEncounter.type !== "parts-supplier") {
       this.scene.start("RunScene", { run });
       return;
     }
@@ -94,15 +97,21 @@ export class PrepareScene extends Phaser.Scene {
     // stamp is tracked here rather than drawn once in create() — otherwise the
     // header keeps the credit count the scene was entered with.
     addRunStamp(this, run).forEach((object) => this.track(object));
-    this.track(this.add.text(this.scale.width / 2, 54, supplier ? "Parts Supplier" : "Reward Draft", {
+    const guestPayload = encounter.type === "cross-pollination"
+      ? encounter.payload as CrossPollinationPayload
+      : null;
+    const guestName = guestPayload ? entrantById(guestPayload.guestEntrantId)?.name : null;
+    const title = supplier ? "Parts Supplier"
+      : guestPayload ? `Guest Workshop · ${guestName ?? guestPayload.guestEntrantId}` : "Reward Draft";
+    this.track(this.add.text(this.scale.width / 2, 54, title, {
       fontSize: "22px",
       fontFamily: DISPLAY_FONT,
       fontStyle: "bold",
       color: "#f3e5bd",
-    }).setOrigin(0.5));
+    }).setOrigin(0.5).setDepth(20));
 
     if (supplier) this.renderSupplier(encounter.payload as PartsSupplierPayload);
-    else this.renderReward(encounter.payload as RewardDraftPayload);
+    else this.renderReward(encounter.payload as RewardDraftPayload | CrossPollinationPayload);
     this.createControl(680, 170, "TEST DAY", () => this.openTestDay());
     this.renderSlots(header.label, header.topologyLabel);
     this.renderStorage(header.storageLabel);
@@ -118,7 +127,7 @@ export class PrepareScene extends Phaser.Scene {
     }
   }
 
-  private renderReward(payload: RewardDraftPayload): void {
+  private renderReward(payload: RewardDraftPayload | CrossPollinationPayload): void {
     payload.offers.forEach((offer, index) => {
       const resolution = previewAcquisitionResolution(this.run!.build, offer.item);
       this.createDraggableOffer(170 + index * 230, 95, offer.id, offer.item, true, false, resolution);
@@ -144,7 +153,7 @@ export class PrepareScene extends Phaser.Scene {
       if (entry.state === "available") this.createLockToggle(x, entry);
     });
     this.createControl(300, 170, payload.restockUsed ? "Restock used" : "Restock · 1 credit", () => {
-      this.run = restockSupplier(this.run!, this.run!.activeEncounter!.id, Math.random, ITEM_POOL);
+      this.run = restockSupplier(this.run!, this.run!.activeEncounter!.id, Math.random);
       this.render();
     }, { enabled: !payload.restockUsed && !payload.unavailable && this.run!.credits >= 1 });
     this.createControl(500, 170, "Leave Supplier", () => {
@@ -224,7 +233,7 @@ export class PrepareScene extends Phaser.Scene {
   private acquireOffer(offerId: string, destination?: GarageDestination): void {
     const encounter = this.run!.activeEncounter!;
     try {
-      if (encounter.type === "reward-draft") {
+      if (encounter.type === "reward-draft" || encounter.type === "cross-pollination") {
         const next = acceptReward(this.run!, encounter.id, offerId, destination, Math.random);
         this.scene.start("RunScene", { run: next });
         return;

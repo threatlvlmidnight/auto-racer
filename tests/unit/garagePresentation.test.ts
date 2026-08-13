@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { ITEM_POOL } from "../../src/content/sample-data";
+import { LEGACY_ITEM_POOL } from "../fixtures/legacy-item-pool";
 import { garageItemInspector, previewAcquisitionResolution } from "../../src/scenes/garagePresentation";
 import { resolveDuplicateAcquisition, TIER_BONUS_PERCENT } from "../../src/simulation/tiering";
 import { testItem, vehicleBuild } from "../fixtures/vehicle-build-fixtures";
 
-const POWER_FITTED = ITEM_POOL.find((item) => item.id === "item-001")!; // Power, Fitted time-modifier
-const CHASSIS_NO_CONSEQUENCE = ITEM_POOL.find((item) => item.id === "item-003")!; // Chassis, Improvised "none"
-const STORED_BUFF = ITEM_POOL.find((item) => item.id === "item-013")!; // activeWhileStored
-const BUFF_ITEM = ITEM_POOL.find((item) => item.id === "item-012")!; // Power buff item
+const POWER_FITTED = LEGACY_ITEM_POOL.find((item) => item.id === "item-001")!; // Power, Fitted time-modifier
+const CHASSIS_NO_CONSEQUENCE = LEGACY_ITEM_POOL.find((item) => item.id === "item-003")!; // Chassis, Improvised "none"
+const STORED_BUFF = LEGACY_ITEM_POOL.find((item) => item.id === "item-013")!; // activeWhileStored
+const BUFF_ITEM = LEGACY_ITEM_POOL.find((item) => item.id === "item-012")!; // Power buff item
 const EMPTY_BUILD = vehicleBuild();
 
 describe("garageItemInspector", () => {

@@ -1,5 +1,4 @@
 import Phaser from "phaser";
-import { ITEM_POOL } from "../content/sample-data";
 import {
   chooseEncounter,
   selectSponsorOption,
@@ -245,7 +244,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   private selectChoice(choiceId: string): void {
-    const next = chooseEncounter(this.run, choiceId, Math.random, ITEM_POOL);
+    const next = chooseEncounter(this.run, choiceId, Math.random);
     const route = runRoute(next);
     this.scene.start(route, { run: next, encounterId: next.activeEncounter?.id });
   }
@@ -256,7 +255,7 @@ export class RunScene extends Phaser.Scene {
     if (option.objective.kind === "target-race-time") {
       return `Finish in ${option.objective.targetSeconds}s or less\n7 credits`;
     }
-    return `Trigger ${option.objective.identityTag} items ${option.objective.requiredEvents} times\n7 credits`;
+    return `Trigger ${option.objective.tag} items ${option.objective.requiredEvents} times\n7 credits`;
   }
 
   private historyEntryLabel(entry: RunHistorySummary): string {

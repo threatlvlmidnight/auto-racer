@@ -48,7 +48,7 @@ export interface SponsorOptionPresentation {
   kind: "immediate" | "win-next-race" | "target-race-time" | "trigger-tagged-items";
   payout: 2 | 7;
   targetSeconds?: number;
-  identityTag?: string;
+  tag?: string;
   requiredEvents?: number;
 }
 
@@ -96,7 +96,7 @@ function sponsorObjectiveLabel(objective: SponsorObjective): string {
   if (objective.kind === "target-race-time") {
     return `finish in ${objective.targetSeconds}s or less`;
   }
-  return `trigger ${objective.identityTag} items ${objective.requiredEvents} times`;
+  return `trigger ${objective.tag} items ${objective.requiredEvents} times`;
 }
 
 export function activeEncounterPresentation(run: Run): ActiveEncounterPresentation | null {
@@ -143,7 +143,7 @@ export function activeEncounterPresentation(run: Run): ActiveEncounterPresentati
             id: option.id,
             kind: option.kind,
             payout: option.payout,
-            identityTag: option.objective.identityTag,
+            tag: option.objective.tag,
             requiredEvents: option.objective.requiredEvents,
           };
         }
@@ -250,7 +250,8 @@ export function runRoute(run: Run): RunSceneRoute {
   if (run.activeEncounter?.type === "pvp") return "ContestScene";
   if (
     run.activeEncounter?.type === "parts-supplier" ||
-    run.activeEncounter?.type === "reward-draft"
+    run.activeEncounter?.type === "reward-draft" ||
+    run.activeEncounter?.type === "cross-pollination"
   ) {
     return "PrepareScene";
   }

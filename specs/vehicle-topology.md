@@ -49,8 +49,8 @@ Examples of valid authored installation behavior:
 - Fitted leaf springs protect another Chassis item from disruption;
 - an Improvised pressure tank generates Heat when it fires;
 - an Improvised body panel adds Weight but counts as an extra piece of Scrap;
-- an item intentionally rewards being Improvised as part of a Fieldworks or
-  cross-origin build.
+- an experimental Fieldworks item intentionally rewards cross-category
+  installation as part of a cross-disciplinary prototype.
 
 An item may have no special `Improvised` consequence, in which case a mismatch
 simply forfeits its `Fitted` effect. Every item must still communicate all three

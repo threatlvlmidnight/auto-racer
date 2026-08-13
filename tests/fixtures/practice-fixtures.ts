@@ -1,9 +1,9 @@
-import { ITEM_POOL } from "../../src/content/sample-data";
+import { LEGACY_ITEM_POOL } from "./legacy-item-pool";
 import type { Build, OfferedItem } from "../../src/simulation/types";
 import { vehicleBuild } from "./vehicle-build-fixtures";
 
 const item = (id: string): OfferedItem => structuredClone(
-  ITEM_POOL.find((candidate) => candidate.id === id)!,
+  LEGACY_ITEM_POOL.find((candidate) => candidate.id === id)!,
 );
 
 export function emptyPracticeBuild(): Build {

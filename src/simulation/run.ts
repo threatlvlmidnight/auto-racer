@@ -160,6 +160,7 @@ export type StageState = "unavailable" | "available" | "active" | "completed";
 export type EncounterType =
   | "parts-supplier"
   | "reward-draft"
+  | "cross-pollination"
   | "sponsor-meeting"
   | "pvp";
 export type NonPvpEncounterType = Exclude<EncounterType, "pvp">;
@@ -224,7 +225,18 @@ export interface CreditTransaction {
 export type SponsorObjective =
   | { kind: "win-next-race" }
   | { kind: "target-race-time"; targetSeconds: number }
-  | { kind: "trigger-tagged-items"; identityTag: IdentityTag; requiredEvents: 10 };
+  | { kind: "trigger-tagged-items"; tag: string; requiredEvents: 10 };
+
+/**
+ * 020-character-item-pools: the small authored set `objectiveForKind`
+ * (encounters.ts) selects a `"trigger-tagged-items"` `tag` from, via the
+ * same `rng` every other encounter branch already threads through — never a
+ * single fixed value (research.md Decision 4). Every entry MUST match at
+ * least one `Buff`-role item somewhere in the full item catalog, checked by
+ * `validateItemPools` (itemPools.ts), so the objective is never authored
+ * unwinnable by construction.
+ */
+export const SPONSOR_OBJECTIVE_TAGS: readonly string[] = ["information", "momentum"];
 
 export interface SponsorContract {
   id: string;

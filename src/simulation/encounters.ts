@@ -1,9 +1,11 @@
 import { drawItem } from "./draft";
 import { commitGarageCommand, sellItem, type GarageDestination, type GarageSource } from "./garage";
+import { poolForCrossPollination, poolForEntrant } from "./itemPools";
 import {
   activateChoice,
   completeNonPvpEncounter,
   RunTransitionError,
+  SPONSOR_OBJECTIVE_TAGS,
   type CreditTransaction,
   type EncounterPayload,
   type EncounterChoice,
@@ -31,6 +33,13 @@ export interface ItemOffer {
 
 export interface RewardDraftPayload {
   kind: "reward-draft";
+  offers: ItemOffer[];
+  selection: string | "declined" | null;
+}
+
+export interface CrossPollinationPayload {
+  kind: "cross-pollination";
+  guestEntrantId: Run["identity"]["entrantId"];
   offers: ItemOffer[];
   selection: string | "declined" | null;
 }
@@ -71,6 +80,7 @@ export interface SponsorResolution {
 const ENCOUNTER_SUMMARIES = {
   "parts-supplier": "Buy any affordable parts; one restock costs 1 credit.",
   "reward-draft": "Choose one of three weighted rewards or decline all.",
+  "cross-pollination": "Inspect three parts from another entrant's exclusive workshop.",
   "sponsor-meeting": "Take 2 credits now or accept a 7-credit race objective.",
 } as const;
 
@@ -96,15 +106,14 @@ export function generateEncounterChoices(run: Run, rng: RandomSource): Encounter
 export function chooseEncounter(
   run: Run,
   choiceId: string,
-  _rng: RandomSource,
-  _itemPool: OfferedItem[],
+  rng: RandomSource,
 ): Run {
   const choice = run.availableChoices.find(({ id }) => id === choiceId);
   if (!choice) {
     throw new RunTransitionError("encounter-id-mismatch", `Choice ${choiceId} is not current`);
   }
   const active = activateChoice(run, choice);
-  const payload = createPayload(active, choice.type, _rng, _itemPool);
+  const payload = createPayload(active, choice.type, rng);
   return {
     ...active,
     activeEncounter: active.activeEncounter
@@ -117,21 +126,33 @@ function createPayload(
   run: Run,
   type: EncounterChoice["type"],
   rng: RandomSource,
-  itemPool: OfferedItem[],
-): RewardDraftPayload | PartsSupplierPayload | SponsorMeetingPayload {
+): RewardDraftPayload | CrossPollinationPayload | PartsSupplierPayload | SponsorMeetingPayload {
   const encounter = run.activeEncounter!;
   if (type === "reward-draft") {
+    const itemPool = poolForEntrant(run.identity.entrantId);
     return {
       kind: type,
       offers: Array.from({ length: 3 }, (_, index) => ({
         id: `${encounter.id}-offer-${index + 1}`,
-        item: drawItem(itemPool, run.identityTag, TAG_WEIGHT, rng),
+        item: drawItem([...itemPool], run.identityTag, TAG_WEIGHT, rng),
+      })),
+      selection: null,
+    };
+  }
+  if (type === "cross-pollination") {
+    const guest = poolForCrossPollination(run.identity.entrantId, run.seed, encounter.id);
+    return {
+      kind: type,
+      guestEntrantId: guest.guestEntrantId,
+      offers: Array.from({ length: 3 }, (_, index) => ({
+        id: `${encounter.id}-offer-${index + 1}`,
+        item: guest.pool[Math.min(guest.pool.length - 1, Math.floor(rng() * guest.pool.length))],
       })),
       selection: null,
     };
   }
   if (type === "parts-supplier") {
-    return createSupplierPayload(run, rng, itemPool);
+    return createSupplierPayload(run, rng);
   }
   return createSponsorPayload(run, rng);
 }
@@ -139,9 +160,12 @@ function createPayload(
 function createSupplierPayload(
   run: Run,
   rng: RandomSource,
-  itemPool: OfferedItem[],
 ): PartsSupplierPayload {
-  const eligible = itemPool.filter((item) => item.identityTag === run.identityTag);
+  // 020-character-item-pools data-model.md "Signature simplification": pool
+  // membership is now fully derivable from run.identity.entrantId, and it's
+  // already the correctly-gated Neutral + own-entrant pool — no additional
+  // identityTag-based narrowing on top (research.md Decision 3).
+  const eligible = poolForEntrant(run.identity.entrantId);
   if (eligible.length === 0) {
     return { kind: "parts-supplier", stock: [], unavailable: true, restockUsed: false, purchases: [] };
   }
@@ -178,14 +202,14 @@ function createSponsorPayload(run: Run, rng: RandomSource): SponsorMeetingPayloa
         id: `${encounterId}-sponsor-contract-${index + 1}`,
         kind,
         payout: 7 as const,
-        objective: objectiveForKind(run, kind),
+        objective: objectiveForKind(run, kind, rng),
       })),
     ],
     selection: null,
   };
 }
 
-function objectiveForKind(run: Run, kind: SponsorObjective["kind"]): SponsorObjective {
+function objectiveForKind(run: Run, kind: SponsorObjective["kind"], rng: RandomSource): SponsorObjective {
   if (kind === "target-race-time") {
     const nextPvp = run.stages.slice(run.stageIndex + 1).find((stage) => stage.kind === "pvp")!;
     return {
@@ -199,7 +223,11 @@ function objectiveForKind(run: Run, kind: SponsorObjective["kind"]): SponsorObje
     };
   }
   if (kind === "trigger-tagged-items") {
-    return { kind, identityTag: run.identityTag, requiredEvents: 10 };
+    // 020-character-item-pools research.md Decision 4: deterministic per
+    // (run seed, stage) like every other draft/encounter decision (FR-008),
+    // never a single hardcoded tag.
+    const tagIndex = Math.min(SPONSOR_OBJECTIVE_TAGS.length - 1, Math.floor(rng() * SPONSOR_OBJECTIVE_TAGS.length));
+    return { kind, tag: SPONSOR_OBJECTIVE_TAGS[tagIndex], requiredEvents: 10 };
   }
   return { kind };
 }
@@ -232,7 +260,7 @@ export function resolvePendingSponsor(
     const objective = contract.objective;
     const matchingItemIds = new Set(
       [...result.board, ...result.storage]
-        .filter((item) => item.identityTag === objective.identityTag)
+        .filter((item) => item.synergyTags.includes(objective.tag))
         .map((item) => item.id),
     );
     actual = result.laps.reduce(
@@ -262,7 +290,14 @@ export function acceptReward(
   placement?: PlacementCommand,
   rng: RandomSource = () => 0,
 ): Run {
-  const payload = requirePayload<RewardDraftPayload>(run, encounterId, "reward-draft");
+  if (run.status !== "active" || run.activeEncounter?.id !== encounterId) {
+    throw new RunTransitionError("encounter-id-mismatch", `${encounterId} is not current`);
+  }
+  const kind = run.activeEncounter.payload.kind;
+  if (kind !== "reward-draft" && kind !== "cross-pollination") {
+    throw new RunTransitionError("invalid-encounter-type", "Expected reward acquisition");
+  }
+  const payload = run.activeEncounter.payload as RewardDraftPayload | CrossPollinationPayload;
   if (payload.selection !== null) {
     throw new RunTransitionError("invalid-action", "Reward Draft is already resolved");
   }
@@ -283,7 +318,11 @@ export function declineReward(
   encounterId: string,
   rng: RandomSource = () => 0,
 ): Run {
-  requirePayload<RewardDraftPayload>(run, encounterId, "reward-draft");
+  if (run.activeEncounter?.id !== encounterId
+    || (run.activeEncounter.payload.kind !== "reward-draft"
+      && run.activeEncounter.payload.kind !== "cross-pollination")) {
+    throw new RunTransitionError("invalid-encounter-type", "Expected reward acquisition");
+  }
   return completeNonPvpEncounter(
     run,
     encounterId,
@@ -332,14 +371,16 @@ export function restockSupplier(
   run: Run,
   encounterId: string,
   rng: RandomSource,
-  itemPool: OfferedItem[],
 ): Run {
   const payload = requirePayload<PartsSupplierPayload>(run, encounterId, "parts-supplier");
   if (payload.restockUsed || payload.unavailable) {
     throw new RunTransitionError("invalid-action", "Supplier restock is unavailable");
   }
   if (run.credits < 1) throw new RunTransitionError("insufficient-credits", "Restock costs 1 credit");
-  const eligible = itemPool.filter((item) => item.identityTag === run.identityTag);
+  // 020-character-item-pools data-model.md "Signature simplification": same
+  // reasoning as createSupplierPayload — pool is derived from
+  // run.identity.entrantId and already correctly gated.
+  const eligible = poolForEntrant(run.identity.entrantId);
   if (eligible.length === 0) throw new RunTransitionError("invalid-action", "No stock is available");
   const transaction = transactionFor(run, encounterId, "restock", -1);
   return {

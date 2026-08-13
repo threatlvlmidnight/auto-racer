@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ITEM_POOL } from "../../src/content/sample-data";
+import { LEGACY_ITEM_POOL } from "../fixtures/legacy-item-pool";
 import {
   garageComparisonModel,
   garageDestinationOrder,
@@ -32,7 +32,7 @@ describe("garage names the selected vehicle, never a generic board", () => {
   it("contains no user-facing Board/BOARD terminology anywhere in the garage models", () => {
     ENTRANT_VEHICLES.forEach(([entrantId, vehicleId]) => {
       const identity = runIdentityForEntrant(entrantId)!;
-      const build = vehicleBuild([ITEM_POOL[0]], [ITEM_POOL[1]], vehicleId as never);
+      const build = vehicleBuild([LEGACY_ITEM_POOL[0]], [LEGACY_ITEM_POOL[1]], vehicleId as never);
       const text = [
         JSON.stringify(garageVehicleHeader(identity)),
         JSON.stringify(garageSlotModels(build)),
@@ -61,11 +61,11 @@ describe("garage slot models follow authored topology order", () => {
   });
 
   it("distinguishes occupied from empty slots in text", () => {
-    const slots = garageSlotModels(vehicleBuild([ITEM_POOL[0]], [], "the-highwheel"));
+    const slots = garageSlotModels(vehicleBuild([LEGACY_ITEM_POOL[0]], [], "the-highwheel"));
 
     expect(slots[0].occupied).toBe(true);
     expect(slots[0].stateLabel.toUpperCase()).toContain("OCCUPIED");
-    expect(slots[0].itemName).toBe(ITEM_POOL[0].name);
+    expect(slots[0].itemName).toBe(LEGACY_ITEM_POOL[0].name);
     expect(slots[1].occupied).toBe(false);
     expect(slots[1].stateLabel.toUpperCase()).toContain("EMPTY");
     expect(slots[1].itemName).toBeNull();
@@ -73,9 +73,9 @@ describe("garage slot models follow authored topology order", () => {
 
   it("reports the resolved installation state of each occupied slot", () => {
     // item-001 is a Power item; Highwheel slot 1 is Power, slot 2 is Chassis.
-    const fitted = garageSlotModels(vehicleBuild([ITEM_POOL[0]], [], "the-highwheel"))[0];
-    const improvised = garageSlotModels(vehicleBuild([null, ITEM_POOL[0]], [], "the-highwheel"))[1];
-    const flexible = garageSlotModels(vehicleBuild([null, null, null, ITEM_POOL[0]], [], "the-highwheel"))[3];
+    const fitted = garageSlotModels(vehicleBuild([LEGACY_ITEM_POOL[0]], [], "the-highwheel"))[0];
+    const improvised = garageSlotModels(vehicleBuild([null, LEGACY_ITEM_POOL[0]], [], "the-highwheel"))[1];
+    const flexible = garageSlotModels(vehicleBuild([null, null, null, LEGACY_ITEM_POOL[0]], [], "the-highwheel"))[3];
 
     expect(fitted.installationState).toBe("fitted");
     expect(improvised.installationState).toBe("improvised");
@@ -94,7 +94,7 @@ describe("garage slot models follow authored topology order", () => {
 
 describe("garage storage models", () => {
   it("always exposes exactly three independent positions with no slot-type affinity", () => {
-    const storage = garageStorageModels(vehicleBuild([], [ITEM_POOL[1]], "the-hush"));
+    const storage = garageStorageModels(vehicleBuild([], [LEGACY_ITEM_POOL[1]], "the-hush"));
 
     expect(storage).toHaveLength(3);
     expect(storage.map((position) => position.index)).toEqual([0, 1, 2]);
@@ -107,8 +107,8 @@ describe("garage storage models", () => {
   });
 
   it("marks an active-while-stored item explicitly rather than implying inertness", () => {
-    const tyreRack = ITEM_POOL.find((item) => item.activeWhileStored)!;
-    const storage = garageStorageModels(vehicleBuild([], [tyreRack, ITEM_POOL[0]], "the-hush"));
+    const tyreRack = LEGACY_ITEM_POOL.find((item) => item.activeWhileStored)!;
+    const storage = garageStorageModels(vehicleBuild([], [tyreRack, LEGACY_ITEM_POOL[0]], "the-hush"));
 
     expect(storage[0].storageActive).toBe(true);
     expect(storage[0].stateLabel.toUpperCase()).toContain("ACTIVE");
@@ -118,8 +118,8 @@ describe("garage storage models", () => {
 });
 
 describe("garage preview and occupant comparison", () => {
-  const build = () => vehicleBuild([ITEM_POOL[3]], [], "the-highwheel");
-  const offers = [{ id: "offer-1", item: ITEM_POOL[0] }];
+  const build = () => vehicleBuild([LEGACY_ITEM_POOL[3]], [], "the-highwheel");
+  const offers = [{ id: "offer-1", item: LEGACY_ITEM_POOL[0] }];
 
   it("describes an empty-slot placement with its resulting installation state", () => {
     const model = garagePreviewModel(
@@ -142,14 +142,14 @@ describe("garage preview and occupant comparison", () => {
 
     expect(model.requiresConfirmation).toBe(true);
     expect(model.comparison).not.toBeNull();
-    expect(model.comparison!.candidate.name).toBe(ITEM_POOL[0].name);
-    expect(model.comparison!.occupant.name).toBe(ITEM_POOL[3].name);
+    expect(model.comparison!.candidate.name).toBe(LEGACY_ITEM_POOL[0].name);
+    expect(model.comparison!.occupant.name).toBe(LEGACY_ITEM_POOL[3].name);
     expect(model.comparison!.outcome.toLowerCase()).toContain("remove");
   });
 
   it("states the exact outcome of a swap without calling it a removal", () => {
     const model = garagePreviewModel(
-      { build: vehicleBuild([ITEM_POOL[3], ITEM_POOL[0]], [], "the-highwheel") },
+      { build: vehicleBuild([LEGACY_ITEM_POOL[3], LEGACY_ITEM_POOL[0]], [], "the-highwheel") },
       { source: { area: "vehicle", slotId: "the-highwheel-slot-1" }, destination: { area: "vehicle", slotId: "the-highwheel-slot-2" }, replacement: "swap" },
     );
 
@@ -183,12 +183,12 @@ describe("garage preview and occupant comparison", () => {
 
 describe("garage comparison model", () => {
   it("compares two items on the facts a placement decision needs", () => {
-    const comparison = garageComparisonModel(ITEM_POOL[0], ITEM_POOL[3], "replace");
+    const comparison = garageComparisonModel(LEGACY_ITEM_POOL[0], LEGACY_ITEM_POOL[3], "replace");
 
-    expect(comparison.candidate.name).toBe(ITEM_POOL[0].name);
+    expect(comparison.candidate.name).toBe(LEGACY_ITEM_POOL[0].name);
     expect(comparison.candidate.categoryLabel.toUpperCase()).toMatch(/POWER|CHASSIS/);
     expect(comparison.candidate.baseEffectLabel.length).toBeGreaterThan(0);
-    expect(comparison.occupant.name).toBe(ITEM_POOL[3].name);
+    expect(comparison.occupant.name).toBe(LEGACY_ITEM_POOL[3].name);
     expect(comparison.outcome.length).toBeGreaterThan(0);
   });
 });

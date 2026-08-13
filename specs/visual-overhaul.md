@@ -412,7 +412,7 @@ badges, and their exact contribution remains inspectable after the race.
 The interface draws from early sporting programs, coachbuilder plates,
 machinist catalogs, enamel instrument panels, stamped race credentials, and
 illustrated newspapers. It should feel newly standardized: official typography
-and route markings coexist with hand-authored notes, patched machinery, and
+and route markings coexist with hand-authored notes, experimental machinery, and
 entrant-specific materials.
 
 ### Palette

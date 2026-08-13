@@ -1,6 +1,6 @@
 import { vehicleById } from "../content/entrants";
-import { ITEM_POOL } from "../content/sample-data";
 import { createEmptyVehicleBuild } from "./build";
+import { poolForRival } from "./itemPools";
 import { drawItem } from "./draft";
 import { addItem } from "./slots";
 import { addItemToStorage } from "./storage";
@@ -73,7 +73,7 @@ export function resolveRivalBuild(profile: RivalProfile, level: number, seed: nu
   }
 
   const { slotsToFill, priceBias } = profile.levelScaling(level);
-  const pool = priceBucket(ITEM_POOL, priceBias);
+  const pool = priceBucket(poolForRival(profile.vehicleId), priceBias);
   const positions = fillPositions(createEmptyVehicleBuild(profile.vehicleId));
   const clampedCount = Math.max(0, Math.min(slotsToFill, positions.length));
 

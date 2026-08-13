@@ -4,8 +4,10 @@ import {
   createRunForEntrant,
   type Run,
 } from "../../src/simulation/run";
+import { chooseEncounter, type RewardDraftPayload } from "../../src/simulation/encounters";
 import { entrantSelectionModel, entrantDetailModel } from "../../src/scenes/entrantPresentation";
 import { ENTRANTS } from "../../src/content/entrants";
+import { poolForEntrant } from "../../src/simulation/itemPools";
 import type { EntrantId } from "../../src/simulation/types";
 
 const rng = () => {
@@ -181,5 +183,87 @@ describe("entrant selection presentation acceptance", () => {
 
     expect(model.equalityStatement).toMatch(/four active slots/i);
     expect(model.equalityStatement).toMatch(/three storage/i);
+  });
+});
+
+// A constant 0.4 lands on "reward-draft" as the first of the two offered
+// choice types at a fresh run's stage 1 (floor(0.4*3)=1 of
+// [parts-supplier, reward-draft, sponsor-meeting]) — guarantees every test
+// below actually exercises a reward-draft encounter rather than silently
+// skipping (confirmEntrant's own fixed rng does not reliably offer one).
+function confirmEntrantWithRewardDraft(entrantId: EntrantId): Run {
+  const result = createRunForEntrant({
+    entrantId,
+    runId: `run-reward-draft-${entrantId}`,
+    seed: 3,
+    rng: () => 0.4,
+  });
+  if (result.kind !== "created") throw new Error(`expected created, got ${result.code}`);
+  return result.run;
+}
+
+describe("draft-time pool gating per entrant (020-character-item-pools US1, tasks.md T014)", () => {
+  it("never surfaces an out-of-pool item across many sampled reward-draft offers, for any of the 4 entrants", () => {
+    ENTRANTS.forEach((entrant) => {
+      const run = confirmEntrantWithRewardDraft(entrant.id);
+      const pool = poolForEntrant(entrant.id);
+      const choice = run.availableChoices.find((candidate) => candidate.type === "reward-draft");
+      expect(choice).toBeDefined();
+      if (!choice) return;
+
+      for (let sample = 0; sample < 20; sample += 1) {
+        const roll = (sample % 20) / 20;
+        const active = chooseEncounter(run, choice.id, () => roll);
+        const payload = active.activeEncounter!.payload as RewardDraftPayload;
+        payload.offers.forEach(({ item }) => {
+          expect(pool.some((candidate) => candidate.id === item.id)).toBe(true);
+        });
+      }
+    });
+  });
+
+  it("two different entrants under the same seed each draw only from their own gated pool", () => {
+    const mercer = confirmEntrantWithRewardDraft("evelyn-mercer");
+    const soto = confirmEntrantWithRewardDraft("lucien-soto");
+    const mercerPool = poolForEntrant("evelyn-mercer");
+    const sotoPool = poolForEntrant("lucien-soto");
+    const mercerChoice = mercer.availableChoices.find((candidate) => candidate.type === "reward-draft")!;
+    const sotoChoice = soto.availableChoices.find((candidate) => candidate.type === "reward-draft")!;
+    expect(mercerChoice).toBeDefined();
+    expect(sotoChoice).toBeDefined();
+
+    const mercerActive = chooseEncounter(mercer, mercerChoice.id, () => 0.4);
+    const sotoActive = chooseEncounter(soto, sotoChoice.id, () => 0.4);
+    const mercerOffers = (mercerActive.activeEncounter!.payload as RewardDraftPayload).offers;
+    const sotoOffers = (sotoActive.activeEncounter!.payload as RewardDraftPayload).offers;
+
+    expect(mercerOffers.length).toBeGreaterThan(0);
+    expect(sotoOffers.length).toBeGreaterThan(0);
+    // Full behavioral distinctness (different items actually drawn) is only
+    // observable once each entrant's real exclusive pool is authored (US2,
+    // tasks.md T020-T023) — until then EXCLUSIVE_ITEMS is genuinely empty
+    // for every entrant, so both pools equal NEUTRAL_ITEMS. What's provable
+    // now, and what this test asserts, is that the wiring itself reads
+    // run.identity.entrantId rather than a shared/hardcoded pool.
+    mercerOffers.forEach(({ item }) => expect(mercerPool.some((candidate) => candidate.id === item.id)).toBe(true));
+    sotoOffers.forEach(({ item }) => expect(sotoPool.some((candidate) => candidate.id === item.id)).toBe(true));
+  });
+});
+
+describe("draft determinism preserved through the pool-resolution refactor (020-character-item-pools US1, FR-008, tasks.md T015)", () => {
+  it("identical (run seed, stage) inputs always produce identical reward-draft offers", () => {
+    const first = confirmEntrantWithRewardDraft("evelyn-mercer");
+    const second = confirmEntrantWithRewardDraft("evelyn-mercer");
+    const choice = first.availableChoices.find((candidate) => candidate.type === "reward-draft")!;
+    expect(choice).toBeDefined();
+
+    const firstActive = chooseEncounter(first, choice.id, () => 0.4);
+    const secondActive = chooseEncounter(second, choice.id, () => 0.4);
+    const firstOffers = (firstActive.activeEncounter!.payload as RewardDraftPayload).offers;
+
+    expect(firstOffers.length).toBeGreaterThan(0);
+    expect(firstOffers).toEqual(
+      (secondActive.activeEncounter!.payload as RewardDraftPayload).offers,
+    );
   });
 });

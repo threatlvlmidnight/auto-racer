@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { ITEM_POOL } from "../../src/content/sample-data";
 import { GHOST_POOL } from "../../src/content/rivals";
 import { selectGhostRoster } from "../../src/simulation/rivals";
 import {
@@ -74,7 +73,7 @@ describe("run scene boundary", () => {
     expect(model.choices.map(({ id }) => id)).toEqual(run.availableChoices.map(({ id }) => id));
     expect(runRoute(run)).toBe("RunScene");
 
-    const selected = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+    const selected = chooseEncounter(run, run.availableChoices[0].id, () => 0);
     expect(runRoute(selected)).toBe(
       selected.activeEncounter?.type === "sponsor-meeting" ? "RunScene" : "PrepareScene",
     );
@@ -85,7 +84,7 @@ describe("run scene boundary", () => {
   it("carries PvP context through one guarded result continuation with explicit labels", () => {
     let run = create();
     for (let stage = 0; stage < 2; stage += 1) {
-      run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+      run = chooseEncounter(run, run.availableChoices[0].id, () => 0);
       run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
     }
     const input = contestSceneInput(run, run.activeEncounter!.id);
@@ -117,7 +116,7 @@ describe("run scene boundary", () => {
 
     for (let pvpCount = 0; pvpCount < 4; pvpCount += 1) {
       for (let stage = 0; stage < 2; stage += 1) {
-        run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+        run = chooseEncounter(run, run.availableChoices[0].id, () => 0);
         run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
       }
       const lapCount = run.stages[run.stageIndex].lapCount!;
@@ -136,7 +135,7 @@ describe("run scene boundary", () => {
     let run = create();
     const advanceThroughTwoChoices = () => {
       for (let stage = 0; stage < 2; stage += 1) {
-        run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+        run = chooseEncounter(run, run.availableChoices[0].id, () => 0);
         run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
       }
     };
@@ -161,7 +160,7 @@ describe("run scene boundary", () => {
   it("populates rivalRoster from selectGhostRoster(GHOST_POOL, run.seed, level), not a fixed direct reference (019-async-ghost-pool T011)", () => {
     let run = create();
     for (let stage = 0; stage < 2; stage += 1) {
-      run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+      run = chooseEncounter(run, run.availableChoices[0].id, () => 0);
       run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
     }
     const input = contestSceneInput(run, run.activeEncounter!.id);
@@ -172,7 +171,7 @@ describe("run scene boundary", () => {
   it("toLegacyContestResult preserves each lap's physics breakdown when bridging an NCarContestResult (021-arcade-physics-simulation T028a, /speckit.analyze finding I1)", () => {
     let run = create();
     for (let stage = 0; stage < 2; stage += 1) {
-      run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+      run = chooseEncounter(run, run.availableChoices[0].id, () => 0);
       run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
     }
     const input = contestSceneInput(run, run.activeEncounter!.id);
@@ -196,7 +195,7 @@ describe("run scene boundary", () => {
       build: vehicleBuild(),
       rng: () => 0,
     });
-    const active = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+    const active = chooseEncounter(run, run.availableChoices[0].id, () => 0);
     const payload = active.activeEncounter!.payload as PartsSupplierPayload;
     const before = activeEncounterPresentation(active);
 
@@ -234,7 +233,7 @@ describe("run scene boundary", () => {
       build: vehicleBuild(),
       rng: () => 0.99,
     });
-    const active = chooseEncounter(run, run.availableChoices[0].id, () => 0.5, ITEM_POOL);
+    const active = chooseEncounter(run, run.availableChoices[0].id, () => 0.5);
     const model = activeEncounterPresentation(active);
 
     expect(model).toMatchObject({ type: "sponsor-meeting", credits: 5 });
@@ -255,7 +254,7 @@ describe("run scene boundary", () => {
 
   it("presents available, active, completed, failed, and unavailable states without silent regeneration", () => {
     const available = create();
-    const active = chooseEncounter(available, available.availableChoices[0].id, () => 0, ITEM_POOL);
+    const active = chooseEncounter(available, available.availableChoices[0].id, () => 0);
     const completed = {
       ...available,
       status: "completed" as const,

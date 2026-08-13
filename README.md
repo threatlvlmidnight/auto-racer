@@ -44,14 +44,13 @@ not partial coverage by oversight.
 
 ## Manual validation
 
-The prepare phase presents five offers drawn from a 15-item pool. The active
-Performance identity weights each draw toward Performance-tagged items while
-keeping neutral items available. Drag offers onto the three-slot board, use
-Next to advance or decline, and use the once-per-round Refresh to reroll. A
-toggleable three-slot storage area accepts board items and supports swapping;
-stored items are inert except for the visibly marked Tyre Rack. Item tags,
-effects, and slot contents stay visible throughout preparation. A Performance
-buff can amplify matching direct items held with it.
+The item catalog contains 10 shared Neutral items plus 15 exclusive items for
+each of the four entrants. Standard Reward Draft and Parts Supplier encounters
+draw only from Neutral plus the selected entrant's pool; Cross-Pollination
+occasionally offers three parts from exactly one other entrant's exclusive
+workshop. Drag offers onto the selected vehicle's four typed slots or three
+storage positions. Items expose physical-stat changes, contextual effects,
+cooldowns, Buffs, Synergies, tiers, and storage behavior throughout preparation.
 
 Contests resolve deterministically over 10 laps, then play back as a watched
 race around an oval track for roughly 20 seconds. The two cars follow their

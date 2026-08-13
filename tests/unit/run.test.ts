@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { BASELINE_CAR, ITEM_POOL, SAMPLE_GHOST } from "../../src/content/sample-data";
+import { BASELINE_CAR, SAMPLE_GHOST } from "../../src/content/sample-data";
+import { LEGACY_ITEM_POOL } from "../fixtures/legacy-item-pool";
 import { chooseEncounter } from "../../src/simulation/encounters";
 import { resolveContest } from "../../src/simulation/contest";
 import {
@@ -47,7 +48,7 @@ const newRun = (): Run =>
 function advanceToFirstPvp(run = newRun()): Run {
   let current = run;
   for (let stage = 0; stage < 2; stage += 1) {
-    current = chooseEncounter(current, current.availableChoices[0].id, () => 0, ITEM_POOL);
+    current = chooseEncounter(current, current.availableChoices[0].id, () => 0);
     current = completeNonPvpEncounter(
       current,
       current.activeEncounter!.id,
@@ -129,7 +130,7 @@ describe("12-stage schedule (017-season-structure-grow US1, FR-001/FR-002/FR-003
     const seenTypes = new Set<string>();
     for (let choiceCount = 0; choiceCount < 8; choiceCount += 1) {
       run.availableChoices.forEach((choice) => seenTypes.add(choice.type));
-      run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+      run = chooseEncounter(run, run.availableChoices[0].id, () => 0);
       run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
       if (run.stages[run.stageIndex]?.kind === "pvp") {
         const result = resolveContest(run.build, { id: "slow-ghost", lapTime: 100 }, run.stages[run.stageIndex].lapCount!);
@@ -145,7 +146,7 @@ describe("12-stage schedule (017-season-structure-grow US1, FR-001/FR-002/FR-003
     let run = newRun();
     for (let pvpCount = 0; pvpCount < 4; pvpCount += 1) {
       for (let stage = 0; stage < 2; stage += 1) {
-        run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+        run = chooseEncounter(run, run.availableChoices[0].id, () => 0);
         run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
       }
       const lapCount = run.stages[run.stageIndex].lapCount!;
@@ -165,7 +166,7 @@ describe("non-PvP run transitions", () => {
   it("activates one stored choice without selecting an item", () => {
     const run = newRun();
     const choice = run.availableChoices[0];
-    const active = chooseEncounter(run, choice.id, sequenceRng(0.1, 0.8), ITEM_POOL);
+    const active = chooseEncounter(run, choice.id, sequenceRng(0.1, 0.8));
 
     expect(active.activeEncounter).toMatchObject({
       id: `${choice.id}-encounter`,
@@ -180,7 +181,7 @@ describe("non-PvP run transitions", () => {
 
   it("completes exactly once, appends history, preserves build, and advances one stage", () => {
     const run = newRun();
-    const active = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+    const active = chooseEncounter(run, run.availableChoices[0].id, () => 0);
     const snapshot = structuredClone(active);
     const completed = completeNonPvpEncounter(
       active,
@@ -213,7 +214,7 @@ describe("non-PvP run transitions", () => {
   it("rejects wrong choice and stale encounter IDs with typed codes", () => {
     const run = newRun();
 
-    expect(() => chooseEncounter(run, "wrong-choice", () => 0, ITEM_POOL)).toThrowError(
+    expect(() => chooseEncounter(run, "wrong-choice", () => 0)).toThrowError(
       expect.objectContaining({ code: "encounter-id-mismatch" }),
     );
     expect(() =>
@@ -224,7 +225,7 @@ describe("non-PvP run transitions", () => {
   it("rejects generic completion at a scheduled PvP stage", () => {
     let run = newRun();
     for (let stage = 0; stage < 2; stage += 1) {
-      run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+      run = chooseEncounter(run, run.availableChoices[0].id, () => 0);
       run = completeNonPvpEncounter(
         run,
         run.activeEncounter!.id,
@@ -275,8 +276,8 @@ describe("PvP run transitions", () => {
 
   it.each([
     ["lap count", (result: ContestResult) => ({ ...result, lapCount: 12 })],
-    ["board IDs", (result: ContestResult) => ({ ...result, board: [ITEM_POOL[0]] })],
-    ["storage IDs", (result: ContestResult) => ({ ...result, storage: [ITEM_POOL[0]] })],
+    ["board IDs", (result: ContestResult) => ({ ...result, board: [LEGACY_ITEM_POOL[0]] })],
+    ["storage IDs", (result: ContestResult) => ({ ...result, storage: [LEGACY_ITEM_POOL[0]] })],
   ])("rejects mismatched %s before any mutation", (_label, mutate) => {
     const active = advanceToFirstPvp();
     const snapshot = structuredClone(active);
@@ -309,7 +310,7 @@ describe("PvP run transitions", () => {
     let finalId = "";
     for (let pvpCount = 0; pvpCount < 3; pvpCount += 1) {
       for (let stage = 0; stage < 2; stage += 1) {
-        run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+        run = chooseEncounter(run, run.availableChoices[0].id, () => 0);
         run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
       }
       finalId = run.activeEncounter!.id;
@@ -361,7 +362,7 @@ describe("run status and summaries", () => {
           sponsorOutcome: {
             id: "contract",
             sourceEncounterId: "meeting",
-            objective: { kind: "trigger-tagged-items", identityTag: "performance", requiredEvents: 10 },
+            objective: { kind: "trigger-tagged-items", tag: "momentum", requiredEvents: 10 },
             payout: 7,
             status: "succeeded",
             resolvedEncounterId: "pvp",
@@ -418,7 +419,7 @@ describe("run status and summaries", () => {
     expect(fresh.build.slots).toHaveLength(4);
     expect(fresh.build.storage).toHaveLength(3);
     const completed = { ...fresh, status: "completed" as const };
-    expect(() => chooseEncounter(completed, completed.availableChoices[0].id, () => 0, ITEM_POOL))
+    expect(() => chooseEncounter(completed, completed.availableChoices[0].id, () => 0))
       .toThrowError(expect.objectContaining({ code: "run-not-active" }));
   });
 });
@@ -714,7 +715,7 @@ describe("reputation and the \"failed\" RunStatus (015-economy-depth Foundationa
       const lapCount = run.stages[run.stageIndex].lapCount!;
       run = completePvpEncounter(run, run.activeEncounter!.id, resolveContest(run.build, slowGhost, lapCount), () => 0);
       for (let stage = 0; stage < 2; stage += 1) {
-        run = chooseEncounter(run, run.availableChoices[0].id, () => 0, ITEM_POOL);
+        run = chooseEncounter(run, run.availableChoices[0].id, () => 0);
         run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
       }
     }

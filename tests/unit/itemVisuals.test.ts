@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { ITEM_POOL } from "../../src/content/sample-data";
+import { LEGACY_ITEM_POOL } from "../fixtures/legacy-item-pool";
 import { itemVisualDescriptor } from "../../src/scenes/itemVisualDescriptor";
 
 describe("itemVisualDescriptor", () => {
   it("distinguishes direct, flat, stacking, and count-synergy behavior", () => {
-    const direct = ITEM_POOL.find((item) => !item.buff)!;
-    const flat = ITEM_POOL.find((item) => item.buff && item.cooldown === undefined && !item.buff.perCount)!;
-    const stacking = ITEM_POOL.find((item) => item.buff && item.cooldown !== undefined)!;
-    const count = ITEM_POOL.find((item) => item.buff?.perCount)!;
+    const direct = LEGACY_ITEM_POOL.find((item) => !item.buff)!;
+    const flat = LEGACY_ITEM_POOL.find((item) => item.buff && item.cooldown === undefined && !item.buff.perCount)!;
+    const stacking = LEGACY_ITEM_POOL.find((item) => item.buff && item.cooldown !== undefined)!;
+    const count = LEGACY_ITEM_POOL.find((item) => item.buff?.perCount)!;
 
     expect(itemVisualDescriptor(direct).kind).toBe("direct");
     expect(itemVisualDescriptor(flat).kind).toBe("flat-buff");
@@ -16,8 +16,8 @@ describe("itemVisualDescriptor", () => {
   });
 
   it("uses the visible one-lap convention and preserves category flags", () => {
-    const flat = ITEM_POOL.find((item) => item.buff && item.cooldown === undefined)!;
-    const stored = ITEM_POOL.find((item) => item.activeWhileStored)!;
+    const flat = LEGACY_ITEM_POOL.find((item) => item.buff && item.cooldown === undefined)!;
+    const stored = LEGACY_ITEM_POOL.find((item) => item.activeWhileStored)!;
 
     expect(itemVisualDescriptor(flat)).toMatchObject({
       performance: true,

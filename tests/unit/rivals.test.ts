@@ -3,6 +3,7 @@ import { vehicleById } from "../../src/content/entrants";
 import { GHOST_POOL, RIVAL_PROFILES, validateGhostPool, validateRivalCatalog } from "../../src/content/rivals";
 import { resolveRivalBuild, selectGhostRoster } from "../../src/simulation/rivals";
 import { installedItems, storedItems } from "../../src/simulation/slots";
+import { poolForRival } from "../../src/simulation/itemPools";
 
 describe("RIVAL_PROFILES catalog (FR-004)", () => {
   it("authors exactly 7 profiles", () => {
@@ -65,14 +66,15 @@ describe("resolveRivalBuild determinism (FR-005)", () => {
     });
   });
 
-  it("installs real catalog items reusing the existing deterministic draw — no second selection mechanism", () => {
-    const build = resolveRivalBuild(profile, 2, 7);
-    const installed = [...installedItems(build), ...storedItems(build)].filter(
-      (item): item is NonNullable<typeof item> => item !== null,
-    );
-    expect(installed.length).toBeGreaterThan(0);
-    installed.forEach((item) => {
-      expect(item.id).toMatch(/^item-\d{3}$/);
+  it("installs items only from each profile's Neutral plus own-entrant pool", () => {
+    GHOST_POOL.forEach((candidate) => {
+      const build = resolveRivalBuild(candidate, 4, 7);
+      const eligibleIds = new Set(poolForRival(candidate.vehicleId).map((item) => item.id));
+      const installed = [...installedItems(build), ...storedItems(build)].filter(
+        (item): item is NonNullable<typeof item> => item !== null,
+      );
+      expect(installed.length).toBeGreaterThan(0);
+      installed.forEach((item) => expect(eligibleIds.has(item.id), `${candidate.id}: ${item.id}`).toBe(true));
     });
   });
 

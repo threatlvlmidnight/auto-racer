@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ITEM_POOL } from "../../src/content/sample-data";
+import { LEGACY_ITEM_POOL } from "../fixtures/legacy-item-pool";
 import {
   commitGarageCommand,
   previewGarageCommand,
@@ -386,7 +386,7 @@ describe("tier field (016-duplicate-item-tiering foundational)", () => {
 
 describe("garage item-copy conservation", () => {
   it("never duplicates or drops an item across a long sequence of legal operations", () => {
-    let build = vehicleBuild([ITEM_POOL[0], ITEM_POOL[1]], [ITEM_POOL[2]]);
+    let build = vehicleBuild([LEGACY_ITEM_POOL[0], LEGACY_ITEM_POOL[1]], [LEGACY_ITEM_POOL[2]]);
     const startingIds = [...installedItems(build), ...storedItems(build)]
       .filter((item): item is ItemDefinition => item !== null)
       .map((item) => item.id)
@@ -434,7 +434,7 @@ describe("resolveInstallation — full catalog matrix", () => {
   const SLOT_TYPES: SlotType[] = ["power", "chassis", "flex"];
 
   it("is legal for every shipped item against every slot type and never mutates the item", () => {
-    ITEM_POOL.forEach((item) => {
+    LEGACY_ITEM_POOL.forEach((item) => {
       const snapshot = structuredClone(item);
       SLOT_TYPES.forEach((slotType) => {
         expect(() => resolveInstallation(item, slotType)).not.toThrow();
@@ -444,7 +444,7 @@ describe("resolveInstallation — full catalog matrix", () => {
   });
 
   it("resolves Fitted with the item's own Fitted behavior when the slot matches its category", () => {
-    ITEM_POOL.forEach((item) => {
+    LEGACY_ITEM_POOL.forEach((item) => {
       const resolution = resolveInstallation(item, item.installationCategory);
 
       expect(resolution.state).toBe("fitted");
@@ -461,7 +461,7 @@ describe("resolveInstallation — full catalog matrix", () => {
 
   it("resolves Improvised — still legal — with the item's own Improvised behavior when the slot conflicts", () => {
     const opposite: Record<"power" | "chassis", "power" | "chassis"> = { power: "chassis", chassis: "power" };
-    ITEM_POOL.forEach((item) => {
+    LEGACY_ITEM_POOL.forEach((item) => {
       const conflictingSlot = opposite[item.installationCategory];
       const resolution = resolveInstallation(item, conflictingSlot);
       const hasConsequence = item.improvisedBehavior.kind !== "none";
@@ -474,7 +474,7 @@ describe("resolveInstallation — full catalog matrix", () => {
   });
 
   it("resolves Flexible with base-only behavior in a Flex slot regardless of category", () => {
-    ITEM_POOL.forEach((item) => {
+    LEGACY_ITEM_POOL.forEach((item) => {
       const resolution = resolveInstallation(item, "flex");
 
       expect(resolution.state).toBe("flexible");

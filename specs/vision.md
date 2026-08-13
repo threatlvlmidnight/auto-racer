@@ -46,10 +46,13 @@ The committed initial-release roster is:
   ecosystem covers craftsmanship, roadcraft, materials, appraisal, and resale.
 - **Lucien Soto - Velodrome**: a champion cyclist whose ecosystem covers cadence,
   momentum, drafting, endurance, sporting prizes, and lightweight engineering.
-- **Inez Rook - Fieldworks**: an expedition engineer and compulsive salvager whose
-  ecosystem covers tools, repair, fuel, heat, transformation, and experimental machinery.
-- **Nell Voss - Backroads**: a customs runner and illicit courier whose ecosystem
-  covers contraband, evasion, wagers, information, distractions, and exposure.
+- **Inez Rook - Fieldworks**: an expedition engineer and experimental vehicle
+  designer whose ecosystem transfers serious technology across aviation,
+  industry, expeditions, and transport through airflow, pressure, heat,
+  unconventional running gear, instrumentation, and cross-disciplinary prototypes.
+- **Nell Voss - Backroads**: a customs runner and rulebook engineer whose
+  ecosystem covers technical loopholes, information, calculated exposure,
+  late-braking attacks, unconventional racing lines, wagers, and getaway speed.
 
 These are thematic item ecosystems, not locked mechanical classes or prescribed
 strategies. Each supports multiple approaches to pace, scaling, control,

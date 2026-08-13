@@ -61,15 +61,15 @@ export const ENTRANTS: readonly EntrantDefinition[] = [
     id: "inez-rook",
     name: "Inez Rook",
     origin: "fieldworks",
-    role: "Expedition engineer, field mechanic, and compulsive rescuer of broken machinery",
+    role: "Expedition engineer and experimental vehicle designer",
     approach:
-      "There is no such thing as the wrong component, only a component whose next purpose has not yet been "
-      + "understood. Inez expects a machine to change whenever circumstances do.",
+      "No existing vehicle category gets to decide what belongs in a racing machine. Inez transfers serious "
+      + "technology across aviation, industry, expeditions, and transport to test what competition can make possible.",
     strategyDirections: [
-      "Salvage and transformation of unwanted or damaged items",
-      "Tool, spare-part, and storage-count synergies",
-      "Heat, pressure, and controlled-risk overclocking",
-      "Hybrid assemblies that connect otherwise unrelated synergy tags",
+      "Aircraft power, propellers, and experimental airflow systems",
+      "Multi-axle running gear and unconventional tracking systems",
+      "Instrumented heat, pressure, and controlled-limit engineering",
+      "Cross-disciplinary prototypes that connect otherwise unrelated systems",
     ],
     vehicleId: "the-lark",
     portraitAssetKey: "entrant-inez-rook",
@@ -78,15 +78,15 @@ export const ENTRANTS: readonly EntrantDefinition[] = [
     id: "nell-voss",
     name: "Nell Voss",
     origin: "backroads",
-    role: "Customs runner, illicit courier, and veteran of races that were never officially announced",
+    role: "Customs runner, rulebook engineer, and veteran of races that were never officially announced",
     approach:
-      "Officials have given a name and a rulebook to something Nell has done for years. Rules, patrols, bad "
-      + "roads, and other competitors are all obstacles to be read, redirected, or escaped.",
+      "Officials enforce written rules, not intentions, and rivals defend against expected moves, not every possible "
+      + "one. Nell builds to the exact limit, finds the unguarded interpretation or line, and commits before it closes.",
     strategyDirections: [
-      "Contraband value builds that balance cargo against a later payout",
-      "Risk and exposure builds that become lucrative under pressure",
-      "Evasion, redirection, and protection from opposing effects",
-      "Sudden escape bursts and decisive high-speed laps",
+      "Rulebook engineering through exact conditions and technical loopholes",
+      "Late-braking attacks and aggressive but calculated corner entry",
+      "Information builds that identify narrow performance opportunities",
+      "Getaway acceleration and decisive high-speed escape",
     ],
     vehicleId: "the-hush",
     portraitAssetKey: "entrant-nell-voss",
@@ -120,7 +120,7 @@ export const VEHICLES: readonly VehicleDefinition[] = [
     entrantId: "inez-rook",
     baseCarId: BASELINE_CAR.id,
     silhouetteAssetKey: "vehicle-the-lark",
-    // 1 Power / 1 Chassis / 2 Flex — the most adaptable, least specialised.
+    // 1 Power / 1 Chassis / 2 Flex — cross-disciplinary and deliberately experimental.
     slots: slots("the-lark", ["power", "chassis", "flex", "flex"]),
     storageCapacity: VEHICLE_STORAGE_CAPACITY,
   },
