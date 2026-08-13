@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-12
 
-**Status**: Draft
+**Status**: Ready for implementation
 
 **Input**: User description: "Display vehicle base and effective physical stats throughout a run, while building the vehicle, and during race playback."
 
@@ -309,6 +309,23 @@ remain understandable in monochrome and with motion disabled.
 - Exact panel geometry, responsive breakpoints, animation, and icon artwork are
   planning and design-system decisions, provided the information hierarchy and
   accessibility requirements above are preserved.
+
+## Clarifications
+
+### Session 2026-08-13
+
+- Preparation totals represent stock plus unconditional, currently active item
+  contributions. Track-, segment-, cooldown-, and lap-dependent potential is
+  labeled separately and is never folded into a guessed total.
+- A placement preview is derived from the authoritative prospective build
+  produced by the existing garage preview path. Presentation does not recreate
+  placement, swap, eviction, installation, or tier rules.
+- Race playback uses recorded lap physics and contribution evidence only. It
+  never reruns simulation to obtain a display value.
+- The always-visible race panel prioritizes the player's four-stat profile.
+  Rival aggregate stats remain optional and are not required for this feature.
+- Feature 025 does not own live race rank, ghost ordering, or track-composition
+  explanation. Those concerns belong to feature 027.
 
 ## Out of Scope
 

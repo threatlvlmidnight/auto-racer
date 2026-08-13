@@ -1,6 +1,40 @@
 # Handoff
 
-## Latest session — feature 024 complete, feature 026 visual pass in progress
+## Latest session — feature 025 packaged, feature 027 specification started
+
+**Updated**: 2026-08-13 after completing feature 025's specification package
+and drafting feature 027.
+
+### Current specification state
+
+- `025-vehicle-stat-display` now has a complete spec, research, plan, data
+  model, contract, quickstart, and 50-task implementation sequence. Its core
+  boundary is locked: honest unconditional preparation totals, authoritative
+  prospective-build previews, and recorded-only lap-effective race values.
+- `027-race-legibility-integrity` now has a complete spec, research, plan, data
+  model, contract, quickstart, and 57-task implementation sequence. The owner
+  chose a projected race position that updates once per completed player lap.
+  At lap N, all cars are compared by cumulative simulated time through the same
+  lap N; the published projection remains stable between player checkpoints.
+- Feature 027 also owns playback/marker integrity diagnosis and authoritative
+  post-race track composition. Feature 025 retains ownership of aggregate
+  vehicle-stat panels.
+- `.specify/feature.json` points at `027-race-legibility-integrity`.
+
+### Start here next session
+
+1. Implement feature 025 when authorized, following its 50-task sequence.
+2. Then implement feature 027 when authorized, beginning with immutable result
+   snapshots and playback-integrity tests. Carry the exact generated `Track`
+   and original roster tie-break order on `NCarContestResult`; never regenerate
+   a track in a scene.
+3. Add integrity tests around `carProgressAt`, checkpoint projection,
+   `nCarFrameStateAt`, marker wrapping, missed boundaries, finish events, and
+   final-result parity before changing playback presentation.
+
+---
+
+## Previous session — feature 024 complete, feature 026 visual pass in progress
 
 **Updated**: 2026-08-12 after the first feature-026 implementation and visual
 review loop.

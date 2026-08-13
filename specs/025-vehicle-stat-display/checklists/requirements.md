@@ -31,6 +31,7 @@
 
 ## Notes
 
-- Specification is ready for clarification or planning.
+- Specification clarification, planning, research, data model, contract,
+  quickstart, and implementation tasks are complete as a documentation package.
 - Feature 024 owns item-level presentation; feature 025 owns aggregate vehicle
   stats and the shared context used to reconcile those item-level contributions.
