@@ -1,6 +1,5 @@
 import Phaser from "phaser";
-import { confirmWorldTourDestination } from "../simulation/championship";
-import type { Run } from "../simulation/run";
+import { confirmRunDestination, type Run } from "../simulation/run";
 import type { SelectableRegionId } from "../simulation/types";
 import {
   addDemoBackdrop,
@@ -75,8 +74,7 @@ export class DestinationScene extends Phaser.Scene {
 
   private confirm(): void {
     if (!this.selected || !this.run.worldTour) return;
-    const worldTour = confirmWorldTourDestination(this.run.id, this.run.worldTour, this.selected);
-    this.scene.start("RunScene", { run: { ...this.run, worldTour } });
+    this.scene.start("RunScene", { run: confirmRunDestination(this.run, this.selected, Math.random) });
   }
 
   private back(): void { this.scene.start("RunScene", { run: this.run }); }

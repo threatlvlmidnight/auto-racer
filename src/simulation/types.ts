@@ -568,6 +568,8 @@ export interface ContestResult {
    * has no equivalent position on an 8-car scale.
    */
   playerPosition?: number;
+  /** Stable entrant/profile IDs in final order when resolved from an N-car field. */
+  finishingOrder?: readonly string[];
 }
 
 // --- Feature 012: multi-ghost contest --------------------------------------
@@ -729,4 +731,15 @@ export interface RecordedGhost {
   setup: LockedRaceSetup;
   trackId: string;
   simulationRulesVersion: string;
+}
+
+export interface ExactTrackGhostRecord extends RecordedGhost {
+  id: string;
+  ownerId: string;
+  displayName: string;
+  recordedTime: number;
+}
+
+export interface EliteFinaleOpponent extends ExactTrackGhostRecord {
+  provenance: "recorded" | "exhibition-fallback";
 }

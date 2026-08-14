@@ -80,6 +80,15 @@ export function localProfilesForRegion(regionId: RegionId): readonly LocalTeamPr
   return LOCAL_TEAM_PROFILES.filter((profile) => profile.regionId === regionId);
 }
 
+export function localRivalRoster(
+  regionId: RegionId,
+  tier: LocalRaceTier,
+  legOrdinal: 1 | 2 | 3 | 4 | 5,
+): readonly RivalProfile[] {
+  const slots = occupiedSlots(tier, legOrdinal);
+  return localProfilesForRegion(regionId).map((profile) => asRivalProfile(profile, slots));
+}
+
 export function resolveLocalOpponentSnapshot(
   profile: LocalTeamProfile,
   tier: LocalRaceTier,

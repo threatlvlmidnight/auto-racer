@@ -1,4 +1,5 @@
 import { vehicleById } from "../content/entrants";
+import { RIVAL_PROFILES } from "../content/rivals";
 import { createEmptyVehicleBuild } from "./build";
 import { poolForRival } from "./itemPools";
 import { drawItem } from "./draft";
@@ -16,6 +17,8 @@ import {
   ACTIVE_IDENTITY_TAG,
   TAG_WEIGHT,
   type EligibleSetupControl,
+  type EliteFinaleOpponent,
+  type ExactTrackGhostRecord,
   type ItemDefinition,
   type LockedRaceSetup,
   type RivalProfile,
@@ -35,6 +38,55 @@ function mulberry32(seed: number): () => number {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+export function selectEliteFinaleOpponents(
+  records: readonly ExactTrackGhostRecord[],
+  track: Track,
+  playerOwnerId: string,
+  seed: number,
+): readonly EliteFinaleOpponent[] {
+  const seenOwners = new Set<string>();
+  const recorded = [...records]
+    .filter((record) =>
+      record.ownerId !== playerOwnerId
+      && record.trackId === track.id
+      && record.setup.trackId === track.id
+      && record.simulationRulesVersion.length > 0
+      && Number.isFinite(record.recordedTime)
+      && record.recordedTime > 0)
+    .sort((left, right) => left.recordedTime - right.recordedTime || left.id.localeCompare(right.id))
+    .filter((record) => {
+      if (seenOwners.has(record.ownerId)) return false;
+      seenOwners.add(record.ownerId);
+      return true;
+    })
+    .slice(0, 7)
+    .map((record): EliteFinaleOpponent => ({ ...record, provenance: "recorded" }));
+
+  const opponents: EliteFinaleOpponent[] = [...recorded];
+  for (let index = opponents.length; index < 7; index += 1) {
+    const profile = RIVAL_PROFILES[index];
+    const build = resolveRivalBuild(profile, 4, seed + index * 4099);
+    const setup = selectGeneratedRivalSetup(build, track, {
+      encounterId: `elite-fallback-${index + 1}`,
+      lapCount: 16,
+    });
+    const recordedTime = simulatePlayerLaps(build, 16, track, setup.totalDelta)
+      .reduce((sum, lap) => sum + lap.time, 0);
+    opponents.push({
+      id: `elite-fallback-${profile.id}`,
+      ownerId: `exhibition-${profile.id}`,
+      displayName: `${profile.name} · Exhibition Ghost`,
+      recordedTime,
+      build,
+      setup,
+      trackId: track.id,
+      simulationRulesVersion: "prototype-exhibition-v1",
+      provenance: "exhibition-fallback",
+    });
+  }
+  return opponents;
 }
 
 function hashSeed(...parts: (string | number)[]): number {

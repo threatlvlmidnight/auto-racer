@@ -67,7 +67,7 @@ Paris; verify offers, cadence, navigation, history, and stage-40 completion.
 
 ### Implementation
 
-- [ ] T019 [US1] Extend run creation/advancement/history in `src/simulation/run.ts` to use committed `TourLeg`/`TourStage` state and complete only after stage 40 or explicit failure
+- [X] T019 [US1] Extend run creation/advancement/history in `src/simulation/run.ts` to use committed `TourLeg`/`TourStage` state and complete only after stage 40 or explicit failure
 - [ ] T020 [US1] Add region-flavor descriptors around unchanged encounter selection in `src/simulation/encounters.ts` without changing its probability/economy authority
 - [X] T021 [US1] Implement `DestinationScene` in `src/scenes/DestinationScene.ts` with two persistent cards, disclosed theme/cadence/tendency, Back, focus/input parity, and explicit travel confirmation
 - [ ] T022 [US1] Register destination routing in `src/main.ts`, `src/scenes/EntrantSelectScene.ts`, `src/scenes/RunScene.ts`, and result-to-next-stage navigation without counting travel as a stage (scene registration, first-leg route, Back, and confirmation landed; post-leg result routing remains)
@@ -89,15 +89,15 @@ canonical race parity, and reconcile all different settlement outputs.
 
 ### Tests
 
-- [ ] T025 [P] [US2] Add failing settlement table tests in `tests/unit/settlement.test.ts` for all eight positions, Local `1+1` purse/no interest/no points, Championship `2+2` purse/interest/points, sponsor ordering, and zero-floor reputation (all position/purse/interest/points policy tables landed; sponsor ordering and integrated zero-floor coverage remain)
+- [ ] T025 [P] [US2] Add failing settlement table tests in `tests/unit/settlement.test.ts` for all eight positions, Local `1+1` purse/no interest/no points, Championship `2+2` purse/interest/points, sponsor ordering, and zero-floor reputation (all tables and integrated zero-floor behavior landed; dedicated sponsor-order assertion remains)
 - [ ] T026 [P] [US2] Add failing shared-pipeline parity tests in `tests/integration/race-parity.test.ts` proving race kind selects inputs/policy only and never a second simulation, playback, setup, or Results resolver
 - [ ] T027 [P] [US2] Add failing sponsor tests in `tests/integration/contract-targeting.test.ts` for next-Championship skipping Local Races and explicitly race-agnostic objectives progressing in either type
 - [ ] T028 [P] [US2] Add failing player-copy/static-boundary tests in `tests/integration/world-tour-copy.test.ts` rejecting visible `PvE`/`PvP` and requiring Local Race/Championship Race across hub, setup, contracts, Results, history, and explanations
 
 ### Implementation
 
-- [ ] T029 [US2] Implement pure race-kind purse, reputation, interest, points, sponsor, and explanation policy in `src/simulation/settlement.ts`
-- [ ] T030 [US2] Refactor `src/simulation/contest.ts` and `src/simulation/run.ts` so both race kinds assemble the same canonical contest input and settle exactly once through T029
+- [ ] T029 [US2] Implement pure race-kind purse, reputation, interest, points, sponsor, and explanation policy in `src/simulation/settlement.ts` (purse/reputation/interest/points and sponsor eligibility landed; explanation tokens remain)
+- [X] T030 [US2] Refactor `src/simulation/contest.ts` and `src/simulation/run.ts` so both race kinds assemble the same canonical contest input and settle exactly once through T029
 - [ ] T031 [US2] Update contract target resolution and objective eligibility in `src/simulation/encounters.ts` and sponsor content so next-Championship contracts skip Local Races and disclose that behavior
 - [ ] T032 [US2] Add pure race-kind presentation labels/descriptions in `src/scenes/worldTourPresentation.ts` and consume them in `RunScene.ts`, `PreRaceScene.ts`, `ContestScene.ts`, and `ResultScene.ts`
 - [ ] T033 [US2] Render itemized purse, interest, reputation, sponsor, and points settlement in `src/scenes/ResultScene.ts` without inferring values in the scene
@@ -121,7 +121,7 @@ whose reduced difficulty comes solely from legal builds and setups.
 - [X] T040 [P] Author seven Northern Europe and seven Mediterranean & North Africa profiles in `src/content/localTeams/northernEurope.ts` and `src/content/localTeams/mediterraneanNorthAfrica.ts`
 - [X] T041 [P] Author seven Paris international exhibition profiles in `src/content/localTeams/parisExhibition.ts`
 - [ ] T042 Assemble and validate the profile catalog in `src/content/localTeams/index.ts`, then implement deterministic legal item/build selection, slot/tier scaling, setup selection, and fallback provenance in `src/simulation/localOpponents.ts` (catalog, slot scaling, legal build/setup selection, and provenance landed; explicit Challenge tier-2 upgrade policy remains)
-- [ ] T043 Integrate seven generated local snapshots into Local Race contest assembly in `src/simulation/run.ts` through the shared setup/contest boundary
+- [ ] T043 Integrate seven generated local snapshots into Local Race contest assembly in `src/simulation/run.ts` through the shared setup/contest boundary (seven persistent Local identities and build scaling are routed through shared contest input; exact prelocked Qualifier/Challenge setup snapshots remain)
 - [ ] T044 Extend per-car Results inspection in `src/scenes/ResultScene.ts` to show local identity, legal build, setup, and fallback label from recorded evidence
 - [ ] T045 Run T035-T037 across every profile, leg, and Local tier; reject content that requires a hidden pace modifier to meet difficulty goals
 
@@ -145,8 +145,8 @@ reconcile points, wins, podiums, recent finishes, ties, and classification.
 ### Implementation
 
 - [X] T050 [US3] Implement pure standings creation, result application, sorting, histories, qualification projection, and normal classification in `src/simulation/standings.ts`
-- [ ] T051 [US3] Extend championship rival content/state generation in `src/content/rivals.ts` and `src/simulation/rivals.ts` with seven persistent identities and versioned evolving snapshots
-- [ ] T052 [US3] Integrate standings mutation after Championship settlement only in `src/simulation/run.ts`, recording canonical per-race standings snapshots for history
+- [ ] T051 [US3] Extend championship rival content/state generation in `src/content/rivals.ts` and `src/simulation/rivals.ts` with seven persistent identities and versioned evolving snapshots (seven identities persist in tour state; explicit per-leg snapshot evolution remains)
+- [ ] T052 [US3] Integrate standings mutation after Championship settlement only in `src/simulation/run.ts`, recording canonical per-race standings snapshots for history (Championship-only mutation landed; immutable per-race table snapshots in history remain)
 - [ ] T053 [US3] Add standings table/history presentation models in `src/scenes/worldTourPresentation.ts` with text/symbol tie-break meaning and Local-team exclusion
 - [ ] T054 [US3] Render current standings and post-race changes in `src/scenes/RunScene.ts` and `src/scenes/ResultScene.ts`
 - [ ] T055 [US3] Run T046-T049 and the normal-finale quickstart scenario
@@ -167,15 +167,15 @@ sparse, duplicate, invalid, and full-record cases; verify field and classificati
 ### Tests
 
 - [X] T056 [P] [US4] Add failing finale qualification tests in `tests/unit/standings.test.ts` for sole raw-points lead, raw-points tie that secondary tie-breaks place first, raw-points tie that secondary tie-breaks place below first, lower points total, exact race-nine boundary, and derive-once behavior
-- [ ] T057 [P] [US4] Add failing record-selection tests in `tests/unit/rivals.test.ts` for exact track fingerprint, eligibility/ranking, player exclusion, deduplication, invalid evidence rejection, top seven, and stable ordering
-- [ ] T058 [P] [US4] Add failing fallback tests in `tests/unit/rivals.test.ts` for zero-to-six records, deterministic legal exhibition ghosts, visible provenance labels, and an unchanged total field of eight
+- [X] T057 [P] [US4] Add failing record-selection tests in `tests/unit/rivals.test.ts` for exact track fingerprint, eligibility/ranking, player exclusion, deduplication, invalid evidence rejection, top seven, and stable ordering (implemented in `tests/unit/eliteFinale.test.ts`)
+- [X] T058 [P] [US4] Add failing fallback tests in `tests/unit/rivals.test.ts` for zero-to-six records, deterministic legal exhibition ghosts, visible provenance labels, and an unchanged total field of eight (implemented in `tests/unit/eliteFinale.test.ts`)
 - [ ] T059 [P] [US4] Add failing elite flow tests in `tests/integration/elite-finale.test.ts` for frozen standings, shared setup/contest/results pipeline, ghost standings exclusion, and finish-based World Champion/Podium/Classified outcomes
 
 ### Implementation
 
-- [ ] T060 [US4] Define the injected exact-track recorded-ghost source, validation, and provenance contracts in `src/simulation/types.ts` and `src/simulation/rivals.ts` without adding networking
-- [ ] T061 [US4] Implement finale derivation, record filtering/ranking, seven-slot selection, and deterministic exhibition fallback generation in `src/simulation/rivals.ts`
-- [ ] T062 [US4] Persist `FinaleSelection` after Championship Race nine and assemble normal versus elite race-ten input exactly once in `src/simulation/run.ts`
+- [X] T060 [US4] Define the injected exact-track recorded-ghost source, validation, and provenance contracts in `src/simulation/types.ts` and `src/simulation/rivals.ts` without adding networking
+- [X] T061 [US4] Implement finale derivation, record filtering/ranking, seven-slot selection, and deterministic exhibition fallback generation in `src/simulation/rivals.ts`
+- [ ] T062 [US4] Persist `FinaleSelection` after Championship Race nine and assemble normal versus elite race-ten input exactly once in `src/simulation/run.ts` (normal/elite mode persists after race nine; elite field assembly at race ten remains)
 - [ ] T063 [US4] Freeze standings in elite mode and implement finish-only elite classification in `src/simulation/standings.ts`
 - [ ] T064 [US4] Add elite qualification, opponent provenance, frozen-table, and title-result presentation in `src/scenes/worldTourPresentation.ts`, `RunScene.ts`, `PreRaceScene.ts`, and `ResultScene.ts`
 - [ ] T065 [US4] Run T056-T059 plus invalid/tampered ghost regression cases
@@ -228,8 +228,8 @@ including preparation traversal, recovery, repeat zero, and Paris-at-zero.
 
 ### Implementation
 
-- [ ] T078 [US6] Implement pure Last Chance transitions and warning projection in `src/simulation/reputation.ts`
-- [ ] T079 [US6] Initialize reputation/status and apply T078 once per final race settlement in `src/simulation/run.ts` and `src/simulation/settlement.ts`
+- [X] T078 [US6] Implement pure Last Chance transitions and warning projection in `src/simulation/reputation.ts`
+- [X] T079 [US6] Initialize reputation/status and apply T078 once per final race settlement in `src/simulation/run.ts` and `src/simulation/settlement.ts`
 - [ ] T080 [US6] Add low-reputation, active Last Chance, consumed, recovery, and failure presentation to `src/scenes/worldTourPresentation.ts`, `RunScene.ts`, and `ResultScene.ts`
 - [ ] T081 [US6] Run T075-T077 and every Last Chance quickstart case
 

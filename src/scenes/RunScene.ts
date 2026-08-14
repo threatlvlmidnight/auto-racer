@@ -9,6 +9,7 @@ import {
   canEnterEntrantSelection,
   createUnavailableRun,
   runIdentityForEntrant,
+  validateRunScheduleCompatibility,
   type Run,
   type RunHistorySummary,
 } from "../simulation/run";
@@ -75,7 +76,11 @@ export class RunScene extends Phaser.Scene {
   }
 
   private isUsableRun(run: Run): boolean {
-    return Array.isArray(run.stages) && run.stages.length === 12 && Array.isArray(run.history);
+    const schedule = validateRunScheduleCompatibility(run);
+    return schedule.kind === "compatible"
+      && Array.isArray(run.stages)
+      && (run.worldTour?.selectedRegions.length === 0 || (run.stages.length >= 8 && run.stages.length <= 40 && run.stages.length % 8 === 0))
+      && Array.isArray(run.history);
   }
 
   private render(): void {
