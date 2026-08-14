@@ -1,7 +1,9 @@
 import Phaser from "phaser";
+import { buildIdentity } from "../buildIdentity";
 import { canEnterEntrantSelection } from "../simulation/run";
 import { createDemoButton, DEMO_COLORS, DISPLAY_FONT, UI_FONT } from "./demoTheme";
 import { configureHiDpiScene } from "./layout";
+import { titleBuildLabel } from "./titlePresentation";
 
 export class TitleScene extends Phaser.Scene {
   constructor() {
@@ -42,7 +44,11 @@ export class TitleScene extends Phaser.Scene {
       if (guard.kind === "blocked") return;
       this.scene.start("EntrantSelectScene");
     });
-    this.add.text(400, 414, "DEMONSTRATION BUILD", {
+    // Feature 031 (FR-008): small build-identity footer — `<demo-tag> ·
+    // <short-revision>` for releases, an honest local label in development.
+    // It reuses the pre-existing footer slot so the primary title action is
+    // not displaced.
+    this.add.text(400, 414, titleBuildLabel(buildIdentity), {
       fontFamily: UI_FONT,
       fontSize: "10px",
       color: "#b8c0c2",

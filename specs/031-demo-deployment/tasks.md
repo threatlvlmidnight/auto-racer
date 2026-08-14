@@ -44,19 +44,19 @@
 
 ### Tests
 
-- [ ] T013 [P] [US1] Replace the baseline with failing static tests rejecting root-absolute runtime asset literals and requiring every authored BootScene asset key/path in `tests/integration/deployment-boundaries.test.ts`
-- [ ] T014 [P] [US1] Add failing title-footer presentation tests for release and local-development identities in `tests/unit/titlePresentation.test.ts`
+- [X] T013 [P] [US1] Replace the baseline with failing static tests rejecting root-absolute runtime asset literals and requiring every authored BootScene asset key/path in `tests/integration/deployment-boundaries.test.ts`
+- [X] T014 [P] [US1] Add failing title-footer presentation tests for release and local-development identities in `tests/unit/titlePresentation.test.ts`
 - [X] T015 [P] [US1] Add failing prefixed production-artifact tests for entry module URLs, representative asset paths, cache stamps, and absent source-only trees in `tests/integration/production-artifact.test.ts`
 
 ### Implementation
 
-- [ ] T016 [US1] Replace every `/assets/...` Phaser load with `runtimeAssetUrl()` while preserving all texture keys and authored paths in `src/scenes/BootScene.ts`
-- [ ] T017 [P] [US1] Add a pure compact title build-label model in `src/scenes/titlePresentation.ts`
-- [ ] T018 [US1] Render the small `<demo-tag> · <short-revision>` footer without displacing the primary title action in `src/scenes/TitleScene.ts`
-- [ ] T019 [US1] Update `index.html` and `vite.config.ts` so generated entry/module URLs honor root and repository-prefix builds without client-side route fallback requirements
-- [ ] T020 [US1] Add revision cache stamps to stable public assets only, leaving Vite-hashed modules unchanged in `src/buildIdentity.ts`
-- [ ] T021 [US1] Add package scripts for an explicit simulated Pages-prefix build and preview in `package.json`
-- [ ] T022 [US1] Run T013-T021 and complete a local clean-cache browser walkthrough of title, entrant, garage, pre-race, race, Results, and all seven regional backgrounds under `/auto-racer/`
+- [X] T016 [US1] Replace every `/assets/...` Phaser load with `runtimeAssetUrl()` while preserving all texture keys and authored paths in `src/scenes/BootScene.ts`
+- [X] T017 [P] [US1] Add a pure compact title build-label model in `src/scenes/titlePresentation.ts`
+- [X] T018 [US1] Render the small `<demo-tag> · <short-revision>` footer without displacing the primary title action in `src/scenes/TitleScene.ts`
+- [X] T019 [US1] Update `index.html` and `vite.config.ts` so generated entry/module URLs honor root and repository-prefix builds without client-side route fallback requirements
+- [X] T020 [US1] Add revision cache stamps to stable public assets only, leaving Vite-hashed modules unchanged in `src/buildIdentity.ts`
+- [X] T021 [US1] Add package scripts for an explicit simulated Pages-prefix build and preview in `package.json`
+- [X] T022 [US1] Run T013-T021 and complete a local clean-cache browser walkthrough of title, entrant, garage, pre-race, race, Results, and all seven regional backgrounds under `/auto-racer/`
 
 **Checkpoint**: The game is independently playable as a correctly prefixed static site; no GitHub deployment permission is required yet.
 

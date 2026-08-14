@@ -80,4 +80,54 @@ Captured from `npm run build` (vite v5.4.21, Node v20.19.5) on commit `4bf783d`
 
 ## Phase 3 — User Story 1: playable prefixed demo
 
+### T013-T021 — asset boundary migration and title identity footer
+
+- `tests/integration/deployment-boundaries.test.ts` now rejects any
+  root-absolute `/assets/` literal in `src/` and `index.html`, requires all
+  39 authored asset paths to load through `runtimeAssetUrl()`, and enforces
+  the single-base/no-traversal/no-hardcoded-prefix guards (T043's static
+  audits codified).
+- `BootScene` migrated to `runtimeAssetUrl()` for all 19 literal paths and
+  the four composed families (garages, portraits, vehicles, item families);
+  every texture key preserved.
+- `titlePresentation.ts` (pure) renders `<demo-tag> · <short-revision>` for
+  releases and an honest `local development · <short>` label otherwise;
+  `TitleScene` shows it in the pre-existing footer slot (no displacement of
+  the primary action). T014: 4/4 unit tests.
+- `index.html` audited for T019: no change required — it carries no
+  root-absolute runtime asset references; Vite rewrites the single module
+  entry, and the game has no client-side routes, so no hosting fallback is
+  needed. Recorded as the T019 index.html outcome.
+- T020 revision cache stamps live in `runtimeAssetUrl()`
+  (`?rev=<encoded short revision>`, release builds only; Vite-hashed modules
+  untouched).
+- T021 added `build:pages`/`preview:pages` (plus `verify`, `audit:artifact`)
+  without touching the existing `test`/`lint`/`build` scripts.
+
+### T022 — prefixed local verification run
+
+Full gates on merge commit `4bf783d` + Phase 1-3 work:
+
+- `npm test`: **61 files, 1329/1329 tests passed** (was 57 files / 1,191
+  tests at feature 030's completion).
+- `npm run lint` clean; `npm run build` clean (pre-existing chunk-size
+  warning only).
+- Simulated release build: `VITE_DEMO_RELEASE_TAG=demo-v0.0.0
+  VITE_DEMO_REVISION=$(git rev-parse HEAD) VITE_DEMO_BUILT_AT_UTC=$(date -u
+  +…) npm run build:pages` → entry
+  `src="/auto-racer/assets/index-D_dLyZoo.js"`.
+- `npm run preview:pages` served the artifact beneath
+  `http://localhost:4173/auto-racer/`:
+  - entry document `200 text/html`; direct reload `200` (no fallback needed);
+  - generated module `200 text/javascript`, contains the compiled identity
+    (`demo-v0.0.0` present in the bundle → title footer source confirmed);
+  - **all 39 authored runtime assets returned `200`** beneath the prefix with
+    their `?rev=bf5bbfa` cache stamps (0 failures).
+- **Remaining manual item**: the interactive clean-cache browser walkthrough
+  (title → entrant select → garage → pre-race → race → Results, all seven
+  regional backgrounds, four viewports) requires a human-driven browser; the
+  network-level equivalent of SC-001/SC-002 is recorded above.
+
+## Phase 4 — User Story 2: controlled publishing
+
 _(pending)_

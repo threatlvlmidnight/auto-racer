@@ -6,15 +6,18 @@ import { REQUIRED_ASSET_INVENTORY } from "../fixtures/deployment-fixtures";
 /**
  * 031-demo-deployment deployment boundary audits.
  *
- * Phase 1 baseline (T003): enumerate every root-absolute runtime asset
- * reference before the migration to the shared `runtimeAssetUrl` boundary, so
- * the intentional legacy shape is documented before Phase 3 replaces this
- * baseline with rejection tests (T013).
+ * T013 (replaces the T003 baseline): the shared `runtimeAssetUrl` boundary is
+ * now mandatory — root-absolute runtime asset literals are rejected anywhere
+ * in `src/` and `index.html`, every authored BootScene asset must load
+ * through the boundary, and the repository prefix must stay configured in
+ * exactly one place (never hardcoded in runtime sources).
  */
 
 const ROOT = join(__dirname, "..", "..");
 const SRC_DIR = join(ROOT, "src");
 const BOOT_SCENE_PATH = join(SRC_DIR, "scenes", "BootScene.ts");
+const INDEX_HTML_PATH = join(ROOT, "index.html");
+const VITE_CONFIG_PATH = join(ROOT, "vite.config.ts");
 
 function readSource(path: string): string {
   return readFileSync(path, "utf-8");
@@ -43,71 +46,87 @@ function rootAbsoluteReferences(source: string): string[] {
   return found;
 }
 
-/** Root-absolute string literals authored directly in BootScene today. */
-const BASELINE_LITERAL_PATHS = [
-  "/assets/title-race.svg",
-  "/assets/championship-paddock.svg",
-  "/assets/workshop.svg",
-  "/assets/race-day.svg",
-  "/assets/player-vehicle.svg",
-  "/assets/rival-vehicle.svg",
-  "/assets/backgrounds/scenes/championship-race-start.png",
-  "/assets/backgrounds/scenes/championship-route-headquarters.png",
-  "/assets/backgrounds/scenes/sponsor-negotiation.png",
-  "/assets/backgrounds/scenes/road-circuit.png",
-  "/assets/backgrounds/scenes/finish-line-aftermath.png",
-  "/assets/backgrounds/scenes/pre-race-setup.png",
-  "/assets/backgrounds/regions/british-isles.png",
-  "/assets/backgrounds/regions/continental-europe.png",
-  "/assets/backgrounds/regions/north-america.png",
-  "/assets/backgrounds/regions/south-america.png",
-  "/assets/backgrounds/regions/northern-europe.png",
-  "/assets/backgrounds/regions/mediterranean-north-africa.png",
-  "/assets/backgrounds/regions/paris-exhibition.png",
+/** Template families composed at load time (BootScene authored prefixes). */
+const AUTHORED_TEMPLATE_PREFIXES = [
+  "assets/backgrounds/garages/",
+  "assets/portraits/generated/",
+  "assets/vehicles/generated/",
+  "assets/items/families/",
 ];
 
-/** Root-absolute template prefixes whose concrete paths are composed at load time. */
-const BASELINE_TEMPLATE_PREFIXES = [
-  "/assets/backgrounds/garages/",
-  "/assets/portraits/generated/",
-  "/assets/vehicles/generated/",
-  "/assets/items/families/",
-];
+function isTemplated(relative: string): boolean {
+  return AUTHORED_TEMPLATE_PREFIXES.some((prefix) => relative.startsWith(prefix));
+}
 
-describe("T003 baseline: root-absolute runtime asset reference inventory", () => {
-  const bootScene = readSource(BOOT_SCENE_PATH);
-
-  it("BootScene is the only source file with root-absolute /assets/ references", () => {
-    const offenders = collectSourceFiles(SRC_DIR).filter(
-      (file) => file !== BOOT_SCENE_PATH && rootAbsoluteReferences(readSource(file)).length > 0,
-    );
+describe("T013: root-absolute runtime asset literals are rejected", () => {
+  it("no source file contains a root-absolute /assets/ reference", () => {
+    const offenders = collectSourceFiles(SRC_DIR)
+      .map((file) => ({ file, refs: rootAbsoluteReferences(readSource(file)) }))
+      .filter((entry) => entry.refs.length > 0);
     expect(offenders).toEqual([]);
   });
 
-  it("literal root-absolute paths match the documented pre-migration set", () => {
-    const literals = rootAbsoluteReferences(bootScene).filter((ref) => !ref.includes("${"));
-    expect([...new Set(literals)].sort()).toEqual([...BASELINE_LITERAL_PATHS].sort());
+  it("index.html contains no root-absolute runtime asset reference", () => {
+    expect(rootAbsoluteReferences(readSource(INDEX_HTML_PATH))).toEqual([]);
+  });
+});
+
+describe("T013: every authored asset loads through runtimeAssetUrl", () => {
+  const bootScene = readSource(BOOT_SCENE_PATH);
+
+  it("BootScene imports the shared URL boundary", () => {
+    expect(bootScene).toMatch(/import\s*\{\s*runtimeAssetUrl\s*\}\s*from\s*"\.\.\/buildIdentity"/);
   });
 
-  it("template root-absolute prefixes match the documented pre-migration set", () => {
-    const templates = rootAbsoluteReferences(bootScene).filter((ref) => ref.includes("${"));
-    const prefixes = new Set(templates.map((ref) => ref.slice(0, ref.indexOf("${"))));
-    expect([...prefixes].sort()).toEqual([...BASELINE_TEMPLATE_PREFIXES].sort());
-  });
+  it.each(REQUIRED_ASSET_INVENTORY.filter((path) => !isTemplated(path)).map((path) => [path]))(
+    "literal asset %s loads through the boundary",
+    (relative) => {
+      expect(bootScene).toContain(`runtimeAssetUrl("${relative}")`);
+    },
+  );
 
-  it("every authored inventory path is covered by the baseline literal/template set", () => {
+  it.each(AUTHORED_TEMPLATE_PREFIXES.map((prefix) => [prefix]))(
+    "template family %s composes through the boundary",
+    (prefix) => {
+      const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      expect(bootScene).toMatch(new RegExp(`runtimeAssetUrl\\(\\s*\`${escaped}\\$\\{`));
+    },
+  );
+
+  it("the complete authored inventory is covered by literals and templates", () => {
     for (const relative of REQUIRED_ASSET_INVENTORY) {
-      const rooted = `/${relative}`;
       const covered =
-        BASELINE_LITERAL_PATHS.includes(rooted) ||
-        BASELINE_TEMPLATE_PREFIXES.some((prefix) => rooted.startsWith(prefix));
-      expect(covered, `expected baseline coverage for ${relative}`).toBe(true);
+        bootScene.includes(`runtimeAssetUrl("${relative}")`) || isTemplated(relative);
+      expect(covered, `expected boundary coverage for ${relative}`).toBe(true);
     }
   });
+});
 
-  it("stat() confirms the baseline file inventory helpers operate on real files", () => {
-    // Guard against the audit silently drifting from the source tree: the
-    // collected file set must include BootScene and stat as a file.
+describe("T043: single-base, traversal, and mixed-base guards", () => {
+  it("the repository prefix is never hardcoded in runtime sources", () => {
+    const offenders = collectSourceFiles(SRC_DIR).filter((file) =>
+      readSource(file).includes("/auto-racer"),
+    );
+    expect(offenders).toEqual([]);
+    expect(readSource(INDEX_HTML_PATH)).not.toContain("/auto-racer");
+    // vite.config may mention the prefix in prose, but must never hardcode it
+    // as a string literal — the base arrives via VITE_DEMO_BASE_URL only.
+    expect(readSource(VITE_CONFIG_PATH)).not.toMatch(/["'`]\/auto-racer/);
+  });
+
+  it("vite.config consumes exactly one normalized base", () => {
+    const config = readSource(VITE_CONFIG_PATH);
+    expect(config.match(/normalizeBaseUrl\(/g) ?? []).toHaveLength(1);
+    expect(config).toContain("base: BASE_URL");
+  });
+
+  it("no runtimeAssetUrl call carries a traversal or leading slash", () => {
+    const bootScene = readSource(BOOT_SCENE_PATH);
+    expect(bootScene).not.toMatch(/runtimeAssetUrl\(\s*["'`][^"'`]*\.\./);
+    expect(bootScene).not.toMatch(/runtimeAssetUrl\(\s*["'`]\/(?!\*)/);
+  });
+
+  it("stat() confirms the audit helpers operate on real files", () => {
     expect(collectSourceFiles(SRC_DIR)).toContain(BOOT_SCENE_PATH);
     expect(statSync(BOOT_SCENE_PATH).isFile()).toBe(true);
   });
