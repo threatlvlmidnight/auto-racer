@@ -228,7 +228,9 @@ describe("practice control focus order and input parity", () => {
   it("gives contest playback controls deterministic focus order and full input parity", () => {
     const controls = practiceContestControlPlan();
     expect(controls.map((control) => control.order)).toEqual([...controls.keys()]);
-    expect(controls.map((control) => control.id)).toEqual(["cancel", "pause", "speed", "skip"]);
+    // 030-race-playback-controls (T039/T040): the legacy SPEED/F control was
+    // removed; direct 1×/2× controls (playbackControlPlan) replace it.
+    expect(controls.map((control) => control.id)).toEqual(["cancel", "pause", "skip"]);
     controls.forEach((control) => {
       expect(control.pointer).toBe(true);
       expect(control.touch).toBe(true);

@@ -11,15 +11,15 @@ Playback speed may read immutable schedules/results and produce presentation tim
 | `1×` | `0.5` | `2.0×` |
 | `2×` | `1.0` | `1.0×` |
 
-Every new scored or Test Day playback selects `1×`.
+Every new scored or Test Day playback selects `2×`; `1×` remains directly selectable as the slower readable option.
 
 ## 3. Monotonic transition
 
-Selecting speed must not modify elapsed schedule time. For every valid frame delta, next schedule time must be greater than or equal to previous schedule time. Playback never restarts or rewinds.
+Selecting speed must not modify elapsed schedule time. Negative and non-finite frame deltas are rejected; zero is valid and idempotent. For every valid frame delta, next schedule time must be greater than or equal to previous schedule time. Playback never restarts or rewinds.
 
 ## 4. Boundary integrity
 
-All recorded boundaries in `(previousScheduleTime, nextScheduleTime]` are emitted once in deterministic order. Boundaries at `previousScheduleTime` are not emitted again. A delayed frame and many small frames covering the same interval must identify the same boundary set.
+Before the first positive-time advance, all recorded boundaries at schedule time zero are emitted once as an initialization batch. Thereafter, all recorded boundaries in `(previousScheduleTime, nextScheduleTime]` are emitted once in deterministic order. Boundaries at `previousScheduleTime` are not emitted again. A delayed frame and many small frames covering the same interval must identify the same boundary set.
 
 ## 5. Message lifecycle
 
@@ -36,7 +36,7 @@ Messages have no playback-scaled dismissal timer. A message remains until a late
 
 ## 7. Existing Test Day boundary
 
-Test Day keeps its established Cancel, Pause, Skip, and focus behavior. Its speed domain becomes the exact shared two-value contract. Scored races do not gain Pause or Skip.
+Test Day keeps its established Cancel, Pause, Skip, and focus behavior. Its speed domain becomes the exact shared two-value contract. Skip targets the immutable schedule's finite maximum finish boundary, emits all newly crossed boundaries exactly once, and never uses a non-finite clock value. Scored races do not gain Pause or Skip.
 
 ## 8. Result equivalence
 

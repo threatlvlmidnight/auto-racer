@@ -6,7 +6,17 @@ import {
   type PracticeSession,
 } from "../simulation/practice";
 import { clearPracticeRecovery } from "../simulation/practiceRecovery";
-import { frameStateAt } from "../simulation/playback";
+import {
+  createPlaybackController,
+  advancePlaybackController,
+  selectPlaybackControllerSpeed,
+  skipPlaybackController,
+  twoCarBoundaryView,
+  playbackSpeedDescriptor,
+  frameStateAt,
+  type PlaybackController,
+  type PlaybackSpeed,
+} from "../simulation/playback";
 import {
   addDemoBackdrop,
   applyPracticeFocusRing,
@@ -17,6 +27,11 @@ import {
   type PracticeFocusHandle,
 } from "./demoTheme";
 import { practiceContestControlPlan, practiceEvidenceModel } from "./practicePresentation";
+import {
+  freshPlaybackControlPlan,
+  selectPlaybackControl,
+  type PlaybackControlPlan,
+} from "./playbackControlPresentation";
 import { createItemCard, createItemInspector } from "./itemVisuals";
 import { resolvedItemEvidence, unresolvedPhysicalEvidence } from "./itemPresentation";
 import type { OfferedItem } from "../simulation/types";
@@ -32,8 +47,9 @@ export interface PracticeContestSceneData {
 export class PracticeContestScene extends Phaser.Scene {
   private run?: Run;
   private session?: PracticeSession;
-  private elapsedSeconds = 0;
-  private speed = 1;
+  private playbackController?: PlaybackController;
+  private controlPlan: PlaybackControlPlan = freshPlaybackControlPlan();
+  private controlButtons = new Map<PlaybackSpeed, Phaser.GameObjects.Text>();
   private paused = false;
   private lastLap = -1;
   private statusText?: Phaser.GameObjects.Text;
@@ -55,21 +71,48 @@ export class PracticeContestScene extends Phaser.Scene {
     }
     this.run = data.run;
     this.session = data.session;
+    // 030-race-playback-controls: fresh 2× clock per race; 1× remains selectable.
+    // Guard above proves data.session.result exists; the class-field mutation
+    // defeats TS narrowing, so the non-null assertion mirrors render()'s usage.
+    const result = this.session!.result!;
+    const boundaryView = twoCarBoundaryView(result.playback, result.contest);
+    this.playbackController = createPlaybackController(boundaryView);
+    this.controlPlan = freshPlaybackControlPlan();
     this.render();
-    this.input.keyboard?.on("keydown-SPACE", () => this.togglePause());
-    this.input.keyboard?.on("keydown-F", () => this.changeSpeed());
-    this.input.keyboard?.on("keydown-S", () => this.skip());
-    this.input.keyboard?.on("keydown-ESC", () => this.cancel());
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.focusRing?.destroy());
+    this.input.keyboard?.on("keydown-SPACE", this.togglePause, this);
+    // 030-race-playback-controls (T040): keys 1/2 replace the legacy F cycle.
+    this.input.keyboard?.on("keydown-ONE", this.selectNormalSpeed, this);
+    this.input.keyboard?.on("keydown-TWO", this.selectFastSpeed, this);
+    this.input.keyboard?.on("keydown-S", this.skip, this);
+    this.input.keyboard?.on("keydown-ESC", this.cancel, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.keyboard?.off("keydown-SPACE", this.togglePause, this);
+      this.input.keyboard?.off("keydown-ONE", this.selectNormalSpeed, this);
+      this.input.keyboard?.off("keydown-TWO", this.selectFastSpeed, this);
+      this.input.keyboard?.off("keydown-S", this.skip, this);
+      this.input.keyboard?.off("keydown-ESC", this.cancel, this);
+      this.focusRing?.destroy();
+      this.controlButtons.forEach((button) => button.destroy());
+      this.controlButtons.clear();
+    });
   }
 
   update(_time: number, delta: number): void {
     const result = this.session?.result;
-    if (!result || this.paused) return;
-    this.elapsedSeconds += delta / 1000 * this.speed;
-    const frame = frameStateAt(result.playback, result.contest, this.elapsedSeconds, this.lastLap);
-    const lapChanged = this.lastLap !== frame.player.lapIndex;
-    this.lastLap = frame.player.lapIndex;
+    if (!result || !this.playbackController || this.paused) return;
+    // 030-race-playback-controls (T020): advance through the clock; schedule
+    // time is the controller's, not raw accumulation.
+    this.playbackController = advancePlaybackController(this.playbackController, delta / 1000);
+    const scheduleTime = this.playbackController.clock.scheduleTimeSeconds;
+    const frame = frameStateAt(result.playback, result.contest, scheduleTime, this.lastLap);
+    const previousLap = this.lastLap;
+    const crossedPlayerLaps = this.playbackController.lastEvents
+      .filter((event) => event.kind === "player-lap" && event.lap !== undefined)
+      .map((event) => event.lap! - 1);
+    this.lastLap = crossedPlayerLaps.length > 0
+      ? crossedPlayerLaps[crossedPlayerLaps.length - 1]
+      : Math.max(this.lastLap, frame.player.lapIndex);
+    const lapChanged = previousLap !== this.lastLap;
     const visibleLap = Math.min(frame.player.lapIndex + 1, result.contest.lapCount);
     this.lapText?.setText(`Lap ${visibleLap}/${result.contest.lapCount} · live gap ${signed(frame.liveGap)}s`);
     const model = practiceEvidenceModel(result.contest, result.reconciliation);
@@ -79,7 +122,9 @@ export class PracticeContestScene extends Phaser.Scene {
       ? `Player ${lap.playerTime.toFixed(2)}s · Rival ${lap.rivalTime.toFixed(2)}s\n${evidenceSummary(contributions)}`
       : "Awaiting lap evidence");
     if (lapChanged && this.selectedItem) this.showItem(this.selectedItem.item, this.selectedItem.tier, visibleLap);
-    if (frame.player.finished && frame.ghost.finished) this.finish();
+    // 030-race-playback-controls (T020): the controller is the single
+    // results-ready authority (contract §5).
+    if (this.playbackController.resultsReady) this.finish();
   }
 
   private render(): void {
@@ -133,19 +178,38 @@ export class PracticeContestScene extends Phaser.Scene {
         this.showItem(item, tier, Math.max(1, this.lastLap + 1));
       });
     });
-    this.statusText = this.add.text(width / 2, height - 116, "PLAYING · 1x", {
+    this.statusText = this.add.text(width / 2, height - 116, "PLAYING · 2×", {
       fontFamily: UI_FONT,
       fontSize: "14px",
       color: "#9eb5c9",
     }).setOrigin(0.5);
+    // 030-race-playback-controls (T039): retain Cancel/Pause/Skip/focus
+    // while adding direct selected 1×/2× controls within 800×450.
     const plan = practiceContestControlPlan();
-    const buttons = [
-      createDemoButton(this, width / 2 - 210, height - 66, plan[0].label, () => this.cancel(), true, { fontSize: PRACTICE_CONTROL_FONT_SIZE }),
-      createDemoButton(this, width / 2 - 70, height - 66, plan[1].label, () => this.togglePause(), true, { fontSize: PRACTICE_CONTROL_FONT_SIZE, repeatable: true }),
-      createDemoButton(this, width / 2 + 70, height - 66, plan[2].label, () => this.changeSpeed(), true, { fontSize: PRACTICE_CONTROL_FONT_SIZE, repeatable: true }),
-      createDemoButton(this, width / 2 + 210, height - 66, plan[3].label, () => this.skip(), true, { fontSize: PRACTICE_CONTROL_FONT_SIZE }),
+    const practiceButtons = [
+      createDemoButton(this, width / 2 - 140, height - 66, plan[0].label, () => this.cancel(), true, { fontSize: PRACTICE_CONTROL_FONT_SIZE }),
+      createDemoButton(this, width / 2, height - 66, plan[1].label, () => this.togglePause(), true, { fontSize: PRACTICE_CONTROL_FONT_SIZE, repeatable: true }),
+      createDemoButton(this, width / 2 + 140, height - 66, plan[2].label, () => this.skip(), true, { fontSize: PRACTICE_CONTROL_FONT_SIZE }),
     ];
-    this.focusRing = applyPracticeFocusRing(this, buttons);
+    this.controlPlan = freshPlaybackControlPlan();
+    const speedButtons = this.controlPlan.controls.map((control, index) => {
+      const x = width / 2 + (index === 0 ? -50 : 50);
+      const label = `${control.selectedMarker} ${control.label}`;
+      const button = this.add
+        .text(x, height - 30, label, {
+          fontSize: PRACTICE_CONTROL_FONT_SIZE,
+          fontFamily: UI_FONT,
+          fontStyle: "bold",
+          color: control.selected ? "#ffd447" : "#9eb5c9",
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true })
+        .setDepth(90);
+      button.on("pointerdown", () => this.selectSpeed(control.speed));
+      this.controlButtons.set(control.speed, button);
+      return button;
+    });
+    this.focusRing = applyPracticeFocusRing(this, [...practiceButtons, ...speedButtons]);
   }
 
   private showItem(item: OfferedItem, tier: 1 | 2 | 3, lap: number): void {
@@ -161,21 +225,55 @@ export class PracticeContestScene extends Phaser.Scene {
 
   private togglePause(): void {
     this.paused = !this.paused;
-    this.statusText?.setText(`${this.paused ? "PAUSED" : "PLAYING"} · ${this.speed}x`);
+    this.updateStatusText();
   }
 
-  private changeSpeed(): void {
-    this.speed = this.speed === 1 ? 2 : this.speed === 2 ? 4 : 1;
-    this.statusText?.setText(`${this.paused ? "PAUSED" : "PLAYING"} · ${this.speed}x`);
+  /**
+   * 030-race-playback-controls (T027): direct idempotent normal/fast
+   * selection that changes the clock rate without changing elapsed schedule
+   * time (contract §3).
+   */
+  private selectSpeed(speed: PlaybackSpeed): void {
+    if (!this.playbackController) return;
+    this.playbackController = selectPlaybackControllerSpeed(this.playbackController, speed);
+    this.controlPlan = selectPlaybackControl(this.controlPlan, speed);
+    this.updateStatusText();
+    this.controlPlan.controls.forEach((control) => {
+      const button = this.controlButtons.get(control.speed);
+      if (button) {
+        button.setText(`${control.selectedMarker} ${control.label}`);
+        button.setColor(control.selected ? "#ffd447" : "#9eb5c9");
+      }
+    });
+  }
+
+  private selectNormalSpeed(): void {
+    this.selectSpeed("normal");
+  }
+
+  private selectFastSpeed(): void {
+    this.selectSpeed("fast");
   }
 
   private skip(): void {
-    this.elapsedSeconds = Number.POSITIVE_INFINITY;
+    if (!this.playbackController) return;
+    // 030-race-playback-controls (T019): Skip targets the finite finish
+    // boundary, never Infinity (contract §7).
+    this.playbackController = skipPlaybackController(this.playbackController);
+    if (this.playbackController.resultsReady) this.finish();
+  }
+
+  private updateStatusText(): void {
+    const speed = this.playbackController
+      ? playbackSpeedDescriptor(this.playbackController.clock.speed).label
+      : "2×";
+    this.statusText?.setText(`${this.paused ? "PAUSED" : "PLAYING"} · ${speed}`);
   }
 
   private finish(): void {
     const session = this.session;
     this.session = undefined;
+    this.playbackController = undefined;
     this.scene.start("PracticeResultScene", { run: this.run, session });
   }
 
