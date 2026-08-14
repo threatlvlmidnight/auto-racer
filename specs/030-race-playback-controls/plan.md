@@ -6,7 +6,7 @@
 
 ## Summary
 
-Introduce one shared, race-local presentation clock whose `1×` rate consumes existing immutable playback schedules at half the current rate and whose `2×` rate consumes them at the current rate. Use the clock in scored eight-car playback and Test Day playback, expose direct `1×`/`2×` controls with keyboard parity, and make crossed-boundary event derivation robust to speed changes and delayed frames. Simulation, schedules, contest results, settlement, and run state remain unchanged.
+Introduce one shared, race-local presentation clock whose `1×` rate consumes existing immutable playback schedules at half the current rate and whose default `2×` rate consumes them at the current rate. Use the clock in scored eight-car playback and Test Day playback, expose direct `1×`/`2×` controls with keyboard parity, and make crossed-boundary event derivation robust to speed changes and delayed frames. Simulation, schedules, contest results, settlement, and run state remain unchanged.
 
 ## Technical Context
 
@@ -37,7 +37,7 @@ Introduce one shared, race-local presentation clock whose `1×` rate consumes ex
 | I. Prepare → Contest Integrity | PASS | Speed changes consume already-resolved evidence and cannot alter contest input or output. |
 | II. Fairness | PASS | Both speeds are available to every player and have no competitive effect. |
 | III. Transparency & Legibility | PASS | The active speed is explicit; boundary events remain deterministic and inspectable. |
-| IV. Spectation-First | PASS | The readable default directly improves race comprehension while 2× restores the established pace. |
+| IV. Spectation-First | PASS | The slower `1×` option improves race comprehension while the default `2×` retains the established pace. |
 | V. Build Testing Access | PASS | Test Day receives the same speed meanings while retaining its previously shipped unscored controls. |
 | VI. Async-First Architecture | PASS | Playback continues to consume immutable recorded opponents with no live dependency. |
 | Product constraints | PASS | No topology, physics, capacity, theme, or 2D-presentation rule changes. |

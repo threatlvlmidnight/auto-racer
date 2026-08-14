@@ -15,7 +15,7 @@
 - Changing speed at arbitrary times never changes elapsed schedule time discontinuously.
 - One large update and equivalent small updates identify the same crossed lap/finish boundaries exactly once.
 - Multiple speed sequences pass the identical result object to Results.
-- Every newly opened scored race and Test Day starts at `1×`.
+- Every newly opened scored race and Test Day starts at `2×`; `1×` remains directly selectable.
 - Keys `1` and `2` match pointer/touch selection.
 - Active state is readable without color and controls do not overlap existing evidence at 800×450.
 - Test Day retains Cancel, Pause, Skip, and focus behavior, but never exposes 4×.

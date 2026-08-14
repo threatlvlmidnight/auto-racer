@@ -1,5 +1,31 @@
 # Handoff
 
+## Latest session — feature 030 implemented; viewport matrix remains
+
+**Updated**: 2026-08-14 on `codex/030-race-playback-controls`.
+
+Feature 030 now implements race-local `1×`/`2×` presentation clocks for scored
+Local/Championship races and Test Day. New races default to `2×`, retaining the
+legacy watch duration; `1×` remains available and consumes the retained schedule
+at half rate (about 40 seconds watched). Speed never enters contest or settlement authority. Crossed time-zero,
+lap, item, checkpoint, car-finish, and results-ready boundaries are consumed in
+deterministic order exactly once, including delayed frames. Test Day retains
+Pause/Skip/Cancel, removes the legacy `4×`/`F` cycle, and skips to a finite finish
+boundary even while paused. Both scenes expose pointer/touch controls and keys
+`1`/`2`, use a non-color selected marker, reset to `2×`, and remove keyboard
+handlers on shutdown.
+
+Verification: 57 test files / 1,191 tests pass; TypeScript, lint, and production
+build pass. Browser smoke reached the championship and Test Day briefing at
+1280×720. The remaining manual acceptance item is the complete four-viewport,
+both-speed Local/Championship/Test Day matrix recorded as T047; tool-driven canvas
+input did not reliably activate Start Test during this session. Feature 031 remains
+on its separate `codex/031-demo-deployment` branch and requires no playback-specific
+deployment change.
+
+All feature-030 work is uncommitted. Overtake dramatization remains deferred in
+`specs/DEFERRED.md`.
+
 ## Latest session — features 025 and 027 both fully implemented
 
 **Updated**: 2026-08-13 after `/speckit.implement`-ing both `025-vehicle-
