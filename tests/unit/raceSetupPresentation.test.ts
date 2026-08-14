@@ -7,6 +7,7 @@ import {
   setupStatRows,
   setupTrackSummary,
   setupVehicleAssetKey,
+  trackPreviewPoints,
 } from "../../src/scenes/raceSetupPresentation";
 import { vehicleBuild, testItem } from "../fixtures/vehicle-build-fixtures";
 import { setupFixtureItem } from "../fixtures/race-setup-fixtures";
@@ -184,5 +185,42 @@ describe("raceSetupPresentation: unavailable/legacy build edge case", () => {
     const build = vehicleBuild([testItem({ id: "plain-item", name: "Plain", price: 0, timeModifier: 0 })]);
     const controls = setupControlRows(inputFor(build), {});
     expect(controls).toHaveLength(1);
+  });
+});
+
+describe("trackPreviewPoints: smoothed track preview shape", () => {
+  it("produces subdivisionsPerSegment points per original track point", () => {
+    const input = inputFor();
+    const points = trackPreviewPoints(input.track, { scale: 1, offsetX: 0, offsetY: 0, subdivisionsPerSegment: 6 });
+
+    expect(points).toHaveLength(input.track.points.length * 6);
+  });
+
+  it("passes exactly through every original (scaled/offset) point at each segment's start", () => {
+    const input = inputFor();
+    const subdivisions = 8;
+    const points = trackPreviewPoints(input.track, { scale: 0.5, offsetX: 10, offsetY: 20, subdivisionsPerSegment: subdivisions });
+
+    input.track.points.forEach((original, index) => {
+      const expected = { x: original.x * 0.5 + 10, y: original.y * 0.5 + 20 };
+      const actual = points[index * subdivisions];
+      expect(actual.x).toBeCloseTo(expected.x, 9);
+      expect(actual.y).toBeCloseTo(expected.y, 9);
+    });
+  });
+
+  it("defaults to a dense subdivision when none is given", () => {
+    const input = inputFor();
+    const points = trackPreviewPoints(input.track, { scale: 1, offsetX: 0, offsetY: 0 });
+
+    expect(points.length).toBeGreaterThan(input.track.points.length * 5);
+  });
+
+  it("is pure and deterministic", () => {
+    const input = inputFor();
+    const first = trackPreviewPoints(input.track, { scale: 0.32, offsetX: 20, offsetY: 44 });
+    const second = trackPreviewPoints(input.track, { scale: 0.32, offsetX: 20, offsetY: 44 });
+
+    expect(second).toEqual(first);
   });
 });

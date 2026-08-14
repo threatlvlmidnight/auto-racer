@@ -1,7 +1,7 @@
 import { DELTA_KEY_FOR_STAT, type PhysicalStatTarget } from "../simulation/buffs";
 import { resolveCurrentBuildPhysicalStats } from "../simulation/laps";
 import { lockRaceSetup, type RaceSetupInput } from "../simulation/raceSetup";
-import { summarizeTrack } from "../simulation/tracks";
+import { summarizeTrack, type Track } from "../simulation/tracks";
 import type {
   EligibleSetupControl,
   ItemPhysicsContribution,
@@ -196,4 +196,79 @@ export function raceSetupSceneModel(input: RaceSetupInput, selections: SetupSele
     hasEquipmentControls: input.eligibleControls.length > 1,
     vehicleAssetKey: setupVehicleAssetKey(input),
   };
+}
+
+// --- Track preview shape ---------------------------------------------------
+
+export interface TrackPreviewPoint {
+  x: number;
+  y: number;
+}
+
+export interface TrackPreviewOptions {
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+  /** Interpolated points generated per original track segment. */
+  subdivisionsPerSegment?: number;
+}
+
+const DEFAULT_PREVIEW_SUBDIVISIONS = 10;
+
+/**
+ * A dense, smoothly-curved closed loop through the track's own authoritative
+ * points (never a separate/regenerated shape — same `track.points` the full-
+ * size renderers use). `track.points` holds one vertex per straight segment
+ * with a sharp angle at every corner (tracks.ts's `deriveTrackPoints`) — at
+ * full playback scale a thick stroke reads that as a track; shrunk to an
+ * icon-sized preview the same sharp joins read as a rough polygon. Catmull-
+ * Rom interpolation (cyclic, so the loop closes smoothly with no seam)
+ * produces a rounded circuit silhouette instead, purely for this compact
+ * preview — full-size renderers are untouched.
+ */
+export function trackPreviewPoints(track: Track, options: TrackPreviewOptions): readonly TrackPreviewPoint[] {
+  const subdivisions = options.subdivisionsPerSegment ?? DEFAULT_PREVIEW_SUBDIVISIONS;
+  const base = track.points.map((point) => ({
+    x: point.x * options.scale + options.offsetX,
+    y: point.y * options.scale + options.offsetY,
+  }));
+  return catmullRomClosedLoop(base, subdivisions);
+}
+
+function catmullRomClosedLoop(
+  points: readonly TrackPreviewPoint[],
+  subdivisions: number,
+): readonly TrackPreviewPoint[] {
+  const count = points.length;
+  if (count < 3) return points;
+  const result: TrackPreviewPoint[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const p0 = points[(index - 1 + count) % count];
+    const p1 = points[index];
+    const p2 = points[(index + 1) % count];
+    const p3 = points[(index + 2) % count];
+    for (let step = 0; step < subdivisions; step += 1) {
+      result.push(catmullRomPoint(p0, p1, p2, p3, step / subdivisions));
+    }
+  }
+  return result;
+}
+
+/** Standard uniform Catmull-Rom spline basis — exactly reproduces p1 at t=0. */
+function catmullRomPoint(
+  p0: TrackPreviewPoint,
+  p1: TrackPreviewPoint,
+  p2: TrackPreviewPoint,
+  p3: TrackPreviewPoint,
+  t: number,
+): TrackPreviewPoint {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const axis = (a: number, b: number, c: number, d: number) => 0.5 * (
+    2 * b
+    + (-a + c) * t
+    + (2 * a - 5 * b + 4 * c - d) * t2
+    + (-a + 3 * b - 3 * c + d) * t3
+  );
+  return { x: axis(p0.x, p1.x, p2.x, p3.x), y: axis(p0.y, p1.y, p2.y, p3.y) };
 }

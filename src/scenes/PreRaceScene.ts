@@ -10,6 +10,7 @@ import type { PracticeOriginInput, PracticeSetupSnapshot } from "../simulation/p
 import type { SetupControlFamily, SetupPositionId, SetupSelections } from "../simulation/types";
 import {
   raceSetupSceneModel,
+  trackPreviewPoints,
   type RaceSetupSceneModel,
   type SetupControlRow,
 } from "./raceSetupPresentation";
@@ -84,6 +85,13 @@ export class PreRaceScene extends Phaser.Scene {
       this.rememberChecked = data.run.setupMemory?.enabled === true;
       this.focusedFamily = "driver-aggression";
     }
+
+    // Drawn once, not per-render: addDemoBackdrop adds a translucent overlay
+    // rectangle that isn't tracked/destroyed by render()'s cleanup, so
+    // calling it again on every selection change stacked a new overlay on
+    // top each time, darkening the screen with every click.
+    addDemoBackdrop(this, "scene-pre-race-setup", 0.32);
+    addRunStamp(this, this.setupInput.run);
 
     this.bindKeyboard();
     this.render();
@@ -177,8 +185,6 @@ export class PreRaceScene extends Phaser.Scene {
     this.focusRing?.destroy();
 
     const model = this.model();
-    addDemoBackdrop(this, "scene-pre-race-setup", 0.32);
-    addRunStamp(this, this.setupInput.run);
     this.track(this.add.text(LOGICAL_WIDTH / 2, 26, "PRE-RACE SETUP", {
       fontSize: "24px", fontFamily: DISPLAY_FONT, fontStyle: "bold", color: "#f4d58d",
     }).setOrigin(0.5));
@@ -214,14 +220,18 @@ export class PreRaceScene extends Phaser.Scene {
   private renderTrack(model: RaceSetupSceneModel): void {
     const graphics = this.add.graphics();
     this.track(graphics);
-    const points = this.setupInput.track.points;
-    graphics.lineStyle(14, 0x30353a, 1);
+    // A smoothly-curved preview of the exact same track.points every other
+    // renderer uses — see trackPreviewPoints's own comment for why a raw
+    // straight-segment polyline reads as blocky rectangles at this small a
+    // scale even though it reads fine as a track at full playback size.
+    const points = trackPreviewPoints(this.setupInput.track, { scale: 0.32, offsetX: 20, offsetY: 44 });
+    graphics.lineStyle(5, 0x30353a, 1);
     graphics.beginPath();
-    graphics.moveTo(points[0].x * 0.32 + 20, points[0].y * 0.32 + 44);
-    points.slice(1).forEach((point) => graphics.lineTo(point.x * 0.32 + 20, point.y * 0.32 + 44));
+    graphics.moveTo(points[0].x, points[0].y);
+    points.slice(1).forEach((point) => graphics.lineTo(point.x, point.y));
     graphics.closePath();
     graphics.strokePath();
-    graphics.lineStyle(2, 0xd5d8da, 0.85);
+    graphics.lineStyle(1.5, 0xd5d8da, 0.9);
     graphics.strokePath();
     this.track(this.add.text(20, 62, model.track.headline.toUpperCase(), {
       fontSize: "11px", fontFamily: UI_FONT, fontStyle: "bold", color: "#ffd447",
