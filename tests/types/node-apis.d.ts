@@ -58,8 +58,17 @@ declare module "node:child_process" {
     stderr: string;
     error?: Error;
   }
+  export interface ExecFileError extends Error {
+    code?: number | string;
+  }
   export function execFileSync(command: string, args: string[], options?: ExecSyncOptions): string;
   export function spawnSync(command: string, args: string[], options?: ExecSyncOptions): SpawnSyncResult;
+  export function execFile(
+    command: string,
+    args: string[],
+    options: ExecSyncOptions,
+    callback: (error: ExecFileError | null, stdout: string, stderr: string) => void,
+  ): void;
 }
 
 declare module "node:http" {
@@ -74,6 +83,7 @@ declare module "node:http" {
   export interface Server {
     listen(port: number, host: string, callback: () => void): Server;
     close(callback?: () => void): void;
+    closeAllConnections(): void;
     address(): { port: number } | string | null;
   }
   export function createServer(handler: (req: IncomingMessage, res: ServerResponse) => void): Server;

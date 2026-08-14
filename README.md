@@ -139,3 +139,74 @@ npm run simulation:log   # also writes logs/practice-result.json
 See `specs/011-build-test-day/quickstart.md` and
 `specs/011-build-test-day/acceptance-evidence.md` for the full validation
 workflow and retained evidence.
+
+## Demo deployment (GitHub Pages)
+
+Feature 031-demo-deployment publishes a shareable demo to
+`https://threatlvlmidnight.github.io/auto-racer/`. Releases are deliberate:
+ordinary pushes and pull requests run verification only and never deploy; only
+a manually selected semantic demo tag can become the public demo, and every
+release passes the full gates (tests, lint, build, artifact audit) plus a
+post-deployment public smoke check. The deployed game is fully static — no
+multiplayer service, accounts, secrets, or server-side process.
+
+### One-time repository setup (administrator)
+
+1. Open repository **Settings → Pages → Build and deployment**.
+2. Set **Source** to **GitHub Actions**.
+3. Confirm the protected `github-pages` environment permits the
+   **Deploy demo release** workflow (add required reviewers here if you want
+   a second human gate on every publication).
+
+### Publish a demo release
+
+Creating a tag only makes a revision eligible — it does not deploy. Tag,
+then manually dispatch:
+
+```bash
+git tag -a demo-v0.1.0 -m "First public demo release" <approved-commit>
+git push origin demo-v0.1.0
+```
+
+1. Open **Actions → Deploy demo release → Run workflow**.
+2. Enter the exact tag (e.g. `demo-v0.1.0`) and run it.
+3. Watch the stages: tag grammar validation → exact remote-tag resolution →
+   checkout of the resolved revision → tests → lint → identity build →
+   artifact audit → Pages deployment → public smoke check.
+4. Inspect the workflow **summary** for the deployment URL, selected tag,
+   resolved revision, and healthy/unhealthy result. The live title screen
+   footer shows `<demo-tag> · <short-revision>` as a second confirmation.
+
+Any failed pre-deployment gate leaves the currently published demo
+untouched. A failed smoke check marks the release unhealthy and names the
+failing public resource; no automatic rollback runs.
+
+### Ordinary releases
+
+Increment the semantic demo version (`demo-vMAJOR.MINOR.PATCH`), tag the
+approved revision, and manually dispatch that tag. Tag names must use
+non-negative integer components with no omitted component or leading zero.
+
+### Manual rollback
+
+Recovery is the same release operation with a previous tag — there is no
+current-release state file and no automatic rollback controller:
+
+1. Identify the previously healthy demo tag from workflow/deployment history.
+2. **Actions → Deploy demo release → Run workflow** with that existing tag.
+3. Wait for all verification, deployment, and smoke stages to complete.
+4. Confirm the title footer once again shows the restored tag and revision.
+
+### Local release validation
+
+| Command | Does |
+|---|---|
+| `npm run build:pages` | Production build beneath the `/auto-racer/` prefix (set `VITE_DEMO_RELEASE_TAG`/`VITE_DEMO_REVISION`/`VITE_DEMO_BUILT_AT_UTC` for a simulated release identity) |
+| `npm run preview:pages` | Serve the prefixed build locally at `http://localhost:4173/auto-racer/` |
+| `npm run audit:artifact` | Run the forbidden-path/credential-pattern audit over `dist/` |
+| `npm run verify` | Tests + lint + build, the same gates CI enforces |
+
+```bash
+node scripts/smoke-demo.mjs --url http://localhost:4173/auto-racer/ \
+  --tag demo-v0.1.0 --revision "$(git rev-parse HEAD)"
+```

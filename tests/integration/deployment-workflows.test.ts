@@ -158,3 +158,71 @@ describe("T024: deploy-demo.yml releases only through a manual, validated path",
     expect(content).not.toMatch(/uses:\s*[a-z0-9_.-]+\/[a-z0-9_.-]+@v\d/);
   });
 });
+
+describe("T035: smoke runs against the deploy-pages output and never rolls back", () => {
+  const content = readWorkflow(DEPLOY_PATH);
+  const smokeJob = content.slice(content.indexOf("smoke:"));
+
+  it("a post-deployment smoke job exists and depends on the deploy job", () => {
+    expect(smokeJob.length).toBeGreaterThan(0);
+    expect(smokeJob).toContain("needs: [validate-and-build, deploy]");
+  });
+
+  it("runs the smoke checker against the returned Pages URL and expected identity", () => {
+    expect(smokeJob).toContain("scripts/smoke-demo.mjs");
+    expect(smokeJob).toContain("needs.deploy.outputs.page_url");
+    expect(smokeJob).toContain("needs.validate-and-build.outputs.release_tag");
+    expect(smokeJob).toContain("needs.validate-and-build.outputs.revision");
+  });
+
+  it("the smoke job carries no deployment authority whatsoever", () => {
+    expect(smokeJob).not.toContain("deploy-pages");
+    expect(smokeJob).not.toContain("upload-pages-artifact");
+    expect(smokeJob).not.toContain("configure-pages");
+    expect(smokeJob).not.toContain("pages: write");
+    expect(smokeJob).not.toContain("id-token: write");
+    expect(smokeJob).toContain("contents: read");
+  });
+
+  it("the whole workflow forbids automatic rollback and recursive deployment", () => {
+    expect(content.toLowerCase()).not.toContain("rollback:");
+    expect(content).not.toContain("workflow_run:");
+    expect(content).not.toContain("repository_dispatch");
+    // Recovery guidance is manual-only, surfaced through the health summary.
+    expect(smokeJob).toContain("No automatic rollback");
+  });
+
+  it("reports healthy/unhealthy with URL, tag, and revision in the summary", () => {
+    expect(smokeJob).toContain("GITHUB_STEP_SUMMARY");
+    expect(smokeJob).toContain("healthy");
+    expect(smokeJob).toContain("unhealthy");
+    expect(smokeJob).toContain("if: always()");
+  });
+});
+
+describe("T036: operator runbook contract in README", () => {
+  const readme = readWorkflow(join(ROOT, "README.md"));
+
+  it("documents the one-time Pages enablement setting", () => {
+    expect(readme).toContain("Settings");
+    expect(readme).toContain("Pages");
+    expect(readme).toContain("GitHub Actions");
+  });
+
+  it("documents semantic demo tag creation without auto-publishing", () => {
+    expect(readme).toMatch(/git tag[^\n]*demo-v/);
+    expect(readme).toMatch(/git push[^\n]*demo-v|git push origin/);
+    expect(readme.toLowerCase()).toContain("does not deploy");
+  });
+
+  it("documents manual dispatch of the release workflow", () => {
+    expect(readme).toContain("Deploy demo release");
+    expect(readme.toLowerCase()).toContain("run workflow");
+  });
+
+  it("documents result inspection and manual previous-tag redeployment", () => {
+    expect(readme.toLowerCase()).toContain("summary");
+    expect(readme.toLowerCase()).toContain("previous");
+    expect(readme).toMatch(/demo-v/);
+  });
+});

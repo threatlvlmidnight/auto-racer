@@ -97,18 +97,18 @@
 
 ### Tests
 
-- [ ] T034 [P] [US3] Add failing smoke-check unit/integration tests for bounded retries, entry content, discovered module URL, representative assets, identity match, empty bodies, HTTP failures, and network errors in `tests/integration/deployment-smoke.test.ts`
-- [ ] T035 [P] [US3] Add failing workflow tests requiring smoke execution against `deploy-pages` output and forbidding automatic rollback or recursive deployment in `tests/integration/deployment-workflows.test.ts`
-- [ ] T036 [P] [US3] Add failing runbook checks requiring one-time enablement, first release, routine release, unhealthy diagnosis, and previous-tag restoration instructions in `tests/integration/deployment-boundaries.test.ts`
+- [X] T034 [P] [US3] Add failing smoke-check unit/integration tests for bounded retries, entry content, discovered module URL, representative assets, identity match, empty bodies, HTTP failures, and network errors in `tests/integration/deployment-smoke.test.ts`
+- [X] T035 [P] [US3] Add failing workflow tests requiring smoke execution against `deploy-pages` output and forbidding automatic rollback or recursive deployment in `tests/integration/deployment-workflows.test.ts`
+- [X] T036 [P] [US3] Add failing runbook checks requiring one-time enablement, first release, routine release, unhealthy diagnosis, and previous-tag restoration instructions in `tests/integration/deployment-boundaries.test.ts`
 
 ### Implementation
 
-- [ ] T037 [US3] Implement bounded-retry entry/module/asset/build-identity checks with exact failing-URL diagnostics in `scripts/smoke-demo.mjs`
-- [ ] T038 [US3] Add the post-deployment smoke job using the returned Pages URL and expected tag/revision, marking failures unhealthy without rollback in `.github/workflows/deploy-demo.yml`
-- [ ] T039 [US3] Surface deployment URL, selected tag, resolved revision, and healthy/unhealthy result in the workflow summary in `.github/workflows/deploy-demo.yml`
-- [ ] T040 [US3] Document Pages enablement, tag creation, manual dispatch, result inspection, and manual previous-tag redeployment in `README.md`
-- [ ] T041 [US3] Add failure-triage and recovery evidence templates to `specs/031-demo-deployment/acceptance-evidence.md`
-- [ ] T042 [US3] Run T034-T041 against a local prefixed server and record forced missing-asset, identity-mismatch, and non-public previous-tag recovery evidence in `specs/031-demo-deployment/acceptance-evidence.md`
+- [X] T037 [US3] Implement bounded-retry entry/module/asset/build-identity checks with exact failing-URL diagnostics in `scripts/smoke-demo.mjs`
+- [X] T038 [US3] Add the post-deployment smoke job using the returned Pages URL and expected tag/revision, marking failures unhealthy without rollback in `.github/workflows/deploy-demo.yml`
+- [X] T039 [US3] Surface deployment URL, selected tag, resolved revision, and healthy/unhealthy result in the workflow summary in `.github/workflows/deploy-demo.yml`
+- [X] T040 [US3] Document Pages enablement, tag creation, manual dispatch, result inspection, and manual previous-tag redeployment in `README.md`
+- [X] T041 [US3] Add failure-triage and recovery evidence templates to `specs/031-demo-deployment/acceptance-evidence.md`
+- [X] T042 [US3] Run T034-T041 against a local prefixed server and record forced missing-asset, identity-mismatch, and non-public previous-tag recovery evidence in `specs/031-demo-deployment/acceptance-evidence.md`
 
 **Checkpoint**: Every public release reports a health result and has a documented, same-pipeline manual recovery path.
 

@@ -180,4 +180,71 @@ Full gates on merge commit `4bf783d` + Phase 1-3 work:
 
 ## Phase 5 — User Story 3: health and recovery
 
+### T034-T039 — smoke checker, workflow wiring, health summaries
+
+- `scripts/smoke-demo.mjs` (T037): bounded-retry entry availability
+  (default 2-minute budget), entry/module/content-type checks, module
+  identity assertions, six representative stamped asset checks, exact
+  failing-URL diagnostics, manual-recovery guidance, zero mutation.
+- T034 drives the real CLI against in-process HTTP fixture servers:
+  **12/12 tests** covering transient-then-recovered entry (reports 3
+  attempts), permanent HTTP 500, connection-refused, wrong entry
+  content-type, missing module reference, missing module, identity
+  mismatch, missing asset, empty body, SPA-fallback masking, and recovery
+  instructions. All bounded (each failing drill completed in ~1.5 s against
+  a 1.5 s budget).
+- **Hardening found live**: `vite preview` (like SPA-fallback hosts) serves
+  `index.html` with HTTP 200 for missing asset paths. The checker now
+  rejects `text/html` responses for representative assets as "resolved to
+  the HTML entry fallback; the asset is missing" (regression test added).
+- `deploy-demo.yml` gained the read-only post-deployment `smoke` job (T038):
+  receives only the returned page URL plus expected tag/revision, checks out
+  the deployed revision for the versioned checker, and marks health without
+  any deployment authority. T039: deploy and smoke jobs publish tag,
+  revision, URL, and healthy/unhealthy result to `GITHUB_STEP_SUMMARY`.
+  T035 statically enforces no-rollback/no-recursive-deployment shape.
+
+### T036/T040 — operator runbook
+
+README gained "Demo deployment (GitHub Pages)": one-time Pages enablement,
+tag-then-dispatch publishing, gate sequence, summary/footer inspection,
+ordinary releases, manual previous-tag rollback, and local validation
+commands. T036 contract-tests the required runbook content (4 tests).
+
+### T041 — failure-triage and recovery evidence templates
+
+Build/verification failure (pre-deployment):
+
+```text
+Failed stage: <tag-validation | gates | build | audit>
+Release tag: <demo-vX.Y.Z>
+Evidence: workflow run URL, failed step log
+Public impact: none — the live demo is unchanged
+Action: fix forward at the source, re-tag or re-dispatch the same tag
+```
+
+Hosting/runtime failure (post-deployment smoke):
+
+```text
+Failed resource: <exact URL from smoke output>
+Last status/error: <HTTP status or network error>
+Release tag / revision: <demo-vX.Y.Z> / <sha>
+Action: manually re-dispatch Deploy demo release with the previous healthy
+demo tag (README: Manual rollback). No automatic rollback runs.
+```
+
+### T042 — local prefixed-server drill results
+
+Against `npm run build:pages` + `npm run preview:pages`
+(`http://localhost:4173/auto-racer/`, revision `f103e9f`):
+
+| Drill | Result |
+|---|---|
+| Healthy simulated release `demo-v0.1.0` | exit 0 — `healthy … after 1 attempt(s)` |
+| Forced missing asset (`title-race.svg` removed) | exit 1 — unhealthy, names `…/assets/title-race.svg?rev=f103e9f` and the HTML-fallback cause |
+| Forced identity mismatch (`--tag demo-v9.9.9`) | exit 1 — unhealthy, `identity-tag` names the module URL |
+| Previous-tag recovery (`demo-v0.0.9` rebuilt through the same pipeline) | exit 0 — healthy; bundle carries the restored tag (title footer source confirmed) |
+
+## Phase 6 — Polish and release gates
+
 _(pending)_

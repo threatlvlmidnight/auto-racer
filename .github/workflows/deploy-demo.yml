@@ -160,3 +160,56 @@ jobs:
             echo "- **Deployment URL**: ${PAGE_URL}"
             echo "- **Status**: artifact deployed; public smoke check follows"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  smoke:
+    name: Post-deployment public smoke check
+    needs: [validate-and-build, deploy]
+    runs-on: ubuntu-latest
+    # Read-only: this job observes the live artifact. It receives only the
+    # returned public URL plus expected build identity/resource paths, and it
+    # never starts another deployment or any rollback (FR-018).
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout deployed revision (versioned checker source)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.validate-and-build.outputs.revision }}
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+
+      - name: Run public smoke check
+        id: smoke
+        env:
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+          RELEASE_TAG_INPUT: ${{ needs.validate-and-build.outputs.release_tag }}
+          EXPECTED_REVISION: ${{ needs.validate-and-build.outputs.revision }}
+        run: node scripts/smoke-demo.mjs --url "$PAGE_URL" --tag "$RELEASE_TAG_INPUT" --revision "$EXPECTED_REVISION"
+
+      - name: Record release health in the workflow summary (T039)
+        if: always()
+        env:
+          SMOKE_RESULT: ${{ steps.smoke.outcome }}
+          RELEASE_TAG_INPUT: ${{ needs.validate-and-build.outputs.release_tag }}
+          EXPECTED_REVISION: ${{ needs.validate-and-build.outputs.revision }}
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: |
+          if [ "$SMOKE_RESULT" = "success" ]; then
+            HEALTH="healthy"
+            ADVICE="No action required."
+          else
+            HEALTH="unhealthy"
+            ADVICE="Recovery: manually re-dispatch this workflow with the previous healthy demo tag (README: Manual rollback). No automatic rollback runs."
+          fi
+          {
+            echo "## Demo release health"
+            echo ""
+            echo "- **Result**: ${HEALTH}"
+            echo "- **Release tag**: \`${RELEASE_TAG_INPUT}\`"
+            echo "- **Resolved revision**: \`${EXPECTED_REVISION}\`"
+            echo "- **Deployment URL**: ${PAGE_URL}"
+            echo "- **Advice**: ${ADVICE}"
+          } >> "$GITHUB_STEP_SUMMARY"
