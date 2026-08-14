@@ -130,4 +130,54 @@ Full gates on merge commit `4bf783d` + Phase 1-3 work:
 
 ## Phase 4 — User Story 2: controlled publishing
 
+### T023-T032 — tag validation, artifact audit, and release workflows
+
+- `scripts/validate-demo-tag.mjs` (T026): grammar → tag resolution → HEAD
+  cross-check → optional `--expect-revision`; driven black-box by 24 CLI
+  tests in temporary git repos, including previous-tag restoration through
+  the same validation path (FR-012). A trailing-newline grammar hole
+  (`$` admits `\n` in JS regex) was found while writing fixtures and closed
+  with an explicit whitespace guard in the client module, the script, and the
+  workflow-owned check (exact-equality `grep -Eo` match).
+- `scripts/audit-production-artifact.mjs` (T027): one exported complete
+  rule set (10 forbidden-path rules + 7 credential patterns), deterministic
+  walk rejecting symlinks/non-regular files/path escapes, required entry
+  shape, identity presence checks, redacted failures. T025 covers every rule
+  with positive fixtures, near-miss negative fixtures, and the redaction
+  requirement (30 audit tests).
+- `.github/workflows/verify.yml` (T029): push/PR-only, `contents: read`,
+  locked install + tests + lint + build, zero Pages authority.
+- `.github/workflows/deploy-demo.yml` (T030/T031): `workflow_dispatch` only
+  with required `release_tag`; workflow-owned grammar check and `git
+  ls-remote` exact-ref resolution BEFORE selected-tag checkout; checkout of
+  the resolved revision; repository validator cross-check; full gates;
+  identity build; artifact audit with expected identity; `dist`-only Pages
+  artifact upload; protected `github-pages` environment deploy with exactly
+  `pages: write` + `id-token: write`; serialized deployments
+  (`cancel-in-progress: false`); deployment summary (T039 partial).
+- `.github/dependabot.yml` (T032) monitors the pinned actions. Action pins
+  resolved live from each action repository's tags (lightweight tags →
+  commit SHAs): checkout v4.4.0 `11d5960a…`, setup-node v4.4.0 `49933ea5…`,
+  configure-pages v5.0.0 `983d7736…`, upload-pages-artifact v3.0.1
+  `56afc609…`, deploy-pages v4.0.5 `d6db9016…`.
+- T024 enforces all of the above statically (15 workflow tests), including
+  pre-checkout validation order, least privilege per job, immutable pins, no
+  secrets, and no mutable action tags.
+- package scripts `verify` and `audit:artifact` added (T028) without
+  weakening `test`/`lint`/`build`.
+
+### T033 — release-shape proof run
+
+- Simulated release build (`demo-v0.0.0` + current HEAD revision) then
+  `node scripts/audit-production-artifact.mjs dist --expect-tag demo-v0.0.0
+  --expect-revision <HEAD>` → **PASS**: no forbidden path, no credential
+  pattern, expected identity present in generated output.
+- Full suite: **1411/1411 tests passed** (63 files). `npm run lint` clean.
+- Invalid-input proof: grammar rejection runs before any checkout, and every
+  failed pre-deployment gate happens before `upload-pages-artifact`, so a
+  failing release cannot reach deployment (workflow structure, enforced by
+  T024 index-order assertions).
+
+## Phase 5 — User Story 3: health and recovery
+
 _(pending)_

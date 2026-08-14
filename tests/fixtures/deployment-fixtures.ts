@@ -114,3 +114,47 @@ export const REPRESENTATIVE_SMOKE_ASSETS = [
   "assets/items/families/coachworks-power.png",
   "assets/backgrounds/regions/british-isles.png",
 ];
+
+/**
+ * Positive and negative fixtures for every high-confidence credential pattern
+ * in the production-artifact audit contract. Each positive value MUST trip
+ * its rule; each near-miss negative MUST pass. Matched values are test
+ * fixtures only — never real credentials.
+ */
+export const CREDENTIAL_PATTERN_FIXTURES = [
+  {
+    rule: "credential:pem-private-key",
+    positive: "-----BEGIN RSA PRIVATE KEY-----\nMIIEfakefixturedata\n-----END RSA PRIVATE KEY-----",
+    negative: "-----BEGIN PUBLIC KEY-----\nMIIEfakefixturedata\n-----END PUBLIC KEY-----",
+  },
+  {
+    rule: "credential:github-token",
+    positive: `token = "ghp_${"A1b2C3d4E5f6G7h8I9j0".repeat(2)}"`,
+    negative: 'token = "ghp_tooshort"',
+  },
+  {
+    rule: "credential:aws-access-key",
+    positive: "aws_key=AKIAIOSFODNN7EXAMPLE",
+    negative: "aws_key=AKIA123",
+  },
+  {
+    rule: "credential:slack-token",
+    positive: "slack: xoxb-1234567890123-abcdefghijklmnop",
+    negative: "slack: xoxb-short",
+  },
+  {
+    rule: "credential:openai-secret-key",
+    positive: `openai = "sk-${"a1B2c3D4e5F6g7H8".repeat(2)}"`,
+    negative: 'openai = "sk-short"',
+  },
+  {
+    rule: "credential:stripe-live-key",
+    positive: `stripe = "sk_live_${"51NtXz4Qy8".repeat(3)}"`,
+    negative: `stripe = "sk_test_${"51NtXz4Qy8".repeat(3)}"`,
+  },
+  {
+    rule: "credential:google-api-key",
+    positive: `google = "AIza${"a".repeat(35)}"`,
+    negative: 'google = "AIza-short"',
+  },
+];

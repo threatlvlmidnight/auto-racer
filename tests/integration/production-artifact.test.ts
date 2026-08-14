@@ -1,8 +1,10 @@
-import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  CREDENTIAL_PATTERN_FIXTURES,
   FIXED_BUILD_TIME_UTC,
   RELEASE_REVISION,
   REQUIRED_ASSET_INVENTORY,
@@ -110,4 +112,179 @@ describe("T015: prefixed release production artifact", () => {
     expect(rootEntries).not.toContain("package-lock.json");
     expect(rootEntries).not.toContain("tsconfig.json");
   });
+});
+
+// ---------------------------------------------------------------------------
+// T025: production-artifact audit rule coverage — every forbidden-path rule
+// and credential pattern from the audit contract, exercised through the real
+// scripts/audit-production-artifact.mjs CLI against fixture trees.
+// ---------------------------------------------------------------------------
+
+const AUDIT_SCRIPT = join(ROOT, "scripts", "audit-production-artifact.mjs");
+const auditDirs: string[] = [];
+
+function makeAuditTree(files: Record<string, string>): string {
+  const dir = mkdtempSync(join(tmpdir(), "auto-racer-artifact-"));
+  auditDirs.push(dir);
+  for (const relPath of Object.keys(files)) {
+    const full = join(dir, relPath);
+    const parts = relPath.split("/");
+    if (parts.length > 1) {
+      mkdirSync(join(dir, parts.slice(0, -1).join("/")), { recursive: true });
+    }
+    writeFileSync(full, files[relPath]);
+  }
+  return dir;
+}
+
+function runAudit(args: string[]) {
+  return spawnSync(process.execPath, [AUDIT_SCRIPT, ...args], { encoding: "utf-8" });
+}
+
+function cleanTree(): Record<string, string> {
+  return {
+    "index.html": `<!doctype html><script type="module" src="/auto-racer/assets/index-fixture.js"></script>`,
+    "assets/index-fixture.js":
+      `export const tag = "${VALID_DEMO_TAG}"; export const revision = "${RELEASE_REVISION}";`,
+    "assets/images/title.png": "(binary fixture placeholder)",
+  };
+}
+
+afterAll(() => {
+  for (const dir of auditDirs) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+describe("T025: audit passes clean artifacts and enforces identity expectations", () => {
+  it("passes a clean production-shaped tree", () => {
+    const dir = makeAuditTree(cleanTree());
+    const result = runAudit([dir]);
+    expect(result.status).toBe(0);
+  });
+
+  it("passes when the expected tag and revision are present in runtime output", () => {
+    const dir = makeAuditTree(cleanTree());
+    const result = runAudit([dir, "--expect-tag", VALID_DEMO_TAG, "--expect-revision", RELEASE_REVISION]);
+    expect(result.status).toBe(0);
+  });
+
+  it("fails when the expected identity is absent from the artifact", () => {
+    const dir = makeAuditTree({
+      "index.html": "<!doctype html><script src=\"/auto-racer/assets/app.js\"></script>",
+      "assets/app.js": "export const anonymous = true;",
+    });
+    const result = runAudit([dir, "--expect-tag", VALID_DEMO_TAG, "--expect-revision", RELEASE_REVISION]);
+    expect(result.status).toBe(1);
+    const output = `${result.stdout}${result.stderr}`;
+    expect(output).toContain("identity:missing-tag");
+    expect(output).toContain("identity:missing-revision");
+  });
+
+  it("fails when the artifact root does not exist", () => {
+    const result = runAudit([join(tmpdir(), "auto-racer-artifact-does-not-exist")]);
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}${result.stderr}`).toContain("artifact:missing-root");
+  });
+});
+describe("T025: every forbidden-path rule rejects its positive fixture", () => {
+  it.each([
+    [".git/config", "forbidden:git-metadata"],
+    [".github/CODEOWNERS", "forbidden:git-metadata"],
+    [".env", "forbidden:env-file"],
+    [".env.local", "forbidden:env-file"],
+    ["node_modules/phaser/index.js", "forbidden:dependency-tree"],
+    ["src/main.ts", "forbidden:source-tree"],
+    ["tests/unit/x.test.ts", "forbidden:source-tree"],
+    ["specs/spec.md", "forbidden:source-tree"],
+    ["scripts/tool.mjs", "forbidden:source-tree"],
+    ["coverage/lcov.info", "forbidden:source-tree"],
+    ["assets/package.json", "forbidden:package-manifest"],
+    ["assets/package-lock.json", "forbidden:package-manifest"],
+    ["assets/tsconfig.json", "forbidden:tool-config"],
+    ["assets/.eslintrc.json", "forbidden:tool-config"],
+    ["assets/vite.config.ts", "forbidden:tool-config"],
+    [".specify/feature.json", "forbidden:speckit-config"],
+    ["assets/debug.log", "forbidden:log-or-temp"],
+    ["assets/edit.tmp", "forbidden:log-or-temp"],
+    ["assets/index.js.map", "forbidden:source-map"],
+    ["assets/server.pem", "forbidden:credential-file"],
+    ["assets/id_rsa", "forbidden:credential-file"],
+  ])("rejects %s with the %s rule", (relPath, ruleId) => {
+    const tree = cleanTree();
+    tree[relPath] = "forbidden fixture content";
+    const dir = makeAuditTree(tree);
+    const result = runAudit([dir]);
+    expect(result.status).toBe(1);
+    const output = `${result.stdout}${result.stderr}`;
+    expect(output).toContain(ruleId);
+    expect(output).toContain(relPath);
+  });
+
+  it("rejects symbolic links inside the artifact", () => {
+    const dir = makeAuditTree(cleanTree());
+    symlinkSync(join(dir, "index.html"), join(dir, "assets", "sneaky-link.html"));
+    const result = runAudit([dir]);
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}${result.stderr}`).toContain("forbidden:symlink");
+  });
+
+  it("rejects a missing entry document", () => {
+    const dir = makeAuditTree({ "assets/app.js": "export {};" });
+    const result = runAudit([dir]);
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}${result.stderr}`).toContain("artifact:missing-entry");
+  });
+
+  it("rejects an empty entry document", () => {
+    const dir = makeAuditTree({ "index.html": "", "assets/app.js": "export {};" });
+    const result = runAudit([dir]);
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}${result.stderr}`).toContain("artifact:empty-entry");
+  });
+
+  it("rejects a second root entry document and unexpected root entries", () => {
+    const dir = makeAuditTree({
+      ...cleanTree(),
+      "extra.html": "<!doctype html>",
+      "favicon.ico": "not really an icon",
+    });
+    const result = runAudit([dir]);
+    expect(result.status).toBe(1);
+    const output = `${result.stdout}${result.stderr}`;
+    expect(output).toContain("artifact:multiple-entry-documents");
+    expect(output).toContain("artifact:unexpected-root-entry");
+  });
+});
+
+describe("T025: credential pattern fixtures (positive and negative, redacted)", () => {
+  it.each(CREDENTIAL_PATTERN_FIXTURES.map((fixture) => [fixture.rule, fixture.positive]))(
+    "%s rejects its positive fixture without printing the secret",
+    (ruleId, positive) => {
+      const tree = cleanTree();
+      tree["assets/leak.txt"] = positive;
+      const dir = makeAuditTree(tree);
+      const result = runAudit([dir]);
+      expect(result.status).toBe(1);
+      const output = `${result.stdout}${result.stderr}`;
+      expect(output).toContain(ruleId);
+      // Redaction requirement: the audit must never print a matched value.
+      for (const line of positive.split("\n")) {
+        if (line.trim().length > 0) {
+          expect(output).not.toContain(line.trim());
+        }
+      }
+    },
+  );
+
+  it.each(CREDENTIAL_PATTERN_FIXTURES.map((fixture) => [fixture.rule, fixture.negative]))(
+    "%s accepts its near-miss negative fixture",
+    (_ruleId, negative) => {
+      const tree = cleanTree();
+      tree["assets/near-miss.txt"] = negative;
+      const dir = makeAuditTree(tree);
+      const result = runAudit([dir]);
+      expect(result.status).toBe(0);
+    },
+  );
 });

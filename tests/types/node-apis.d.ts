@@ -29,6 +29,7 @@ declare module "node:fs" {
   export function mkdirSync(path: string, options?: { recursive?: boolean }): void;
   export function rmSync(path: string, options?: { recursive?: boolean; force?: boolean }): void;
   export function mkdtempSync(prefix: string): string;
+  export function symlinkSync(target: string, path: string): void;
 }
 
 declare module "node:path" {

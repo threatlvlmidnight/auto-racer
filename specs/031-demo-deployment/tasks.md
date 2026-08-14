@@ -70,20 +70,20 @@
 
 ### Tests
 
-- [ ] T023 [P] [US2] Add failing tag grammar/ref-resolution tests for valid semantic demo tags, raw SHAs, branches, missing tags, omitted components, and leading zeros in `tests/integration/deployment-boundaries.test.ts`
-- [ ] T024 [P] [US2] Add failing workflow static tests for trigger isolation, least-privilege permissions, exact-tag checkout, gated job dependencies, Pages environment, concurrency, and immutable action pins in `tests/integration/deployment-workflows.test.ts`
-- [ ] T025 [P] [US2] Add failing artifact-audit tests covering every rule and redaction requirement in `specs/031-demo-deployment/contracts/production-artifact-audit-contract.md` using positive and negative fixtures in `tests/integration/production-artifact.test.ts`
+- [X] T023 [P] [US2] Add failing tag grammar/ref-resolution tests for valid semantic demo tags, raw SHAs, branches, missing tags, omitted components, and leading zeros in `tests/integration/deployment-boundaries.test.ts`
+- [X] T024 [P] [US2] Add failing workflow static tests for trigger isolation, least-privilege permissions, exact-tag checkout, gated job dependencies, Pages environment, concurrency, and immutable action pins in `tests/integration/deployment-workflows.test.ts`
+- [X] T025 [P] [US2] Add failing artifact-audit tests covering every rule and redaction requirement in `specs/031-demo-deployment/contracts/production-artifact-audit-contract.md` using positive and negative fixtures in `tests/integration/production-artifact.test.ts`
 
 ### Implementation
 
-- [ ] T026 [US2] Implement the reusable local/post-checkout semantic demo-tag and resolved-revision cross-check in `scripts/validate-demo-tag.mjs`
-- [ ] T027 [US2] Implement deterministic production artifact inspection with one exported complete forbidden-path/credential-pattern rule set and actionable rule-specific failures in `scripts/audit-production-artifact.mjs`
-- [ ] T028 [US2] Add `verify` and artifact-audit package scripts without weakening existing `test`, `lint`, or `build` commands in `package.json`
-- [ ] T029 [US2] Add a read-only push/pull-request verification workflow that runs locked install, tests, lint, and build but has no Pages permissions or deploy step in `.github/workflows/verify.yml`
-- [ ] T030 [US2] Add the manual `release_tag` trigger; perform workflow-owned grammar and exact remote-tag validation before selected-tag checkout or repository-code execution; then cross-check the checked-out revision, run locked install/full gates/build identity/artifact audit, and upload the Pages artifact in `.github/workflows/deploy-demo.yml`
-- [ ] T031 [US2] Add the protected `github-pages` deployment job with minimum `pages: write`/`id-token: write` permissions, explicit build dependency, environment URL, and non-overlapping deployment concurrency in `.github/workflows/deploy-demo.yml`
-- [ ] T032 [P] [US2] Configure GitHub Actions dependency monitoring for immutably pinned official actions in `.github/dependabot.yml`
-- [ ] T033 [US2] Run T023-T032, inspect the generated archive, and record proof that invalid input or a failed pre-deployment gate cannot reach deployment in `specs/031-demo-deployment/acceptance-evidence.md`
+- [X] T026 [US2] Implement the reusable local/post-checkout semantic demo-tag and resolved-revision cross-check in `scripts/validate-demo-tag.mjs`
+- [X] T027 [US2] Implement deterministic production artifact inspection with one exported complete forbidden-path/credential-pattern rule set and actionable rule-specific failures in `scripts/audit-production-artifact.mjs`
+- [X] T028 [US2] Add `verify` and artifact-audit package scripts without weakening existing `test`, `lint`, or `build` commands in `package.json`
+- [X] T029 [US2] Add a read-only push/pull-request verification workflow that runs locked install, tests, lint, and build but has no Pages permissions or deploy step in `.github/workflows/verify.yml`
+- [X] T030 [US2] Add the manual `release_tag` trigger; perform workflow-owned grammar and exact remote-tag validation before selected-tag checkout or repository-code execution; then cross-check the checked-out revision, run locked install/full gates/build identity/artifact audit, and upload the Pages artifact in `.github/workflows/deploy-demo.yml`
+- [X] T031 [US2] Add the protected `github-pages` deployment job with minimum `pages: write`/`id-token: write` permissions, explicit build dependency, environment URL, and non-overlapping deployment concurrency in `.github/workflows/deploy-demo.yml`
+- [X] T032 [P] [US2] Configure GitHub Actions dependency monitoring for immutably pinned official actions in `.github/dependabot.yml`
+- [X] T033 [US2] Run T023-T032, inspect the generated archive, and record proof that invalid input or a failed pre-deployment gate cannot reach deployment in `specs/031-demo-deployment/acceptance-evidence.md`
 
 **Checkpoint**: A validated tag can produce and deploy one audited artifact; normal development events cannot publish.
 

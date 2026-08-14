@@ -75,7 +75,9 @@ function assertPublicField(fieldName: string, value: string): void {
 }
 
 export function isValidDemoReleaseTag(tag: string): boolean {
-  return typeof tag === "string" && DEMO_RELEASE_TAG_PATTERN.test(tag);
+  // The explicit whitespace guard matters: JS `$` tolerates a trailing
+  // newline, which would admit "demo-v1.0.0\n" through the anchor alone.
+  return typeof tag === "string" && !/\s/.test(tag) && DEMO_RELEASE_TAG_PATTERN.test(tag);
 }
 
 export function isFullRevision(revision: string): boolean {

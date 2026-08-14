@@ -1,7 +1,9 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { REQUIRED_ASSET_INVENTORY } from "../fixtures/deployment-fixtures";
+import { afterAll, describe, expect, it } from "vitest";
+import { INVALID_DEMO_TAGS, PRIOR_RELEASE_TAG, REQUIRED_ASSET_INVENTORY, VALID_DEMO_TAG } from "../fixtures/deployment-fixtures";
 
 /**
  * 031-demo-deployment deployment boundary audits.
@@ -129,5 +131,103 @@ describe("T043: single-base, traversal, and mixed-base guards", () => {
   it("stat() confirms the audit helpers operate on real files", () => {
     expect(collectSourceFiles(SRC_DIR)).toContain(BOOT_SCENE_PATH);
     expect(statSync(BOOT_SCENE_PATH).isFile()).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T023: semantic demo-tag grammar and resolved-revision cross-check, driven
+// through the real scripts/validate-demo-tag.mjs CLI in temporary git repos.
+// ---------------------------------------------------------------------------
+
+const VALIDATOR_SCRIPT = join(ROOT, "scripts", "validate-demo-tag.mjs");
+const tempDirs: string[] = [];
+
+function runValidator(args: string[], cwd: string) {
+  return spawnSync(process.execPath, [VALIDATOR_SCRIPT, ...args], { cwd, encoding: "utf-8" });
+}
+
+function makeRepo(): string {
+  const dir = mkdtempSync(join(tmpdir(), "auto-racer-demo-tag-"));
+  tempDirs.push(dir);
+  const git = (args: string[]) =>
+    execFileSync("git", args, { cwd: dir, encoding: "utf-8" }).trim();
+  git(["init", "-q"]);
+  git(["config", "user.email", "release@example.com"]);
+  git(["config", "user.name", "Release Fixture"]);
+  return dir;
+}
+
+function commit(dir: string, fileName: string, message: string): string {
+  const git = (args: string[]) =>
+    execFileSync("git", args, { cwd: dir, encoding: "utf-8" }).trim();
+  writeFileSync(join(dir, fileName), `${message}\n`);
+  git(["add", "."]);
+  git(["commit", "-q", "-m", message]);
+  return git(["rev-parse", "HEAD"]);
+}
+
+afterAll(() => {
+  for (const dir of tempDirs) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+describe("T023: semantic demo-tag grammar rejection", () => {
+  const emptyDir = makeRepo();
+
+  it.each(INVALID_DEMO_TAGS.filter((tag) => tag.length > 0).map((tag) => [JSON.stringify(tag)]))(
+    "rejects %s before touching any repository state",
+    (tag) => {
+      const result = runValidator([tag], emptyDir);
+      expect(result.status).toBe(2);
+      expect(result.stderr).toContain("grammar");
+    },
+  );
+});
+
+describe("T023: tag resolution and revision cross-check", () => {
+  const dir = makeRepo();
+  const firstRevision = commit(dir, "game.txt", "first approved revision");
+
+  it("accepts a valid tag checked out at its own commit and prints the revision", () => {
+    execFileSync("git", ["tag", VALID_DEMO_TAG], { cwd: dir });
+    const result = runValidator([VALID_DEMO_TAG], dir);
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe(firstRevision);
+  });
+
+  it("accepts the exact expected revision supplied by the workflow resolver", () => {
+    const result = runValidator([VALID_DEMO_TAG, "--expect-revision", firstRevision], dir);
+    expect(result.status).toBe(0);
+  });
+
+  it("fails when a grammar-valid tag does not exist in the repository", () => {
+    const result = runValidator(["demo-v9.9.9"], dir);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("tag-resolution");
+  });
+
+  it("fails when HEAD has moved past the tagged revision", () => {
+    commit(dir, "later.txt", "unapproved later work");
+    const result = runValidator([VALID_DEMO_TAG], dir);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("cross-check");
+  });
+
+  it("fails when the expected revision disagrees with the tag", () => {
+    execFileSync("git", ["checkout", "-q", `refs/tags/${VALID_DEMO_TAG}`], { cwd: dir });
+    const result = runValidator([VALID_DEMO_TAG, "--expect-revision", "0".repeat(40)], dir);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("expected-revision");
+  });
+
+  it("restores a previous demo tag through the same validation path (FR-012)", () => {
+    // Tag the older commit as the prior release, check it out, and revalidate:
+    // recovery is the same release operation, not a separate rollback path.
+    execFileSync("git", ["tag", PRIOR_RELEASE_TAG, firstRevision], { cwd: dir });
+    execFileSync("git", ["checkout", "-q", `refs/tags/${PRIOR_RELEASE_TAG}`], { cwd: dir });
+    const result = runValidator([PRIOR_RELEASE_TAG, "--expect-revision", firstRevision], dir);
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe(firstRevision);
   });
 });
