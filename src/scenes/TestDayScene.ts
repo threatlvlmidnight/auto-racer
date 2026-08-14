@@ -26,6 +26,9 @@ import { createItemCard, createItemInspector } from "./itemVisuals";
 import { unresolvedPhysicalEvidence } from "./itemPresentation";
 import type { OfferedItem } from "../simulation/types";
 import { configureHiDpiScene, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "./layout";
+import { currentVehicleStatModel } from "./vehicleStatPresentation";
+import { createVehicleStatPanel } from "./vehicleStatVisuals";
+import { STOCK_PHYSICAL_STATS } from "../simulation/tracks";
 
 export interface TestDaySceneData {
   run?: Run;
@@ -94,6 +97,13 @@ export class TestDayScene extends Phaser.Scene {
       align: "center",
       wordWrap: { width: Math.min(620, width - 56) },
     }).setOrigin(0.5);
+    // The build-under-test's honest current stats, before any lap has run
+    // (025-vehicle-stat-display) — same shared model/renderer as PrepareScene's
+    // US1 panel, since a Test Day snapshot is a build, not lap evidence.
+    const statModel = currentVehicleStatModel({ build: this.session!.snapshot.build, stock: STOCK_PHYSICAL_STATS });
+    createVehicleStatPanel(this, width / 2, 258, statModel, {
+      viewport: { width: Math.min(680, width - 56), height: 60 },
+    }).setDepth(20);
     const held = [
       ...this.session!.snapshot.build.slots.flatMap((slot) => slot.item ? [{ item: slot.item, tier: slot.tier }] : []),
       ...this.session!.snapshot.build.storage.flatMap((position) => position.item ? [{ item: position.item, tier: position.tier }] : []),

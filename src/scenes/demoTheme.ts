@@ -46,7 +46,11 @@ export function addHeaderBand(scene: Phaser.Scene): void {
  * run changes in place (purchases, restocks) keep the handles so they can
  * destroy and redraw the stamp instead of leaving stale credits on screen.
  */
-export function addRunStamp(scene: Phaser.Scene, run: Run): Phaser.GameObjects.Text[] {
+export function addRunStamp(
+  scene: Phaser.Scene,
+  run: Run,
+  options: { showCredits?: boolean } = {},
+): Phaser.GameObjects.Text[] {
   const stage = run.status === "completed"
     ? "RUN COMPLETE"
     : run.status === "failed"
@@ -58,6 +62,7 @@ export function addRunStamp(scene: Phaser.Scene, run: Run): Phaser.GameObjects.T
     fontStyle: "bold",
     color: "#f1eee5",
   }).setDepth(92);
+  if (options.showCredits === false) return [stageText];
   const creditsText = scene.add.text(LOGICAL_WIDTH - 24, 22, `${run.credits} CREDITS`, {
     fontFamily: UI_FONT,
     fontSize: "11px",

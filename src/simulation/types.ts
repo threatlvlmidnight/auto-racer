@@ -1,5 +1,5 @@
 import type { PlayerLap } from "./laps";
-import type { PhysicalStats } from "./tracks";
+import type { PhysicalStats, Track } from "./tracks";
 
 // Shared simulation types (data-model.md). Deliberately minimal/illustrative —
 // the real item/component taxonomy is a later feature's responsibility
@@ -115,6 +115,13 @@ export interface ItemDefinition {
    * `undefined` and `[]` are equivalent: both mean "no conditional contributions."
    */
   conditionalPhysics?: readonly ConditionalPhysicsContribution[];
+
+  /**
+   * 028-pre-race-setup: optional installed-only control exposed by the
+   * scored pre-race setup surface. Absence means the item enables no setup
+   * control. See ConfigurableSetupEffect below.
+   */
+  configurableSetup?: ConfigurableSetupEffect;
 }
 
 // --- Feature 023: stat-targeted amplifiers ---------------------------------
@@ -506,6 +513,12 @@ export interface CarResult {
   position: number;
   /** time - (position 1's time); 0 for the leader. */
   gapToLeader: number;
+  /**
+   * 028-pre-race-setup: this car's own immutable locked setup, applied only
+   * to its own build/laps. Absent only for explicitly supported legacy
+   * evidence — never copied from another car (contract §4/§10).
+   */
+  setup?: LockedRaceSetup;
 }
 
 /** Extends ContestResult to a ranked N-car field (data-model.md, N-Car Contest Result). */
@@ -516,4 +529,116 @@ export interface NCarContestResult {
   outcome: ContestOutcome;
   board: OfferedItem[];
   storage: OfferedItem[];
+  /**
+   * 027-race-legibility-integrity: the exact generated Track used to
+   * resolve every car's laps — playback and Results read this value and
+   * MUST NOT independently call generateTrack for an already-resolved
+   * contest (contract §1).
+   */
+  track: Track;
+  /**
+   * 027-race-legibility-integrity: original roster priority before final
+   * sorting — player first, then rivals in authored roster order.
+   * Checkpoint projection ties use this same array final ranking already
+   * used (Decision 3); `cars` above is already sorted by final position and
+   * cannot safely reconstruct it.
+   */
+  tieBreakOrder: readonly string[];
+}
+
+// --- Feature 028: pre-race setup -------------------------------------------
+
+/** Every launch control family. `driver-aggression` is universal; the other six require an installed item. */
+export type SetupControlFamily =
+  | "driver-aggression"
+  | "brake-balance"
+  | "steering-response"
+  | "gearing"
+  | "propeller-pitch"
+  | "racing-line"
+  | "bodywork-trim";
+
+export type SetupPositionId = "low" | "balanced" | "high";
+
+/** Authored on `ItemDefinition.configurableSetup` (data-model.md "Control authoring"). Launch magnitude is always 1. */
+export interface ConfigurableSetupEffect {
+  family: Exclude<SetupControlFamily, "driver-aggression">;
+  magnitude: 1;
+}
+
+/** One of a control's three immutable launch positions, owned by raceSetup.ts's catalog. */
+export interface SetupPositionDefinition {
+  id: SetupPositionId;
+  label: string;
+  /** Per unit of magnitude. Balanced is always all-zero; low/high are exact inverses. */
+  deltaPerMagnitude: ItemPhysicsContribution;
+}
+
+export interface SetupControlDefinition {
+  family: SetupControlFamily;
+  label: string;
+  positions: readonly [SetupPositionDefinition, SetupPositionDefinition, SetupPositionDefinition];
+}
+
+/** One position's resolved (magnitude-scaled) delta, for presentation/lock consumption. */
+export interface SetupPositionPresentation {
+  id: SetupPositionId;
+  label: string;
+  delta: Required<ItemPhysicsContribution>;
+}
+
+/** A control derived from the current build (data-model.md "Derived eligible control"). */
+export interface EligibleSetupControl {
+  family: SetupControlFamily;
+  label: string;
+  /** Empty only for driver-aggression. Stable-sorted for canonical equality. */
+  sourceItemIds: readonly string[];
+  /** 1 for the universal control; installed source count for equipment controls. */
+  magnitude: number;
+  positions: readonly SetupPositionPresentation[];
+}
+
+/** The player's uncommitted discrete choice per family. Missing entries resolve to "balanced". */
+export type SetupSelections = Partial<Record<SetupControlFamily, SetupPositionId>>;
+
+/** Championship-local remembered setup (data-model.md "Draft and remembered state"). */
+export interface RunSetupMemory {
+  enabled: boolean;
+  selections: SetupSelections;
+}
+
+export interface LockedSetupControl {
+  family: SetupControlFamily;
+  position: SetupPositionId;
+  sourceItemIds: readonly string[];
+  magnitude: number;
+  appliedDelta: Required<ItemPhysicsContribution>;
+}
+
+export const RACE_SETUP_RULES_VERSION = "race-setup-v1";
+
+export interface LockedRaceSetup {
+  rulesVersion: typeof RACE_SETUP_RULES_VERSION;
+  encounterId: string;
+  trackId: string;
+  /** Canonical family order — see raceSetup.ts's CANONICAL_FAMILY_ORDER. */
+  controls: readonly LockedSetupControl[];
+  totalDelta: Required<ItemPhysicsContribution>;
+}
+
+/**
+ * T058: a future recorded asynchronous ghost's contract (data-model.md
+ * "Per-car contest and ghost evidence", FR-016/FR-017) — not constructed or
+ * persisted by any code yet (no network/backend exists in this feature).
+ * Reserved so a later async-multiplayer feature can adopt this exact shape
+ * rather than re-deriving it, and so `validateLockedRaceSetup` (raceSetup.ts)
+ * already has the right input shape to re-validate one on replay: build the
+ * `RaceSetupInput` from `ghost.build`/`ghost.trackId`, then call
+ * `validateLockedRaceSetup(input, ghost.setup)`.
+ */
+export interface RecordedGhost {
+  build: VehicleBuild;
+  setup: LockedRaceSetup;
+  trackId: string;
+  simulationRulesVersion: string;
 }

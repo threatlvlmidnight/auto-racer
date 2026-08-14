@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { vehicleById } from "../../src/content/entrants";
 import { GHOST_POOL, RIVAL_PROFILES, validateGhostPool, validateRivalCatalog } from "../../src/content/rivals";
-import { resolveRivalBuild, selectGhostRoster } from "../../src/simulation/rivals";
+import { resolveRivalBuild, selectGeneratedRivalSetup, selectGhostRoster } from "../../src/simulation/rivals";
 import { installedItems, storedItems } from "../../src/simulation/slots";
 import { poolForRival } from "../../src/simulation/itemPools";
+import { deriveEligibleSetupControls, lockRaceSetup } from "../../src/simulation/raceSetup";
+import { simulatePlayerLaps } from "../../src/simulation/laps";
+import { generateTrack } from "../../src/simulation/tracks";
+import { vehicleBuild } from "../fixtures/vehicle-build-fixtures";
+import { fourDistinctFamilyBuild, zeroConfigurableBuild } from "../fixtures/race-setup-fixtures";
+import type { Run } from "../../src/simulation/run";
+import type { LockedRaceSetup, SetupSelections } from "../../src/simulation/types";
 
 describe("RIVAL_PROFILES catalog (FR-004)", () => {
   it("authors exactly 7 profiles", () => {
@@ -254,4 +261,75 @@ describe("selectGhostRoster non-coupling signature (T016, FR-003/FR-005)", () =>
     const roster = selectGhostRoster(pool, seed, level);
     expect(roster).toHaveLength(7);
   });
+});
+
+// 028-pre-race-setup T050: deterministic generated-rival setup policy.
+describe("selectGeneratedRivalSetup (T050, contract §6, FR-018A)", () => {
+  function bruteForceLegalSelections(build: ReturnType<typeof vehicleBuild>): SetupSelections[] {
+    const eligible = deriveEligibleSetupControls(build);
+    return eligible.reduce<SetupSelections[]>(
+      (partials, control) => partials.flatMap((partial) =>
+        (["low", "balanced", "high"] as const).map((position) => ({ ...partial, [control.family]: position }))),
+      [{}],
+    );
+  }
+
+  function totalTime(build: ReturnType<typeof vehicleBuild>, track: ReturnType<typeof generateTrack>, lapCount: number, setup: LockedRaceSetup): number {
+    return simulatePlayerLaps(build, lapCount, track, setup.totalDelta).reduce((sum, lap) => sum + lap.time, 0);
+  }
+
+  it("selects the exact global-minimum-time legal combination, verified by independent brute force", () => {
+    const build = fourDistinctFamilyBuild();
+    const track = generateTrack(7, 2);
+    const context = { encounterId: "rival-encounter", lapCount: 10 };
+    const input = { run: {} as Run, encounterId: context.encounterId, build, track, eligibleControls: deriveEligibleSetupControls(build), initialSelections: {} };
+
+    const allSelections = bruteForceLegalSelections(build);
+    expect(allSelections.length).toBeLessThanOrEqual(243);
+    const times = allSelections.map((selections) => {
+      const setup = lockRaceSetup(input, selections) as LockedRaceSetup;
+      return { selections, time: totalTime(build, track, context.lapCount, setup) };
+    });
+    const minTime = Math.min(...times.map((entry) => entry.time));
+    const tiedWinners = times.filter((entry) => entry.time === minTime);
+    // The first-enumerated tied winner (canonical family order, then
+    // low/balanced/high) is the one the contract requires.
+    const expectedSelections = tiedWinners[0].selections;
+
+    const result = selectGeneratedRivalSetup(build, track, context);
+
+    expect(totalTime(build, track, context.lapCount, result)).toBe(minTime);
+    expect(lockRaceSetup(input, expectedSelections)).toEqual(result);
+  });
+
+  it("delegates to the same lockRaceSetup/simulatePlayerLaps humans use — resulting setup validates cleanly", () => {
+    const build = fourDistinctFamilyBuild();
+    const track = generateTrack(7, 2);
+    const context = { encounterId: "rival-encounter", lapCount: 10 };
+    const result = selectGeneratedRivalSetup(build, track, context);
+
+    expect(result.rulesVersion).toBe("race-setup-v1");
+    expect(result.encounterId).toBe(context.encounterId);
+    expect(result.trackId).toBe(track.id);
+  });
+
+  it("is pure and deterministic: identical inputs produce a deeply equal result", () => {
+    const build = fourDistinctFamilyBuild();
+    const track = generateTrack(7, 2);
+    const context = { encounterId: "rival-encounter", lapCount: 10 };
+
+    const first = selectGeneratedRivalSetup(build, track, context);
+    const second = selectGeneratedRivalSetup(build, track, context);
+
+    expect(second).toEqual(first);
+  });
+
+  it("always includes the universal Driver Aggression control, even for a build with no configurable items", () => {
+    const build = zeroConfigurableBuild();
+    const track = generateTrack(7, 1);
+    const result = selectGeneratedRivalSetup(build, track, { encounterId: "e", lapCount: 10 });
+
+    expect(result.controls.map((control) => control.family)).toEqual(["driver-aggression"]);
+  });
+
 });

@@ -4,23 +4,28 @@ import { installedItems } from "../simulation/slots";
 import {
   buildNCarPlaybackSchedule,
   nCarFrameStateAt,
+  updateLiveProjection,
   type CarProgress,
+  type LiveProjectionState,
   type NCarPlaybackSchedule,
-  type RankedCar,
 } from "../simulation/playback";
-import { generateTrack, pointAtProgress } from "../simulation/tracks";
+import { pointAtProgress } from "../simulation/tracks";
 import {
   SLOT_CAPACITY,
   type NCarContestResult,
   type OfferedItem,
+  type VehicleBuild,
+  type LockedRaceSetup,
 } from "../simulation/types";
 import type { Run } from "../simulation/run";
-import { standingsRows } from "./contestFormatting";
 import { createItemCard, createItemInspector } from "./itemVisuals";
 import { resolvedItemEvidence, type ItemPresentationContext } from "./itemPresentation";
 import { contestSceneInput, raceLapLabel } from "./runPresentation";
 import { addDemoBackdrop, addRunStamp, DISPLAY_FONT, UI_FONT } from "./demoTheme";
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
+import { recordedLapVehicleStatModel, vehicleItemLookup } from "./vehicleStatPresentation";
+import { createVehicleStatPanel } from "./vehicleStatVisuals";
+import { projectionPresentation } from "./raceProjectionPresentation";
 
 const BOARD_SLOT_WIDTH = 190;
 const BOARD_SLOT_HEIGHT = 58;
@@ -50,22 +55,28 @@ export class ContestScene extends Phaser.Scene {
   private trails = new Map<string, { x: number; y: number }[]>();
   private trailGraphics?: Phaser.GameObjects.Graphics;
   private playerLapLabel?: Phaser.GameObjects.Text;
-  private standingsTexts: Phaser.GameObjects.Text[] = [];
+  private projectionState: LiveProjectionState = { kind: "awaiting-first-split", label: "Awaiting Lap 1 Split" };
+  private projectionHeadlineText?: Phaser.GameObjects.Text;
+  private projectionSplitText?: Phaser.GameObjects.Text;
+  private projectionAheadText?: Phaser.GameObjects.Text;
+  private projectionBehindText?: Phaser.GameObjects.Text;
+  private projectionChangeText?: Phaser.GameObjects.Text;
   private tickerText?: Phaser.GameObjects.Text;
   private boardHighlights = new Map<string, Phaser.GameObjects.Rectangle>();
   private lastRenderedPlayerLapIndex = -1;
-  private previousStandings: RankedCar[] | null = null;
   private previousFinishedCarIds: string[] = [];
   private run?: Run;
   private encounterId?: string;
   private selectedItem?: OfferedItem;
   private itemInspector?: Phaser.GameObjects.Container;
+  private playedBuild?: VehicleBuild;
+  private vehicleStatPanel?: Phaser.GameObjects.Container;
 
   constructor() {
     super("ContestScene");
   }
 
-  create(data: { run?: Run; encounterId?: string }): void {
+  create(data: { run?: Run; encounterId?: string; setup?: LockedRaceSetup }): void {
     configureHiDpiScene(this);
     if (!data.run || !data.encounterId) {
       this.scene.start("RunScene", { unavailable: true });
@@ -81,13 +92,18 @@ export class ContestScene extends Phaser.Scene {
 
     this.run = input.run;
     this.encounterId = input.encounterId;
-    this.result = resolveContest(input.build, input.rivalRoster, input.level, input.seed, input.lapCount);
-    const track = generateTrack(input.seed, input.level);
-    this.schedule = buildNCarPlaybackSchedule(this.result, track);
+    this.playedBuild = input.build;
+    this.result = resolveContest(
+      input.build, input.rivalRoster, input.level, input.seed, input.lapCount, data.setup, input.encounterId,
+    );
+    // 027-race-legibility-integrity (contract §1): playback reads the
+    // contest's own retained track — it never regenerates one independently,
+    // even though generateTrack is pure and would agree given the same seed.
+    this.schedule = buildNCarPlaybackSchedule(this.result, this.result.track);
     this.elapsedSeconds = 0;
     this.lastRenderedPlayerLapIndex = -1;
-    this.previousStandings = null;
     this.previousFinishedCarIds = [];
+    this.projectionState = { kind: "awaiting-first-split", label: "Awaiting Lap 1 Split" };
     this.trails.clear();
     this.renderTrack(installedItems(input.build), input.lapCount);
   }
@@ -98,12 +114,18 @@ export class ContestScene extends Phaser.Scene {
     }
 
     this.elapsedSeconds += delta / 1000;
+    // 027-race-legibility-integrity Decision 9: previousStandings is always
+    // null here — the retired live standings table was the only reason to
+    // track it, and passing null permanently disables deriveTickerLines'
+    // frame-level "took-lead" commentary without touching that shared
+    // function (finish-line detection below is unaffected; it only depends
+    // on previousFinishedCarIds and a freshly computed `standings`).
     const frame = nCarFrameStateAt(
       this.schedule,
       this.result,
       this.elapsedSeconds,
       this.lastRenderedPlayerLapIndex,
-      this.previousStandings,
+      null,
       this.previousFinishedCarIds,
     );
     frame.cars.forEach((car) => {
@@ -113,17 +135,28 @@ export class ContestScene extends Phaser.Scene {
     this.renderTrails();
     const player = frame.cars.find((car) => car.role === "player")!;
     this.playerLapLabel?.setText(raceLapLabel("YOU", player.progress, this.result.lapCount));
-    this.renderStandings(frame.standings);
-    if (frame.newTickerLines.length > 0) {
+    // 027-race-legibility-integrity (US1/US2, contract §3, Decision 9): the
+    // projection publishes at most once per completed player lap and holds
+    // otherwise — never per-frame, unlike the retired live standings table.
+    // A checkpoint change is this frame's headline news for the ticker;
+    // player-fired/finished lines (still valid, immutable-evidence facts)
+    // only get the ticker when no checkpoint just changed.
+    const nextProjectionState = updateLiveProjection(this.projectionState, this.result, player.progress);
+    if (nextProjectionState !== this.projectionState) {
+      this.projectionState = nextProjectionState;
+      this.renderProjection();
+      const presentation = projectionPresentation(this.projectionState);
+      this.tickerText?.setText([presentation.headline, presentation.changeLabel].filter(Boolean).join(" · "));
+    } else if (frame.newTickerLines.length > 0) {
       const latest = frame.newTickerLines[frame.newTickerLines.length - 1];
       this.tickerText?.setText(latest.text);
     }
-    this.previousStandings = frame.standings;
     this.previousFinishedCarIds = frame.cars.filter((car) => car.progress.finished).map((car) => car.id);
     if (player.progress.lapIndex !== this.lastRenderedPlayerLapIndex) {
       this.lastRenderedPlayerLapIndex = player.progress.lapIndex;
       frame.newCallouts.forEach((event) => this.flashBoardItem(event.item.id));
       this.renderItemInspector();
+      this.renderVehicleStatPanel();
     }
 
     if (frame.allFinished) {
@@ -151,11 +184,12 @@ export class ContestScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     this.add
-      .text(SIDEBAR_X, SIDEBAR_TOP_Y - 22, "STANDINGS", {
+      .text(SIDEBAR_X, SIDEBAR_TOP_Y - 22, "PROJECTED PACE", {
         fontSize: "12px",
         fontFamily: UI_FONT,
         fontStyle: "bold",
         color: "#d9483f",
+        wordWrap: { width: LOGICAL_WIDTH - SIDEBAR_X - 16 },
       })
       .setOrigin(0.5);
 
@@ -186,12 +220,25 @@ export class ContestScene extends Phaser.Scene {
       this.positionMarker(car.id, marker, start);
     });
 
-    this.standingsTexts = this.schedule!.cars.map((_car, index) =>
+    // 027-race-legibility-integrity (US1/US2): a fixed set of stable rows —
+    // never a reordering per-car list — updated only at completed-player-lap
+    // checkpoints (renderProjection), not once per animation frame.
+    const sidebarWidth = LOGICAL_WIDTH - SIDEBAR_X - 16;
+    const projectionRow = (index: number, options: { bold?: boolean; color?: string; size?: string } = {}) =>
       this.add.text(SIDEBAR_X, SIDEBAR_TOP_Y + index * SIDEBAR_ROW_HEIGHT, "", {
-        fontSize: "12px",
+        fontSize: options.size ?? "11px",
         fontFamily: UI_FONT,
-      }).setOrigin(0.5),
-    );
+        fontStyle: options.bold ? "bold" : "normal",
+        color: options.color ?? "#e6edf0",
+        align: "center",
+        wordWrap: { width: sidebarWidth },
+      }).setOrigin(0.5);
+    this.projectionHeadlineText = projectionRow(0, { bold: true, color: "#ffd447", size: "14px" });
+    this.projectionSplitText = projectionRow(1.3, { color: "#9eb5c9" });
+    this.projectionAheadText = projectionRow(2.3);
+    this.projectionBehindText = projectionRow(3.3);
+    this.projectionChangeText = projectionRow(4.3, { bold: true });
+    this.renderProjection();
 
     this.playerLapLabel = this.add.text(60, 336, `YOU · LAP 1/${lapCount}`, {
       fontSize: "14px",
@@ -206,6 +253,7 @@ export class ContestScene extends Phaser.Scene {
       color: "#cfd8d6",
     }).setOrigin(0.5);
     this.renderBoard(board);
+    this.renderVehicleStatPanel();
   }
 
   private positionMarker(carId: string, marker: Phaser.GameObjects.Image, progress: CarProgress): void {
@@ -235,16 +283,20 @@ export class ContestScene extends Phaser.Scene {
     });
   }
 
-  private renderStandings(standings: Parameters<typeof standingsRows>[0]): void {
-    const rows = standingsRows(standings, this.schedule!.cars);
-    rows.forEach((row, index) => {
-      const text = this.standingsTexts[index];
-      if (!text) return;
-      text
-        .setText(row.label)
-        .setColor(row.isPlayer ? "#ffd447" : row.color)
-        .setFontStyle(row.isPlayer ? "bold" : "normal");
-    });
+  /**
+   * Renders the current `projectionState` into the five fixed sidebar rows
+   * (025-vehicle-stat-display's sibling feature 027, US1/US2). Called once
+   * at scene creation (Awaiting Lap 1 Split) and again only when
+   * `updateLiveProjection` actually publishes a new checkpoint — never once
+   * per animation frame, unlike the retired standingsAt-driven table.
+   */
+  private renderProjection(): void {
+    const presentation = projectionPresentation(this.projectionState);
+    this.projectionHeadlineText?.setText(presentation.headline);
+    this.projectionSplitText?.setText(presentation.splitLabel ?? "");
+    this.projectionAheadText?.setText(presentation.aheadLabel ?? "");
+    this.projectionBehindText?.setText(presentation.behindLabel ?? "");
+    this.projectionChangeText?.setText(presentation.changeLabel ?? "");
   }
 
   private strokeClosedPath(graphics: Phaser.GameObjects.Graphics, points: readonly { x: number; y: number }[]): void {
@@ -320,6 +372,33 @@ export class ContestScene extends Phaser.Scene {
     this.itemInspector = createItemInspector(this, LOGICAL_WIDTH / 2, 304, this.selectedItem, context, {
       width: LOGICAL_WIDTH - 48, height: 112,
     }).setDepth(80);
+  }
+
+  /**
+   * The player's effective four-stat profile for the currently inspected lap
+   * (025-vehicle-stat-display US3). Reads `PlayerLap.physics` only — never
+   * recomputes physics — and refreshes at the same authoritative lap
+   * boundary as the item inspector above, not once per animation frame
+   * (contract §5, research.md Decision 4).
+   */
+  private renderVehicleStatPanel(): void {
+    this.vehicleStatPanel?.destroy();
+    this.vehicleStatPanel = undefined;
+    if (!this.result || !this.playedBuild) return;
+    const player = this.result.cars.find((car) => car.role === "player");
+    if (!player) return;
+    const lapIndex = Phaser.Math.Clamp(this.lastRenderedPlayerLapIndex, 0, Math.max(0, player.laps.length - 1));
+    const lap = player.laps[lapIndex];
+    const model = recordedLapVehicleStatModel({
+      lap: lapIndex + 1,
+      lapCount: this.result.lapCount,
+      contextKind: "race-lap",
+      physics: lap?.physics,
+      itemLookup: vehicleItemLookup(this.playedBuild),
+    });
+    this.vehicleStatPanel = createVehicleStatPanel(this, SIDEBAR_X + 30, 315, model, {
+      viewport: { width: 150, height: 120 },
+    }).setDepth(70);
   }
 
   private flashBoardItem(itemId: string): void {

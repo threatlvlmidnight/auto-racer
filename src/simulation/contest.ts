@@ -1,7 +1,8 @@
 import { simulatePlayerLaps } from "./laps";
-import { resolveRivalBuild } from "./rivals";
+import { resolveRivalBuild, selectGeneratedRivalSetup } from "./rivals";
 import { installedItems, storedItems } from "./slots";
 import { generateTrack } from "./tracks";
+import type { Track } from "./tracks";
 import {
   LAP_COUNT,
   type Build,
@@ -9,6 +10,7 @@ import {
   type ContestOutcome,
   type ContestResult,
   type NCarContestResult,
+  type LockedRaceSetup,
   type RivalProfile,
   type SampleGhost,
 } from "./types";
@@ -48,7 +50,21 @@ const REQUIRED_RIVAL_COUNT = 7;
  *  4. Order-independence — only the active item set matters.
  *  5. No side effects — build and ghost are only read, never mutated.
  */
-export function resolveContest(build: Build, ghost: SampleGhost, lapCount?: number): ContestResult;
+/**
+ * 028-pre-race-setup FR-012D/E, contract §8: `track`/`setup` are additive
+ * optional parameters — every pre-028 2-arg/3-arg call site keeps its exact
+ * legacy no-track-physics output. Setup-origin Test Day is the only caller
+ * that supplies both, applying the exact retained upcoming track and a
+ * temporary locked setup snapshot through the same lap-stat fold as scored
+ * contests.
+ */
+export function resolveContest(
+  build: Build,
+  ghost: SampleGhost,
+  lapCount?: number,
+  track?: Track,
+  setup?: LockedRaceSetup,
+): ContestResult;
 /**
  * Resolve a scored N-car contest between the player and exactly 7 rival
  * profiles (012-multi-ghost-contest, contract §3). Pure and deterministic:
@@ -63,28 +79,54 @@ export function resolveContest(
   level: number,
   seed: number,
   lapCount?: number,
+  setup?: LockedRaceSetup,
+  /**
+   * 028-pre-race-setup FR-018/018A: when provided, every rival also
+   * receives its own deterministic generated setup (contract §6) bound to
+   * this encounter ID. Omitted only by explicitly legacy callers/fixtures
+   * (contract §5) — those keep exact pre-028 rival behavior (all-zero,
+   * no `CarResult.setup`) with zero code changes on their part.
+   */
+  encounterId?: string,
 ): NCarContestResult;
 export function resolveContest(
   build: Build,
   second: SampleGhost | readonly RivalProfile[],
   third?: number,
-  fourth?: number,
-  fifth?: number,
+  fourth?: number | Track,
+  fifth?: number | LockedRaceSetup,
+  sixth?: LockedRaceSetup,
+  seventh?: string,
 ): ContestResult | NCarContestResult {
   if (Array.isArray(second)) {
-    return resolveNCarContest(build, second, third ?? 1, fourth ?? 0, fifth ?? LAP_COUNT);
+    return resolveNCarContest(
+      build, second, third ?? 1, (fourth as number | undefined) ?? 0, (fifth as number | undefined) ?? LAP_COUNT,
+      sixth, seventh,
+    );
   }
-  return resolveLegacyContest(build, second as SampleGhost, third ?? LAP_COUNT);
+  return resolveLegacyContest(
+    build, second as SampleGhost, third ?? LAP_COUNT, fourth as Track | undefined, fifth as LockedRaceSetup | undefined,
+  );
 }
 
-function resolveLegacyContest(build: Build, ghost: SampleGhost, lapCount: number): ContestResult {
+function resolveLegacyContest(
+  build: Build,
+  ghost: SampleGhost,
+  lapCount: number,
+  track?: Track,
+  setup?: LockedRaceSetup,
+): ContestResult {
   const ghostLaps = ghostLapTimes(ghost, lapCount);
-  const laps = simulatePlayerLaps(build, lapCount).map((playerLap, index) => ({
+  const laps = simulatePlayerLaps(build, lapCount, track, setup?.totalDelta).map((playerLap, index) => ({
     lap: index + 1,
     playerLapTime: playerLap.time,
     ghostLapTime: ghostLaps[index],
     firedItems: playerLap.firedItems,
     contributions: playerLap.contributions,
+    // 028-pre-race-setup: only populated when a caller supplies `track`
+    // (setup-origin Test Day) — every existing no-track call site keeps
+    // `physics: undefined`, matching its exact pre-028 lap shape.
+    physics: playerLap.physics,
   }));
   const playerTime = laps.reduce((sum, lap) => sum + lap.playerLapTime, 0);
   const ghostTime = laps.reduce((sum, lap) => sum + lap.ghostLapTime, 0);
@@ -111,6 +153,8 @@ function resolveNCarContest(
   level: number,
   seed: number,
   lapCount: number,
+  setup?: LockedRaceSetup,
+  encounterId?: string,
 ): NCarContestResult {
   if (rivalRoster.length !== REQUIRED_RIVAL_COUNT) {
     throw new ContestResolutionError(
@@ -125,7 +169,7 @@ function resolveNCarContest(
   // rendering-side generateTrack call, which given the same (seed, level)
   // always agrees with this one since generateTrack is pure.
   const track = generateTrack(seed, level);
-  const playerLaps = simulatePlayerLaps(playerBuild, lapCount, track);
+  const playerLaps = simulatePlayerLaps(playerBuild, lapCount, track, setup?.totalDelta);
   const rosterOrder: Omit<CarResult, "position" | "gapToLeader">[] = [
     {
       id: "player",
@@ -134,9 +178,18 @@ function resolveNCarContest(
       color: PLAYER_COLOR,
       time: playerLaps.reduce((sum, lap) => sum + lap.time, 0),
       laps: playerLaps,
+      // 028-pre-race-setup: per-car evidence — never shared with rivals (contract §4/§10).
+      ...(setup ? { setup } : {}),
     },
     ...rivalRoster.map((profile) => {
-      const rivalLaps = simulatePlayerLaps(resolveRivalBuild(profile, level, seed), lapCount, track);
+      const rivalBuild = resolveRivalBuild(profile, level, seed);
+      // 028-pre-race-setup FR-018/018A: each rival gets its own deterministic
+      // generated setup only when the caller supplied an encounterId to bind
+      // it to (contract §5's legacy allowance for callers that don't).
+      const rivalSetup = encounterId
+        ? selectGeneratedRivalSetup(rivalBuild, track, { encounterId, lapCount })
+        : undefined;
+      const rivalLaps = simulatePlayerLaps(rivalBuild, lapCount, track, rivalSetup?.totalDelta);
       return {
         id: profile.id,
         role: "rival" as const,
@@ -144,6 +197,7 @@ function resolveNCarContest(
         color: profile.color,
         time: rivalLaps.reduce((sum, lap) => sum + lap.time, 0),
         laps: rivalLaps,
+        ...(rivalSetup ? { setup: rivalSetup } : {}),
       };
     }),
   ];
@@ -173,5 +227,11 @@ function resolveNCarContest(
     outcome,
     board: installedItems(playerBuild).filter((item): item is NonNullable<typeof item> => item !== null),
     storage: storedItems(playerBuild).filter((item): item is NonNullable<typeof item> => item !== null),
+    // 027-race-legibility-integrity: the exact track every car above was
+    // just simulated against, and the exact roster order (rosterOrder,
+    // pre-sort) used to break the ties above — both retained as immutable
+    // evidence rather than left for a caller to regenerate or reconstruct.
+    track,
+    tieBreakOrder: rosterOrder.map((entry) => entry.id),
   };
 }

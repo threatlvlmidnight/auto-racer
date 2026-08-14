@@ -19,6 +19,7 @@ import {
 } from "../../src/simulation/run";
 import type { ContestResult, EntrantId, RunIdentity, VehicleBuild } from "../../src/simulation/types";
 import { createEmptyVehicleBuild } from "../../src/simulation/build";
+import { commitSetupMemory, initialSetupSelections } from "../../src/simulation/raceSetup";
 import {
   canEnterEntrantSelection,
   createRunForEntrant,
@@ -935,5 +936,80 @@ describe("completePvpEncounter interest wiring (US2)", () => {
     const interestTx = completed.creditTransactions.find((tx) => tx.kind === "interest");
 
     expect(interestTx!.amount).toBe(interestFor(50));
+  });
+});
+
+// 028-pre-race-setup T060: RunSetupMemory (contract §7, FR-012A-C).
+describe("028-pre-race-setup: RunSetupMemory (T060)", () => {
+  it("a freshly created run has no setup memory — disabled by default (new-run reset)", () => {
+    const run = newRun();
+    expect(run.setupMemory).toBeUndefined();
+  });
+
+  it("commitSetupMemory(enabled=false) never writes a selection, even for eligible families", () => {
+    const run = newRun();
+    const committed = commitSetupMemory(run, { "driver-aggression": "low" }, false);
+    expect(committed.setupMemory).toEqual({ enabled: false, selections: {} });
+  });
+
+  it("commitSetupMemory(enabled=true) writes exactly the given family-keyed selections (Start-Race-only write)", () => {
+    const run = newRun();
+    const committed = commitSetupMemory(run, { "driver-aggression": "low", "gearing": "high" }, true);
+    expect(committed.setupMemory).toEqual({
+      enabled: true,
+      selections: { "driver-aggression": "low", "gearing": "high" },
+    });
+  });
+
+  it("initialSetupSelections restores remembered positions only for currently eligible controls", () => {
+    const memory = { enabled: true, selections: { "driver-aggression": "low" as const, "gearing": "high" as const } };
+    const eligible = [{ family: "driver-aggression" as const, label: "Driver Aggression", sourceItemIds: [], magnitude: 1, positions: [] }];
+
+    expect(initialSetupSelections(eligible, memory)).toEqual({ "driver-aggression": "low" });
+  });
+
+  it("initialSetupSelections defaults to empty (Balanced) when memory is disabled", () => {
+    const memory = { enabled: false, selections: { "driver-aggression": "low" as const } };
+    const eligible = [{ family: "driver-aggression" as const, label: "Driver Aggression", sourceItemIds: [], magnitude: 1, positions: [] }];
+
+    expect(initialSetupSelections(eligible, memory)).toEqual({});
+  });
+
+  it("initialSetupSelections defaults to empty when no memory exists at all", () => {
+    expect(initialSetupSelections([], undefined)).toEqual({});
+  });
+
+  it("a dormant remembered value (family currently ineligible) is never surfaced as an initial selection", () => {
+    const memory = { enabled: true, selections: { "gearing": "high" as const } };
+    const eligibleWithoutGearing = [{ family: "driver-aggression" as const, label: "Driver Aggression", sourceItemIds: [], magnitude: 1, positions: [] }];
+
+    expect(initialSetupSelections(eligibleWithoutGearing, memory)).toEqual({});
+  });
+
+  it("a dormant value returns once its family becomes eligible again, without a fresh commit (reactivation)", () => {
+    const memory = { enabled: true, selections: { "gearing": "high" as const } };
+    const eligibleWithGearing = [
+      { family: "driver-aggression" as const, label: "Driver Aggression", sourceItemIds: [], magnitude: 1, positions: [] },
+      { family: "gearing" as const, label: "Gearing", sourceItemIds: ["some-item"], magnitude: 1, positions: [] },
+    ];
+
+    expect(initialSetupSelections(eligibleWithGearing, memory)).toEqual({ gearing: "high" });
+  });
+
+  it("commitSetupMemory merges into (never replaces) prior memory, preserving dormant entries untouched", () => {
+    const run = { ...newRun(), setupMemory: { enabled: true, selections: { "gearing": "high" as const } } };
+    const committed = commitSetupMemory(run, { "driver-aggression": "low" }, true);
+
+    expect(committed.setupMemory).toEqual({
+      enabled: true,
+      selections: { "gearing": "high", "driver-aggression": "low" },
+    });
+  });
+
+  it("disabling the checkbox stops future writes but does not erase what was already remembered", () => {
+    const run = { ...newRun(), setupMemory: { enabled: true, selections: { "gearing": "high" as const } } };
+    const committed = commitSetupMemory(run, { "driver-aggression": "low" }, false);
+
+    expect(committed.setupMemory).toEqual({ enabled: false, selections: { "gearing": "high" } });
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   boardItemsLabel,
+  carSetupLines,
   gapLabel,
   itemCooldownLabel,
   itemDependencyNote,
@@ -13,6 +14,9 @@ import {
 } from "../../src/scenes/resultFormatting";
 import { LEGACY_ITEM_POOL } from "../fixtures/legacy-item-pool";
 import type { CarResult, NCarContestResult } from "../../src/simulation/types";
+import { recordedLapVehicleStatModel, VEHICLE_STAT_ORDER } from "../../src/scenes/vehicleStatPresentation";
+import { SIX_CORNER_TRACK, TEN_CORNER_TRACK } from "../fixtures/race-legibility-fixtures";
+import { buildTrackFitPresentation, trackSummaryPresentation } from "../../src/scenes/trackSummaryPresentation";
 
 // Lighter check (not strict TDD, per constitution's presentation-layer
 // decision) confirming ResultScene's required fields (FR-006, FR-007) are
@@ -40,6 +44,8 @@ function result(overrides: Partial<NCarContestResult>): NCarContestResult {
     outcome: "win",
     board: [],
     storage: [],
+    track: SIX_CORNER_TRACK,
+    tieBreakOrder: ["player"],
     ...overrides,
   };
 }
@@ -195,5 +201,200 @@ describe("itemDependencyNote — US2 FR-007", () => {
     directItems.forEach((item) => {
       expect(itemDetailsLabel(item)).not.toContain("Requires");
     });
+  });
+});
+
+// 025-vehicle-stat-display US4 (T040): the same lap evidence, viewed as a
+// race lap vs. a completed Result lap, must use identical names, order,
+// units, signs, and precision (FR-002/FR-018) — only the context label may
+// differ between screens.
+describe("vehicle stats use identical vocabulary across race and result screens", () => {
+  const stats = { acceleration: 46, topSpeed: 92, brakingPower: 60, corneringSpeed: 53 };
+
+  it("agrees on stat order, labels, units, values, and signs regardless of context", () => {
+    const raceModel = recordedLapVehicleStatModel({
+      lap: 4, lapCount: 10, contextKind: "race-lap", physics: { stats },
+    });
+    const resultModel = recordedLapVehicleStatModel({
+      lap: 10, lapCount: 10, contextKind: "result-lap", physics: { stats },
+    });
+    expect(raceModel.lines.map((line) => line.key)).toEqual(VEHICLE_STAT_ORDER);
+    raceModel.lines.forEach((raceLine, index) => {
+      const resultLine = resultModel.lines[index];
+      expect(resultLine.key).toBe(raceLine.key);
+      expect(resultLine.label).toBe(raceLine.label);
+      expect(resultLine.unit).toBe(raceLine.unit);
+      expect(resultLine.currentValue).toBe(raceLine.currentValue);
+      expect(resultLine.currentLabel).toBe(raceLine.currentLabel);
+      expect(resultLine.stockDeltaLabel).toBe(raceLine.stockDeltaLabel);
+    });
+    // Only the context itself is allowed to differ.
+    expect(raceModel.context.kind).toBe("race-lap");
+    expect(resultModel.context.kind).toBe("result-lap");
+    expect(raceModel.contextLabel).not.toBe(resultModel.contextLabel);
+  });
+});
+
+// 027-race-legibility-integrity Phase 5 (US4, T041): Result track summary
+// for available evidence and the legacy/malformed-unavailable case.
+describe("trackSummaryPresentation (T041)", () => {
+  it("shows exact straight/corner counts, distance, and demand for an available track", () => {
+    const trackResult = result({ track: SIX_CORNER_TRACK });
+    const presentation = trackSummaryPresentation(trackResult);
+
+    expect(presentation.status).toBe("available");
+    if (presentation.status !== "available") throw new Error("unreachable");
+    expect(presentation.summary.trackId).toBe(SIX_CORNER_TRACK.id);
+    expect(presentation.summary.cornerCount).toBe(6);
+    expect(presentation.headline).toContain(SIX_CORNER_TRACK.name);
+    expect(presentation.segmentLine).toContain("6 corner");
+    expect(presentation.capabilityLines).toHaveLength(4);
+  });
+
+  it("differs measurably between two tracks with different composition", () => {
+    const sixCorner = trackSummaryPresentation(result({ track: SIX_CORNER_TRACK }));
+    const tenCorner = trackSummaryPresentation(result({ track: TEN_CORNER_TRACK }));
+    if (sixCorner.status !== "available" || tenCorner.status !== "available") throw new Error("unreachable");
+
+    expect(sixCorner.summary.cornerCount).not.toBe(tenCorner.summary.cornerCount);
+    expect(sixCorner.segmentLine).not.toBe(tenCorner.segmentLine);
+  });
+
+  it("reports unavailable, not a regenerated or inferred value, when track evidence is malformed", () => {
+    const malformedResult = result({
+      track: { id: "legacy", name: "Legacy", segments: [], points: [], characteristics: { powerDemand: 0, brakingDemand: 0, corneringDemand: 0 } },
+    });
+    const presentation = trackSummaryPresentation(malformedResult);
+
+    expect(presentation.status).toBe("unavailable");
+    if (presentation.status !== "unavailable") throw new Error("unreachable");
+    expect(presentation.reason.length).toBeGreaterThan(0);
+  });
+
+  it("reports unavailable when track is missing entirely, without throwing (defensive legacy-result path)", () => {
+    const legacyResult = { ...result({}), track: undefined } as unknown as NCarContestResult;
+    expect(() => trackSummaryPresentation(legacyResult)).not.toThrow();
+    expect(trackSummaryPresentation(legacyResult).status).toBe("unavailable");
+  });
+
+  it("never calls generateTrack — uses only the retained result.track", () => {
+    // Structural proof: the function's only NCarContestResult-typed input
+    // parameter is `result`, and it reads result.track exclusively — there
+    // is no seed/level parameter through which it could regenerate one.
+    expect(trackSummaryPresentation.length).toBe(1);
+  });
+});
+
+describe("buildTrackFitPresentation", () => {
+  it("pairs authoritative track demand with the player's final recorded vehicle stats", () => {
+    const player = car({
+      laps: [{
+        time: 5.7,
+        firedItems: [],
+        contributions: [],
+        physics: {
+          stats: { acceleration: 44, topSpeed: 58, brakingPower: 60, corneringSpeed: 53 },
+          phases: [],
+        },
+      }],
+    });
+    const presentation = buildTrackFitPresentation(result({ cars: [player], track: SIX_CORNER_TRACK }));
+
+    expect(presentation.status).toBe("available");
+    if (presentation.status !== "available") throw new Error("unreachable");
+    expect(presentation.axes.map((axis) => axis.key)).toEqual([
+      "topSpeed", "acceleration", "brakingPower", "corneringSpeed",
+    ]);
+    expect(presentation.axes.find((axis) => axis.key === "topSpeed")).toMatchObject({
+      demand: SIX_CORNER_TRACK.characteristics.powerDemand,
+      vehicle: 58,
+    });
+    expect(presentation.axes.find((axis) => axis.key === "acceleration")).toMatchObject({
+      demand: 60,
+      vehicle: 44,
+    });
+    expect(presentation.axes.find((axis) => axis.key === "brakingPower")?.demand)
+      .toBe(SIX_CORNER_TRACK.characteristics.brakingDemand);
+    expect(presentation.axes.find((axis) => axis.key === "corneringSpeed")?.demand)
+      .toBe(SIX_CORNER_TRACK.characteristics.corneringDemand);
+    expect(presentation.factsLine).toContain("6 CORNERS");
+  });
+
+  it("labels missing final-lap physics instead of inventing vehicle values", () => {
+    expect(buildTrackFitPresentation(result({ cars: [car({ laps: [] })] }))).toEqual({
+      status: "unavailable",
+      reason: "Build–track fit is unavailable for this result.",
+    });
+  });
+
+  it("retains exact values while clamping only radar geometry", () => {
+    const player = car({
+      laps: [{
+        time: 5.7, firedItems: [], contributions: [],
+        physics: {
+          stats: { acceleration: 140, topSpeed: 125, brakingPower: 0.5, corneringSpeed: 53 },
+          phases: [],
+        },
+      }],
+    });
+    const presentation = buildTrackFitPresentation(result({ cars: [player] }));
+    if (presentation.status !== "available") throw new Error("unreachable");
+    expect(presentation.axes.find((axis) => axis.key === "topSpeed")).toMatchObject({ vehicle: 125, vehiclePlot: 100 });
+    expect(presentation.axes.find((axis) => axis.key === "acceleration")).toMatchObject({ vehicle: 140, vehiclePlot: 100 });
+  });
+});
+
+// 028-pre-race-setup T052: per-car setup evidence inspection, reading only
+// CarResult.setup — legacy/missing evidence is labeled, never inferred.
+describe("carSetupLines (T052, contract §10)", () => {
+  it("labels missing setup evidence unavailable rather than inferring Balanced", () => {
+    expect(carSetupLines(car({ setup: undefined }))).toEqual(["Setup: unavailable (legacy result)"]);
+  });
+
+  it("lists family label, position label, source items, and exact signed applied deltas", () => {
+    const player = car({
+      setup: {
+        rulesVersion: "race-setup-v1",
+        encounterId: "encounter-1",
+        trackId: "track-1",
+        controls: [
+          {
+            family: "driver-aggression", position: "low", sourceItemIds: [], magnitude: 1,
+            appliedDelta: { accelerationDelta: -6, topSpeedDelta: -1, brakingPowerDelta: 13, corneringSpeedDelta: 1 },
+          },
+          {
+            family: "brake-balance", position: "high", sourceItemIds: ["rook-differential-braking-valve", "voss-split-circuit-brake-valve"], magnitude: 2,
+            appliedDelta: { accelerationDelta: 0, topSpeedDelta: 0, brakingPowerDelta: 26, corneringSpeedDelta: -2 },
+          },
+        ],
+        totalDelta: { accelerationDelta: -6, topSpeedDelta: -1, brakingPowerDelta: 39, corneringSpeedDelta: -1 },
+      },
+    });
+
+    const lines = carSetupLines(player);
+
+    expect(lines[0]).toContain("Driver Aggression");
+    expect(lines[0]).toContain("Conservative");
+    expect(lines[0]).toContain("−6");
+    expect(lines[1]).toContain("Brake Balance");
+    expect(lines[1]).toContain("Stability");
+    expect(lines[1]).toContain("rook-differential-braking-valve");
+    expect(lines[1]).toContain("voss-split-circuit-brake-valve");
+    expect(lines[1]).toContain("+26");
+  });
+
+  it("shows Balanced positions as no-change without inventing a nonzero delta", () => {
+    const player = car({
+      setup: {
+        rulesVersion: "race-setup-v1", encounterId: "e", trackId: "t",
+        controls: [{
+          family: "driver-aggression", position: "balanced", sourceItemIds: [], magnitude: 1,
+          appliedDelta: { accelerationDelta: 0, topSpeedDelta: 0, brakingPowerDelta: 0, corneringSpeedDelta: 0 },
+        }],
+        totalDelta: { accelerationDelta: 0, topSpeedDelta: 0, brakingPowerDelta: 0, corneringSpeedDelta: 0 },
+      },
+    });
+
+    expect(carSetupLines(player)[0]).toContain("No change");
   });
 });

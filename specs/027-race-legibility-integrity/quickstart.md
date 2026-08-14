@@ -59,3 +59,46 @@ npm run build
 - Marker geometry never becomes the ranking source.
 - Simulation, playback, and Results use the same retained track.
 - Missing track evidence is labeled unavailable, never regenerated.
+
+## Completion evidence
+
+- `npm test`: 887 passed (0 failed) — up from 780 before this feature (825
+  after feature 025). New coverage: 82 tests in `tests/unit/playback.test.ts`
+  (playback-integrity diagnosis T005-T010, `checkpointProjection`/
+  `latestCompletedPlayerLap`/`updateLiveProjection` T024-T028, the T052 full
+  lap-count/fixture sweep, the T053 additive-only-evidence proof), 17 tests
+  in `tests/unit/raceProjectionPresentation.test.ts` (marker identity T013/
+  T014, `projectionPresentation` T029, US5 no-hover/no-color T048/T049), 12
+  new tests in `tests/unit/tracks.test.ts` (`summarizeTrack` T038-T040, T049
+  demand-trait legibility), 3 tests in `tests/unit/race-legibility-
+  baseline.test.ts` (T001 pre-feature snapshot), and 5 new tests in `tests/
+  unit/contest.test.ts` / `tests/integration/result-scene.test.ts` (T015-
+  T018 evidence contract, T041 track-summary presentation).
+- `npm run lint` / `npm run build`: clean throughout.
+- Diagnosis outcome (T011, recorded in full in `research.md`): **zero
+  authoritative playback defects found**. `carProgressAt`, `pointAtProgress`,
+  `frameStateAt`, and `nCarFrameStateAt` all matched independent
+  calculation at every sampled boundary, wraparound, tie, and multi-boundary
+  jump. `src/simulation/playback.ts`'s pre-existing progress math required
+  no correction (T012 was a no-op); the real gaps were presentational
+  (marker identity, and the live standings table itself), both addressed by
+  this feature.
+- Manual browser verification: confirmed the retired live-reordering
+  standings sidebar is fully replaced by the stable "PROJECTED PACE" panel,
+  and that it correctly reads `Awaiting Lap 1 Split` at race start (the
+  FR-006 initial state). Test Day/Practice scenes (unaffected by this
+  feature) continued to render correctly throughout. **Full live-race
+  verification of a checkpoint publishing (lap 1 → lap 2 transition) and of
+  the Results track-summary panel was not obtained** — this environment's
+  backgrounded browser tab throttles `requestAnimationFrame` severely
+  (confirmed independently of any code change: 40+ seconds of real wait
+  advanced the 20-second full-field race animation only marginally), making
+  a full 10-lap race impractical to sit through via this tool. Confidence
+  instead rests on the 887-test suite, which independently re-derives and
+  checks every checkpoint/projection/track-summary value the same way the
+  quickstart's manual steps 4-8 describe.
+- One structural note for future work: `contestFormatting.ts`'s
+  `standingsRows` is no longer called by any scene (the sidebar it fed is
+  retired) but is kept, per T036, because `tests/unit/contestFormatting.test.ts`
+  still covers it as a pure formatter — delete only if a future pass
+  confirms it has no remaining purpose.

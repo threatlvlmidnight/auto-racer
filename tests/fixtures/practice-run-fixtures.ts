@@ -5,6 +5,9 @@ import type {
 } from "../../src/simulation/encounters";
 import { REPUTATION_START, runIdentityForEntrant, type Run, type RunStage } from "../../src/simulation/run";
 import { directRecurringPracticeBuild } from "./practice-fixtures";
+import { lockRaceSetup, raceSetupInput } from "../../src/simulation/raceSetup";
+import type { PracticeSetupSnapshot } from "../../src/simulation/practice";
+import type { LockedRaceSetup, SetupSelections } from "../../src/simulation/types";
 
 export type PracticeFixtureContext =
   | "run-hub"
@@ -191,6 +194,39 @@ export function pvpBriefingPracticeFixture(): PracticeRunFixture {
     run,
     selection: "start-race-control",
     navigation: navigation("pvp-briefing"),
+  };
+}
+
+export interface PreRaceSetupPracticeFixture extends PracticeRunFixture {
+  setupSnapshot: PracticeSetupSnapshot;
+}
+
+/**
+ * 028-pre-race-setup: a run at its active PvP encounter, plus a real
+ * temporary locked-setup snapshot exactly as PreRaceScene's openTestDay()
+ * would build one — for T066-T068's setup-origin Test Day coverage.
+ */
+export function preRaceSetupPracticeFixture(
+  selections: SetupSelections = { "driver-aggression": "low" },
+  rememberChecked = false,
+): PreRaceSetupPracticeFixture {
+  const base = pvpBriefingPracticeFixture();
+  const input = raceSetupInput(base.run, base.run.activeEncounter!.id);
+  const setup = lockRaceSetup(input, selections) as LockedRaceSetup;
+  const setupSnapshot: PracticeSetupSnapshot = {
+    origin: "pre-race-setup",
+    track: input.track,
+    setup,
+    draftSelections: selections,
+    rememberChecked,
+    focusFamily: "driver-aggression",
+  };
+  return {
+    context: "pvp-briefing",
+    run: base.run,
+    selection: "start-race-control",
+    navigation: navigation("pvp-briefing"),
+    setupSnapshot,
   };
 }
 

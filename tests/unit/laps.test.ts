@@ -1584,3 +1584,55 @@ describe("simulatePlayerLaps tiered physics contribution (T038, US5, SC-005)", (
     expect(tier3Lap.physics!.stats.acceleration).toBeGreaterThan(tier1Lap.physics!.stats.acceleration);
   });
 });
+
+// 028-pre-race-setup T025: setup deltas apply after item/buff/synergy/tier
+// resolution, before the positive-stat clamp/segment physics, and are never
+// themselves amplified.
+describe("simulatePlayerLaps setup delta application (T025, contract §4)", () => {
+  it("applies setupDeltas on top of the build's own resolved physics stats", () => {
+    const item = testItem({
+      id: "setup-delta-base-item", name: "Base Item", price: 0, timeModifier: 0,
+      physics: { brakingPowerDelta: 10 },
+    });
+    const track = generateTrack(3, 1);
+    const build = vehicleBuild([item]);
+    const withoutSetup = simulatePlayerLaps(build, LAP_COUNT, track)[0];
+    const withSetup = simulatePlayerLaps(build, LAP_COUNT, track, { brakingPowerDelta: 13, corneringSpeedDelta: -1 })[0];
+
+    expect(withSetup.physics!.stats.brakingPower).toBe(withoutSetup.physics!.stats.brakingPower + 13);
+    expect(withSetup.physics!.stats.corneringSpeed).toBe(withoutSetup.physics!.stats.corneringSpeed - 1);
+    expect(withSetup.physics!.stats.acceleration).toBe(withoutSetup.physics!.stats.acceleration);
+    expect(withSetup.physics!.stats.topSpeed).toBe(withoutSetup.physics!.stats.topSpeed);
+  });
+
+  it("clamps a setup-reduced stat at the same positive minimum as item deltas", () => {
+    const track = generateTrack(3, 1);
+    const build = vehicleBuild([]);
+    const laps = simulatePlayerLaps(build, LAP_COUNT, track, { corneringSpeedDelta: -100000 });
+
+    expect(laps[0].physics!.stats.corneringSpeed).toBe(1);
+  });
+
+  it("is not amplified by a stat-targeted Buff on the affected stat", () => {
+    const buff = testItem({
+      id: "setup-delta-buff", name: "Buff", price: 0, timeModifier: 0,
+      buff: { boostPercent: 999, targetStat: "brakingPower" },
+      physics: { brakingPowerDelta: 1 }, // gives the buff an eligible candidate to amplify
+    });
+    const track = generateTrack(3, 1);
+    const build = vehicleBuild([buff]);
+    const withoutSetup = simulatePlayerLaps(build, LAP_COUNT, track)[0];
+    const withSetup = simulatePlayerLaps(build, LAP_COUNT, track, { brakingPowerDelta: 13 })[0];
+
+    // The buff massively amplifies the item's own +1, but the setup's flat
+    // +13 must land unamplified — exactly +13 over the no-setup baseline.
+    expect(withSetup.physics!.stats.brakingPower).toBe(withoutSetup.physics!.stats.brakingPower + 13);
+  });
+
+  it("all-zero setupDeltas (the default) reproduces pre-028 output byte-for-byte", () => {
+    const track = generateTrack(3, 1);
+    const build = vehicleBuild([testItem({ id: "x", name: "X", price: 0, timeModifier: 0, physics: { topSpeedDelta: 4 } })]);
+
+    expect(simulatePlayerLaps(build, LAP_COUNT, track, {})).toEqual(simulatePlayerLaps(build, LAP_COUNT, track));
+  });
+});

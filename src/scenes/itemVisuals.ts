@@ -115,13 +115,20 @@ export function createItemCard(
         color: "#f1eee5",
         align: "left",
         wordWrap: { width: nameWidth },
+        maxLines: 2,
       },
     )
     .setOrigin(0, 0);
 
-  const metadata = scene.add.text(-options.width / 2 + 8, -options.height / 2 + (offerEmphasis ? 22 : 18),
+  // Long names may wrap to a second line. Flow metadata/effects from the actual
+  // rendered title height rather than fixed offsets so the shared compact card
+  // never prints its hierarchy on top of itself.
+  const metadataY = -options.height / 2 + 4 + name.height + 2;
+  const metadata = scene.add.text(-options.width / 2 + 8, metadataY,
     `${model.categoryLabel} · ${model.originLabel}${model.priceLabel ? ` · ${model.priceLabel}` : ""}`, {
       fontSize: offerEmphasis ? "10px" : "8px", fontFamily: UI_FONT, color: "#b8c0c2",
+      wordWrap: { width: options.width - 16 },
+      maxLines: 1,
     });
   const allEffectLines = model.effectLines.map((line) => {
     const marker = line.direction === "gain" ? "▲" : line.direction === "loss" ? "▼" : "◆";
@@ -130,7 +137,7 @@ export function createItemCard(
   const visibleLineLimit = 2;
   const hiddenLineCount = Math.max(0, allEffectLines.length - visibleLineLimit);
   const effectText = allEffectLines.slice(0, visibleLineLimit).join("\n");
-  const effects = scene.add.text(-options.width / 2 + 8, -options.height / 2 + (offerEmphasis ? 38 : 30), effectText, {
+  const effects = scene.add.text(-options.width / 2 + 8, metadataY + metadata.height + 3, effectText, {
     fontSize: offerEmphasis ? "11px" : "9px",
     fontFamily: UI_FONT,
     color: "#f1eee5",

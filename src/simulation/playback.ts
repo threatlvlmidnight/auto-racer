@@ -309,6 +309,165 @@ function deriveTickerLines(
   return lines;
 }
 
+// --- 027-race-legibility-integrity: equal-lap checkpoint projection -------
+// Replaces frame-level standings as the primary race ranking model
+// (contract §2/§3, Decision 1/2/6). Pure and framework-free: reads only
+// `NCarContestResult.cars[].laps` and `tieBreakOrder`, never a playback
+// schedule, visual time, or geometry.
+
+export type CheckpointProjectionErrorCode = "invalid-lap" | "malformed-laps";
+
+/** Typed, inspectable failure for an out-of-range lap or under-recorded car (contract §2). */
+export class CheckpointProjectionError extends Error {
+  constructor(
+    public readonly code: CheckpointProjectionErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "CheckpointProjectionError";
+  }
+}
+
+export interface CheckpointCar {
+  carId: string;
+  role: CarRole;
+  name: string;
+  color: string;
+  completedLap: number;
+  cumulativeTime: number;
+  position: number;
+  /** car.cumulativeTime - player.cumulativeTime, signed (data-model.md). */
+  gapToPlayer: number;
+}
+
+export interface CheckpointProjection {
+  completedLap: number;
+  lapCount: number;
+  /** Ranked ascending by cumulative time, ties broken by result.tieBreakOrder. */
+  cars: readonly CheckpointCar[];
+  playerPosition: number;
+  player: CheckpointCar;
+  ahead: CheckpointCar | null;
+  behind: CheckpointCar | null;
+}
+
+/**
+ * Every car's cumulative simulated time through exactly `completedLap`,
+ * ranked ascending and tie-broken by `result.tieBreakOrder` — the same
+ * policy the final result already uses (Decision 3). Never reads playback
+ * schedules, visual time, progress, or geometry (contract §2).
+ */
+export function checkpointProjection(
+  result: NCarContestResult,
+  completedLap: number,
+): CheckpointProjection {
+  if (!Number.isInteger(completedLap) || completedLap < 1 || completedLap > result.lapCount) {
+    throw new CheckpointProjectionError(
+      "invalid-lap",
+      `completedLap ${completedLap} must be an integer within 1..${result.lapCount}`,
+    );
+  }
+
+  const withCumulative = result.cars.map((car) => {
+    if (car.laps.length < completedLap) {
+      throw new CheckpointProjectionError(
+        "malformed-laps",
+        `Car ${car.id} has ${car.laps.length} recorded laps, fewer than the requested checkpoint ${completedLap}`,
+      );
+    }
+    const cumulativeTime = car.laps
+      .slice(0, completedLap)
+      .reduce((sum, lap) => sum + lap.time, 0);
+    return { car, cumulativeTime };
+  });
+
+  const tieBreakIndex = new Map(result.tieBreakOrder.map((id, index) => [id, index]));
+  const ranked = [...withCumulative].sort((a, b) =>
+    a.cumulativeTime - b.cumulativeTime
+    || (tieBreakIndex.get(a.car.id) ?? Number.MAX_SAFE_INTEGER) - (tieBreakIndex.get(b.car.id) ?? Number.MAX_SAFE_INTEGER)
+  );
+
+  const playerCumulative = withCumulative.find(({ car }) => car.role === "player")!.cumulativeTime;
+  const cars: CheckpointCar[] = ranked.map(({ car, cumulativeTime }, index) => ({
+    carId: car.id,
+    role: car.role,
+    name: car.name,
+    color: car.color,
+    completedLap,
+    cumulativeTime,
+    position: index + 1,
+    gapToPlayer: cumulativeTime - playerCumulative,
+  }));
+
+  const playerIndex = cars.findIndex((car) => car.role === "player");
+  const player = cars[playerIndex];
+  return {
+    completedLap,
+    lapCount: result.lapCount,
+    cars,
+    playerPosition: player.position,
+    player,
+    ahead: playerIndex > 0 ? cars[playerIndex - 1] : null,
+    behind: playerIndex < cars.length - 1 ? cars[playerIndex + 1] : null,
+  };
+}
+
+/**
+ * The player's own 1-indexed completed-lap count at one presentation
+ * instant — `CarProgress.lapIndex` already IS that count (0 before any lap
+ * completes, capped at `lapCount` once finished; see the T005 diagnosis in
+ * research.md for why the completing-lap instant reads this way).
+ */
+export function latestCompletedPlayerLap(progress: CarProgress, lapCount: number): number {
+  return Math.min(progress.lapIndex, lapCount);
+}
+
+const AWAITING_FIRST_SPLIT: LiveProjectionState = { kind: "awaiting-first-split", label: "Awaiting Lap 1 Split" };
+
+export type LiveProjectionState =
+  | { kind: "awaiting-first-split"; label: "Awaiting Lap 1 Split" }
+  | {
+    kind: "projected";
+    current: CheckpointProjection;
+    previous: CheckpointProjection | null;
+    change: "gained" | "lost" | "held" | "first-split";
+    /** Always >= 0; magnitude only — `change` already carries the direction. */
+    placesChanged: number;
+  };
+
+/**
+ * Publishes a new checkpoint projection only when the player's completed
+ * lap count has increased since `previous` — held stable otherwise, even
+ * across many repeated calls within the same lap (contract §3, Decision 2).
+ * A single call that spans several boundaries (a low-frame-rate update)
+ * publishes only the latest valid checkpoint once; no intermediate one is
+ * ever synthesized or replayed.
+ */
+export function updateLiveProjection(
+  previous: LiveProjectionState,
+  result: NCarContestResult,
+  playerProgress: CarProgress,
+): LiveProjectionState {
+  const latestLap = latestCompletedPlayerLap(playerProgress, result.lapCount);
+  if (latestLap < 1) {
+    return previous.kind === "awaiting-first-split" ? previous : AWAITING_FIRST_SPLIT;
+  }
+
+  const previousProjection = previous.kind === "projected" ? previous.current : null;
+  if (previousProjection && previousProjection.completedLap === latestLap) {
+    return previous;
+  }
+
+  const current = checkpointProjection(result, latestLap);
+  if (!previousProjection) {
+    return { kind: "projected", current, previous: null, change: "first-split", placesChanged: 0 };
+  }
+
+  const placesChanged = previousProjection.playerPosition - current.playerPosition;
+  const change = placesChanged > 0 ? "gained" : placesChanged < 0 ? "lost" : "held";
+  return { kind: "projected", current, previous: previousProjection, change, placesChanged: Math.abs(placesChanged) };
+}
+
 export function nCarFrameStateAt(
   schedule: NCarPlaybackSchedule,
   result: NCarContestResult,

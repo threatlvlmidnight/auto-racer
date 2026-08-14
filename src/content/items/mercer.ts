@@ -182,6 +182,8 @@ export const MERCER_ITEMS: readonly ItemDefinition[] = [
         delta: { corneringSpeedDelta: 6 },
       },
     ],
+    // 028-pre-race-setup FR-008D: exposes the steering-response control.
+    configurableSetup: { family: "steering-response", magnitude: 1 },
     fittedBehavior: NONE,
     improvisedBehavior: NONE_IMPROVISED,
   },

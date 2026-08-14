@@ -34,6 +34,7 @@ import {
   type ItemPhysicalContributionEvidence,
   type LapPhysicsEvidence,
   type OfferedItem,
+  type PhysicsCondition,
   type StatTarget,
   type SynergyResolution,
 } from "./types";
@@ -159,7 +160,7 @@ const MIN_PHYSICAL_STAT = 1;
  * exact, so this reduces to the pre-feature once-per-build computation
  * byte-for-byte (verified by US3's regression tests, not merely assumed).
  */
-function resolvePhysicalStats(
+export function resolvePhysicalStats(
   activeItems: readonly OfferedItem[],
   boostsByStat: Partial<Record<PhysicalStatTarget, number>>,
 ): PhysicalStats {
@@ -182,6 +183,100 @@ function resolvePhysicalStats(
     brakingPower: Math.max(MIN_PHYSICAL_STAT, STOCK_PHYSICAL_STATS.brakingPower + totals.brakingPower),
     corneringSpeed: Math.max(MIN_PHYSICAL_STAT, STOCK_PHYSICAL_STATS.corneringSpeed + totals.corneringSpeed),
   };
+}
+
+/** One flat physical-stat contribution, attributable to the held item that authored it (025-vehicle-stat-display). */
+export interface UnconditionalStatContribution {
+  sourceItemId: string;
+  stat: PhysicalStatTarget;
+  value: number;
+}
+
+/**
+ * A held item's physical-stat effect that cannot be resolved into the
+ * unconditional current total because it depends on a track segment (022-
+ * contextual-physics-effects) or on lap-to-lap stacking (023-stat-targeted-
+ * amplifiers) — both require a lap/track context this build-only resolution
+ * doesn't have (025-vehicle-stat-display spec.md Acceptance Scenario US1.4).
+ */
+export type ConditionalStatPotential =
+  | { kind: "track-segment"; sourceItemId: string; stat: PhysicalStatTarget; condition: PhysicsCondition; value: number }
+  | { kind: "lap-stacking"; sourceItemId: string; stat: PhysicalStatTarget; cooldown: number | undefined; boostPercent: number };
+
+export interface CurrentBuildPhysicalStatsResult {
+  stats: PhysicalStats;
+  contributions: readonly UnconditionalStatContribution[];
+  conditionalPotential: readonly ConditionalStatPotential[];
+}
+
+/**
+ * The build's current physical stats without any track/lap context: stock
+ * plus every active held item's own flat physics delta, amplified only by
+ * Buffs/Synergies whose magnitude is fully determined by the build alone
+ * (flat, count-synergy, and value-scaled — never a cooldown-stacking Buff,
+ * whose magnitude only exists lap over lap). ConditionalPhysics entries and
+ * stacking Buffs targeting a physical stat are surfaced as
+ * `conditionalPotential` instead of folded into `stats`, so preparation
+ * never claims an unresolved track- or lap-dependent bonus is active (025
+ * research.md Decision 2, contract §3).
+ */
+export function resolveCurrentBuildPhysicalStats(build: Build): CurrentBuildPhysicalStatsResult {
+  const synergyResolution = resolveSynergyEffects(build);
+  const locatedItems = buildLocatedItems(build, synergyResolution);
+  const activeLocatedItems = locatedItems.filter(({ active }) => active);
+  const activeItems = activeLocatedItems.map(({ item }) => item);
+  const allHeldItems = locatedItems.map(({ item }) => item);
+  const fittedValue = sumFittedValue(locatedItems.filter(({ area }) => area === "board").map(({ item }) => item));
+
+  const boostsByStat: Partial<Record<PhysicalStatTarget, number>> = {};
+  const conditionalPotential: ConditionalStatPotential[] = [];
+
+  activeItems.forEach((item, index) => {
+    if (!item.buff) return;
+    const targetStat = item.buff.targetStat;
+    if (!targetStat || targetStat === "time") return;
+    if (item.cooldown !== undefined && !isCountSynergyBuff(item)) {
+      conditionalPotential.push({
+        kind: "lap-stacking",
+        sourceItemId: item.id,
+        stat: targetStat,
+        cooldown: item.cooldown,
+        boostPercent: item.buff.boostPercent,
+      });
+      return;
+    }
+    const hasEligibleCandidate = activeItems.some(
+      (candidate, candidateIndex) => candidateIndex !== index && hasDeltaForStat(candidate, targetStat),
+    );
+    if (!hasEligibleCandidate) return;
+    const magnitude = isValueScaledBuff(item)
+      ? item.buff.boostPercent * fittedValue
+      : isCountSynergyBuff(item)
+        ? item.buff.boostPercent * matchingStatItemCount(allHeldItems, item, targetStat)
+        : item.buff.boostPercent;
+    boostsByStat[targetStat] = (boostsByStat[targetStat] ?? 0) + magnitude;
+  });
+
+  const contributions: UnconditionalStatContribution[] = [];
+  activeItems.forEach((item) => {
+    if (!item.physics) return;
+    const scaled = scaleAllStats(item.physics, boostsByStat);
+    (Object.keys(DELTA_KEY_FOR_STAT) as PhysicalStatTarget[]).forEach((stat) => {
+      const value = scaled[DELTA_KEY_FOR_STAT[stat]];
+      if (value) contributions.push({ sourceItemId: item.id, stat, value });
+    });
+  });
+
+  activeItems.forEach((item) => {
+    (item.conditionalPhysics ?? []).forEach((entry) => {
+      (Object.keys(DELTA_KEY_FOR_STAT) as PhysicalStatTarget[]).forEach((stat) => {
+        const value = entry.delta[DELTA_KEY_FOR_STAT[stat]];
+        if (value) conditionalPotential.push({ kind: "track-segment", sourceItemId: item.id, stat, condition: entry.condition, value });
+      });
+    });
+  });
+
+  return { stats: resolvePhysicalStats(activeItems, boostsByStat), contributions, conditionalPotential };
 }
 
 /** Applies every stat's own boostsByStat percent to a single delta object, once per stat key. */
@@ -219,11 +314,18 @@ function resolveConditionalPhysicsContributions(
     })));
 }
 
-export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: Track): PlayerLap[] {
-  // Computed once per build, before the per-lap loop — composition doesn't
-  // vary lap to lap (014-item-synergy-tags research.md Decision 3).
-  const synergyResolution = resolveSynergyEffects(build);
-  const locatedItems: LocatedItem[] = [
+/**
+ * Locates and resolves every held item's own effective form (tier, Fitted/
+ * Improvised installation, synergy) once per build — composition doesn't
+ * vary lap to lap (014-item-synergy-tags research.md Decision 3). Shared by
+ * `simulatePlayerLaps` and `resolveCurrentBuildPhysicalStats` (025-vehicle-
+ * stat-display) so both read one located-item truth rather than two.
+ */
+function buildLocatedItems(
+  build: Build,
+  synergyResolution: ReturnType<typeof resolveSynergyEffects>,
+): LocatedItem[] {
+  return [
     ...build.slots.flatMap((slot, index) => {
       if (!slot.item) return [];
       const installation = resolveInstallation(slot.item, slot.slotType);
@@ -249,6 +351,24 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: T
       }]
       : []),
   ];
+}
+
+export function simulatePlayerLaps(
+  build: Build,
+  lapCount = LAP_COUNT,
+  track?: Track,
+  /**
+   * 028-pre-race-setup contract §4: a locked setup's `totalDelta`, applied
+   * after every existing item/tier/installation/synergy/buff stat
+   * resolution and before the positive-stat clamp/segment physics — never
+   * itself amplified by tiers, buffs, or synergies (spec.md FR-004C,
+   * research.md Decision 3). All-zero (the default) reproduces pre-028
+   * Balanced/no-setup output byte-for-byte.
+   */
+  setupDeltas: ItemPhysicsContribution = {},
+): PlayerLap[] {
+  const synergyResolution = resolveSynergyEffects(build);
+  const locatedItems: LocatedItem[] = buildLocatedItems(build, synergyResolution);
   const activeLocatedItems = locatedItems.filter(({ active }) => active);
   const activeItems = activeLocatedItems.map(({ item }) => item);
   const allHeldItems = locatedItems.map(({ item }) => item);
@@ -407,7 +527,13 @@ export function simulatePlayerLaps(build: Build, lapCount = LAP_COUNT, track?: T
     let physicsStats: PhysicalStats | undefined;
     let physicsResult: ReturnType<typeof simulateLapPhysics> | undefined;
     if (track) {
-      physicsStats = resolvePhysicalStats(activeItems, lapBoosts.boostsByStat);
+      const baseStats = resolvePhysicalStats(activeItems, lapBoosts.boostsByStat);
+      physicsStats = {
+        acceleration: Math.max(MIN_PHYSICAL_STAT, baseStats.acceleration + (setupDeltas.accelerationDelta ?? 0)),
+        topSpeed: Math.max(MIN_PHYSICAL_STAT, baseStats.topSpeed + (setupDeltas.topSpeedDelta ?? 0)),
+        brakingPower: Math.max(MIN_PHYSICAL_STAT, baseStats.brakingPower + (setupDeltas.brakingPowerDelta ?? 0)),
+        corneringSpeed: Math.max(MIN_PHYSICAL_STAT, baseStats.corneringSpeed + (setupDeltas.corneringSpeedDelta ?? 0)),
+      };
       const conditionalPhysicsContributions =
         resolveConditionalPhysicsContributions(activeItems, lapBoosts.boostsByStat);
       physicsResult = simulateLapPhysics(physicsStats, track.segments, conditionalPhysicsContributions);

@@ -187,7 +187,7 @@ export class RunScene extends Phaser.Scene {
 
     if (this.run.activeEncounter?.type === "pvp") {
       this.addControl(width / 2, 220, `Enter ${this.run.activeEncounter.payload.kind === "pvp" ? this.run.activeEncounter.payload.lapCount : ""}-lap PvP`, () => {
-        this.scene.start("ContestScene", { run: this.run, encounterId: this.run.activeEncounter!.id });
+        this.scene.start("PreRaceScene", { run: this.run, encounterId: this.run.activeEncounter!.id });
       });
       this.addControl(width / 2, 285, "TEST DAY · UNSCORED", () => this.openTestDay("pvp-briefing"));
       return;

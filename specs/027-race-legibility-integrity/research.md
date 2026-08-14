@@ -107,6 +107,53 @@ final-result parity. Only then is the live table removed.
 **Why**: This distinguishes expected loop geometry from an actual defect and
 prevents presentation work from masking one.
 
+## Diagnosis (T011): no proven playback defect
+
+Ran the full T005-T010 integrity suite (`tests/unit/playback.test.ts`,
+54 tests) against unmodified `carProgressAt`, `pointAtProgress`,
+`frameStateAt`, and `nCarFrameStateAt` before any presentation change.
+Result: **zero authoritative defects**. Findings, per contract §4:
+
+- **T005 exact boundaries**: at a non-final boundary instant, `carProgressAt`
+  reports the *completing* lap's index at `lapProgress: 1` (not the next
+  lap's index at progress 0); the instant after, it correctly rolls to the
+  next lap at progress ≈0. This is intentional, matching `frameStateAt`'s own
+  `result.laps[player.lapIndex]` evidence lookup at the completion instant —
+  keep as-is, not a defect.
+- **T006 monotonicity**: nondecreasing across five varied schedules (uniform,
+  accelerating, decelerating, irregular, `MIN_VISUAL_LAP_SECONDS`-clamped)
+  sampled every 0.05s for the full animation window plus overrun — holds
+  everywhere.
+- **T007 spatial vs. rank**: `pointAtProgress(track, progress)` takes only
+  fractional progress (arity 2, no lap-index parameter) — two cars on
+  different laps at equal fractional progress render at the identical point.
+  Confirmed as expected closed-loop geometry (Decision 5), not a defect;
+  Phase 2's `raceProjectionPresentation.ts` (T013) adds the identity/lap
+  labeling this makes necessary.
+- **T008/T009 one-time events and low-frame-rate jumps**: entered-lap/callout
+  evidence fires exactly once per caller-recorded lap index, including after
+  a single jump spanning multiple boundaries — `carProgressAt` and
+  `frameStateAt` are both stateless and derive the correct final lap from
+  whatever time they're given, with no accumulation or replay risk. The
+  *publish-only-the-latest-checkpoint* requirement (contract §3) is a
+  property of `updateLiveProjection`, built fresh in Phase 4 — it has no
+  existing counterpart to diagnose here.
+- **T010 final vs. frame**: `resultFormatting.ts`'s functions
+  (`outcomeLabel`, `positionLabel`, `standingsRow`, etc.) already take only
+  `NCarContestResult`, never a frame/schedule — confirmed structurally
+  (no such parameter exists) and by value (a volatile/staggered fixture's
+  mid-race frame order is independent of, and never substituted for, the
+  final `result.cars` order already used by `ResultScene`).
+
+**Conclusion**: Phase 2 requires no changes to `src/simulation/playback.ts`
+(T012 is a no-op). The two real gaps this diagnosis surfaces are
+presentation gaps, not simulation defects: (1) markers need an explicit
+identity/lap-context label since screen position alone cannot communicate
+rank (addressed by T013's `raceProjectionPresentation.ts`), and (2) the
+*live* standings sidebar itself performs frame-level reordering — a design
+choice from `013-race-spectacle`, not a bug — which Phase 4 replaces per
+Decision 6.
+
 ## Decision 9: Stop frame-derived lead commentary
 
 Ticker messages caused only by frame-level `standingsAt` lead changes are

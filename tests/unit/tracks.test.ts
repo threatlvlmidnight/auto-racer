@@ -8,7 +8,9 @@ import {
   simulateLapPhysics,
   solveSpan,
   STOCK_PHYSICAL_STATS,
+  summarizeTrack,
   trackCharacteristics,
+  TrackSummaryError,
   type PhysicalStats,
   type Track,
   type TrackSegment,
@@ -620,6 +622,152 @@ describe("conditional physics resolution — simulateLapPhysics (T007-T011, US1,
 
         expect(boosted.totalSeconds).not.toBeCloseTo(baseline.totalSeconds, 6);
       });
+    });
+  });
+});
+
+// 027-race-legibility-integrity Phase 5 (US4, T038-T040): summarizeTrack is
+// pure, reuses cornerArcLength and retained characteristics, and never
+// introduces a new severity/length threshold (contract §6, Decision 7).
+
+describe("summarizeTrack: exact counts, distances, and angle statistics (T038)", () => {
+  it("counts straights and corners directly from segments, reconciling to segments.length", () => {
+    const track = generateTrack(1, 1);
+    const summary = summarizeTrack(track, 10);
+
+    expect(summary.straightCount + summary.cornerCount).toBe(track.segments.length);
+    expect(summary.straightCount).toBe(track.segments.filter((s) => s.kind === "straight").length);
+    expect(summary.cornerCount).toBe(track.segments.filter((s) => s.kind === "corner").length);
+  });
+
+  it("sums straight length directly and corner distance via the exact exported cornerArcLength", () => {
+    const track = generateTrack(1, 1);
+    const summary = summarizeTrack(track, 10);
+    const expectedStraight = track.segments
+      .filter((s): s is Extract<TrackSegment, { kind: "straight" }> => s.kind === "straight")
+      .reduce((sum, s) => sum + s.length, 0);
+    const expectedCorner = track.segments
+      .filter((s): s is Extract<TrackSegment, { kind: "corner" }> => s.kind === "corner")
+      .reduce((sum, s) => sum + cornerArcLength(s.turnDegrees), 0);
+
+    expect(summary.totalStraightDistance).toBeCloseTo(expectedStraight, 9);
+    expect(summary.totalCornerDistance).toBeCloseTo(expectedCorner, 9);
+    expect(summary.totalDistance).toBeCloseTo(expectedStraight + expectedCorner, 9);
+  });
+
+  it("computes exact min/max/mean corner angle without any severity bucket", () => {
+    const track = generateTrack(1, 1);
+    const summary = summarizeTrack(track, 10);
+    const angles = track.segments
+      .filter((s): s is Extract<TrackSegment, { kind: "corner" }> => s.kind === "corner")
+      .map((s) => s.turnDegrees);
+
+    expect(summary.minCornerDegrees).toBe(Math.min(...angles));
+    expect(summary.maxCornerDegrees).toBe(Math.max(...angles));
+    expect(summary.meanCornerDegrees).toBeCloseTo(angles.reduce((a, b) => a + b, 0) / angles.length, 9);
+  });
+
+  it("carries the track's own id/name and the given lapCount through unchanged", () => {
+    const track = generateTrack(7, 2);
+    const summary = summarizeTrack(track, 14);
+
+    expect(summary.trackId).toBe(track.id);
+    expect(summary.trackName).toBe(track.name);
+    expect(summary.lapCount).toBe(14);
+  });
+
+  it("is pure — identical (track, lapCount) always produces a deeply equal summary", () => {
+    const track = generateTrack(3, 1);
+    expect(summarizeTrack(track, 10)).toEqual(summarizeTrack(track, 10));
+  });
+
+  it("reconciles across a broad deterministic seed/stage matrix (T040)", () => {
+    for (let seed = 0; seed < 40; seed++) {
+      for (const level of [1, 2, 3]) {
+        const track = generateTrack(seed, level);
+        const summary = summarizeTrack(track, 10);
+        expect(summary.straightCount + summary.cornerCount).toBe(track.segments.length);
+        expect(summary.totalDistance).toBeCloseTo(summary.totalStraightDistance + summary.totalCornerDistance, 6);
+        expect(summary.cornerCount).toBeGreaterThanOrEqual(6);
+        expect(summary.cornerCount).toBeLessThanOrEqual(10);
+      }
+    }
+  });
+
+  it("rejects a track with zero segments", () => {
+    const empty: Track = { id: "empty", name: "Empty", segments: [], points: [], characteristics: { powerDemand: 0, brakingDemand: 0, corneringDemand: 0 } };
+    expect(() => summarizeTrack(empty, 10)).toThrow(TrackSummaryError);
+  });
+
+  it("rejects a track containing an unrecognized segment kind rather than silently under-counting", () => {
+    const malformed = {
+      id: "malformed", name: "Malformed",
+      segments: [{ kind: "straight", length: 100 }, { kind: "chicane", length: 50 }],
+      points: [], characteristics: { powerDemand: 50, brakingDemand: 0, corneringDemand: 50 },
+    } as unknown as Track;
+    expect(() => summarizeTrack(malformed, 10)).toThrow(TrackSummaryError);
+  });
+});
+
+describe("summarizeTrack: demand reuse and descriptive capability notes (T039)", () => {
+  it("reuses the track's own retained characteristics verbatim, computing nothing new", () => {
+    const track = generateTrack(1, 1);
+    const summary = summarizeTrack(track, 10);
+
+    expect(summary.demands).toEqual({
+      power: track.characteristics.powerDemand,
+      braking: track.characteristics.brakingDemand,
+      cornering: track.characteristics.corneringDemand,
+    });
+  });
+
+  it("emits exactly one descriptive note per one of the four established stats, using that vocabulary", () => {
+    const track = generateTrack(1, 1);
+    const summary = summarizeTrack(track, 10);
+
+    expect(summary.capabilityNotes.map((note) => note.stat).sort()).toEqual(
+      ["acceleration", "brakingPower", "corneringSpeed", "topSpeed"].sort(),
+    );
+    summary.capabilityNotes.forEach((note) => expect(note.text.length).toBeGreaterThan(0));
+  });
+
+  it("never claims an exact unrecorded time savings in a capability note (FR-018)", () => {
+    const track = generateTrack(1, 1);
+    const summary = summarizeTrack(track, 10);
+
+    summary.capabilityNotes.forEach((note) => {
+      expect(note.text).not.toMatch(/\d+(\.\d+)?\s*s\b/); // no "1.2s"-style time claim
+      expect(note.text.toLowerCase()).not.toContain("saves");
+    });
+  });
+
+  it("gives measurably different notes for a power-dominant vs. a cornering-dominant track", () => {
+    const powerTrack = generateTrack(143, 1); // powerDemand 60 (fixture search)
+    const corneringTrack = generateTrack(5, 1); // corneringDemand 64 (fixture search)
+    const powerSummary = summarizeTrack(powerTrack, 10);
+    const corneringSummary = summarizeTrack(corneringTrack, 10);
+
+    const topSpeedNote = (s: typeof powerSummary) => s.capabilityNotes.find((n) => n.stat === "topSpeed")!.text;
+    expect(topSpeedNote(powerSummary)).not.toBe(topSpeedNote(corneringSummary));
+  });
+});
+
+// 027-race-legibility-integrity US5 (T049): demand traits are plain numbers
+// and text — every value a monochrome/reduced-motion viewer needs is
+// already a string or number on the model, never a color-only channel.
+describe("summarizeTrack demand traits are readable without color (T049)", () => {
+  it("exposes power/braking/cornering demand as plain numbers, not a color-coded severity", () => {
+    const summary = summarizeTrack(generateTrack(1, 1), 10);
+    expect(typeof summary.demands.power).toBe("number");
+    expect(typeof summary.demands.braking).toBe("number");
+    expect(typeof summary.demands.cornering).toBe("number");
+  });
+
+  it("every capabilityNote is plain text carrying its own numeric evidence, not a color swatch", () => {
+    const summary = summarizeTrack(generateTrack(1, 1), 10);
+    summary.capabilityNotes.forEach((note) => {
+      expect(typeof note.text).toBe("string");
+      expect(note.text).toMatch(/\d/); // carries at least one concrete number
     });
   });
 });

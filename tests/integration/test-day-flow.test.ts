@@ -19,6 +19,7 @@ import {
 import { buildPlaybackSchedule, frameStateAt } from "../../src/simulation/playback";
 import {
   allPracticeRunFixtures,
+  preRaceSetupPracticeFixture,
   rewardDraftPracticeFixture,
   runHubPracticeFixture,
   supplierPracticeFixture,
@@ -234,5 +235,45 @@ describe("Test Day reduced-motion and playback-speed invariance", () => {
     expect(withFreshCallouts.player).toStrictEqual(withStaleCallouts.player);
     expect(withFreshCallouts.ghost).toStrictEqual(withStaleCallouts.ghost);
     expect(withFreshCallouts.liveGap).toBe(withStaleCallouts.liveGap);
+  });
+});
+
+// 028-pre-race-setup T067: setup-origin Test Day entry and exact return.
+describe("setup-origin Test Day entry and return (T067)", () => {
+  function beginSetupOrigin(fixture: ReturnType<typeof preRaceSetupPracticeFixture>) {
+    const context = createPracticeReturnContext(fixture.run, {
+      context: "pre-race-setup",
+      selection: fixture.selection,
+      navigation: fixture.navigation,
+      setupSnapshot: fixture.setupSnapshot,
+    });
+    return { context, session: createPracticeSession(fixture.run, context) };
+  }
+
+  it("carries the exact setup snapshot through the return context's protected origin state", () => {
+    const fixture = preRaceSetupPracticeFixture({ "driver-aggression": "high" }, true);
+    const { context } = beginSetupOrigin(fixture);
+
+    expect(context.originState.setupSnapshot).toEqual(fixture.setupSnapshot);
+    expect(context.route).toBe("PreRaceScene");
+  });
+
+  it("returns to the exact uncommitted draft selections, checkbox, and focus family — never the run's remembered/Balanced defaults", () => {
+    const fixture = preRaceSetupPracticeFixture({ "driver-aggression": "high" }, true);
+    const { session } = beginSetupOrigin(fixture);
+    const returned = practiceReturnData(fixture.run, cancelPracticeSession(session));
+
+    expect(returned.route).toBe("PreRaceScene");
+    expect(returned.originState.setupSnapshot).toEqual(fixture.setupSnapshot);
+    expect(returned.originState.setupSnapshot!.draftSelections).toEqual({ "driver-aggression": "high" });
+    expect(returned.originState.setupSnapshot!.rememberChecked).toBe(true);
+  });
+
+  it("supports repeated testing: entering, canceling, and re-entering reproduces the identical resolved result", () => {
+    const fixture = preRaceSetupPracticeFixture({ "driver-aggression": "low" });
+    const first = resolvePractice(beginSetupOrigin(fixture).session);
+    const second = resolvePractice(beginSetupOrigin(fixture).session);
+
+    expect(second.result!.contest).toEqual(first.result!.contest);
   });
 });

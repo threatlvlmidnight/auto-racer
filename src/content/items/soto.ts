@@ -210,6 +210,8 @@ export const SOTO_ITEMS: readonly ItemDefinition[] = [
     installationCategory: "power",
     synergyTags: ["gearing", "momentum"],
     physics: { accelerationDelta: 6, topSpeedDelta: 1 },
+    // 028-pre-race-setup FR-008E: exposes the gearing control.
+    configurableSetup: { family: "gearing", magnitude: 1 },
     fittedBehavior: NONE,
     improvisedBehavior: NONE_IMPROVISED,
   },

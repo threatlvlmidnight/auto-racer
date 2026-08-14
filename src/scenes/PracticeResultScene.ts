@@ -23,6 +23,7 @@ import { createItemCard, createItemInspector } from "./itemVisuals";
 import { resolvedItemEvidence, unresolvedPhysicalEvidence } from "./itemPresentation";
 import type { OfferedItem } from "../simulation/types";
 import { configureHiDpiScene, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "./layout";
+import { recordedLapVehicleStatModel } from "./vehicleStatPresentation";
 
 export interface PracticeResultSceneData {
   run?: Run;
@@ -78,6 +79,25 @@ export class PracticeResultScene extends Phaser.Scene {
         color: "#ffffff",
         align: "center",
       }).setOrigin(0.5);
+    // Same evidence ceiling as PracticeContestScene (research.md Decision 7)
+    // for the generic (no-track) Test Day path — honestly report unavailable
+    // (FR-019) in one compact line rather than a full panel. 028-pre-race-
+    // setup's setup-origin path resolves against a real track, so its laps
+    // do carry physics evidence; pass it through when present.
+    const finalLap = result.contest.laps[result.contest.laps.length - 1];
+    const statModel = recordedLapVehicleStatModel({
+      lap: model.laps.length, lapCount: result.contest.lapCount, contextKind: "test-day", physics: finalLap?.physics,
+    });
+    const statsLine = statModel.status === "unavailable"
+      ? `VEHICLE STATS · ${statModel.unavailableReason}`
+      : `VEHICLE STATS · ${statModel.lines.map((line) => `${line.compactLabel} ${line.currentLabel}`).join(" · ")}`;
+    this.add.text(width / 2, 150, statsLine, {
+      fontFamily: UI_FONT,
+      fontSize: "10px",
+      fontStyle: "italic",
+      color: "#9aa7ad",
+      wordWrap: { width: width - 48 },
+    }).setOrigin(0.5);
     const rows = model.laps.map((lap) =>
       `${lap.label} · ${model.contributions.filter((entry) => entry.lap === lap.lap).map((entry) => `${entry.itemName} ${entry.state} ${signed(entry.contribution)}s`).join(", ") || "no item contribution"}`
     );

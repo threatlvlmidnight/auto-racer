@@ -30,6 +30,14 @@ language and may be revised before final release.
 | Sponsor negotiation room | Sponsor Meeting | Quiet left option field | Accepted v1; sponsor meeting integrated |
 | Road circuit | Race playback, Test Day | Quiet upper band and lower tray | Accepted v1; scored race integrated |
 | Finish-line aftermath | Scored result, Test Day result, run summary | Quiet left result field | Accepted v1; scored result integrated |
+| Pre-race setup bay | Pre-race car setup | Empty left-center vehicle staging area; quiet center/lower control field; right stat-panel safe region | Accepted v2; feature 028 pre-race setup integrated |
+| British Isles regional circuit | Championship and Local Race playback | Broad wet-stone central circuit field; estate and hillside framing | Accepted v1; feature 029 integration pending |
+| Continental Europe regional circuit | Championship and Local Race playback | Broad pale central circuit field; boulevard and alpine framing | Accepted v1; feature 029 integration pending |
+| North America regional circuit | Championship and Local Race playback | Broad dirt central circuit field; timber grandstands and plains framing | Accepted v1; feature 029 integration pending |
+| South America regional circuit | Championship and Local Race playback | Broad dirt central circuit field; mountain-port and cycle workshop framing | Accepted v1; feature 029 integration pending |
+| Northern Europe regional circuit | Championship and Local Race playback | Broad rough central circuit field; forest, rock, and lake framing | Accepted v1; feature 029 integration pending |
+| Mediterranean and North Africa regional circuit | Championship and Local Race playback | Broad sunlit central circuit field; coastal town and cooling-workshop framing | Accepted v1; feature 029 integration pending |
+| Paris International Exhibition circuit | Championship finale playback | Broad formal central exhibition field; symmetrical grandstands and glass hall framing | Accepted v1; feature 029 integration pending |
 
 ## Reusable subject art
 
@@ -45,6 +53,44 @@ Accepted generated masters remain in `public/assets/backgrounds` for this
 first implementation pass. The code pass will produce or select runtime-sized
 derivatives, document focal positions, and enforce the feature's loading budget.
 Transparent subject art will be retained separately from full-scene backgrounds.
+
+### Feature 028 pre-race setup master
+
+- **File**: `public/assets/backgrounds/scenes/pre-race-setup.png`
+- **Dimensions**: 1672×941 RGB PNG
+- **SHA-256**: `760ac77469e1badb68aafbc4b2e79e9faf4e968c975d5214329889b031d54bd6`
+- **Generation path**: built-in image generation tool; project-bound master
+  copied from the generated-image workspace after original-resolution review.
+- **Final prompt**: Painterly sporting-editorial alternate-1901 motor-racing
+  paddock setup bay beneath a canvas-and-timber shelter; an entirely empty open
+  staging floor reserved for one of four runtime canonical vehicle sprites;
+  brass gauges, period tools, pumps and adjustable linkages around the edges;
+  upcoming road circuit visible beyond; calm low-contrast center/lower field
+  for up to five control rows and a quiet right region for vehicle stats; warm
+  overcast cream light, racing green, German silver, restrained red, brass,
+  timber and leather; no vehicle, wheel, chassis, body shell, people as featured
+  subjects, readable text, UI, opponents, modern equipment, flags, logos, or
+  watermark.
+
+### Feature 029 regional race masters
+
+All seven masters are 1672×941 RGB PNGs generated with the built-in image
+generation tool, reviewed at original resolution, and copied into
+`public/assets/backgrounds/regions`. Each uses the established painterly 1901
+sporting-editorial language, keeps the central circuit field compositionally
+quiet for runtime track geometry and racers, and excludes vehicles, people as
+featured subjects, readable text, UI, logos, flags, modern objects, and
+watermarks.
+
+| Region | File | SHA-256 | Distinguishing prompt direction |
+|---|---|---|---|
+| British Isles | `british-isles.png` | `809e801848a96491d72d10eafe5ac10f072ad36f2e28f77c27445af56c3579ef` | Rain-washed estate circuit, hedgerows, wet stone, rolling green hills, restrained overcast light |
+| Continental Europe | `continental-europe.png` | `d2bcc52245b52a92d0926ece0e5c6547e74d25839ed9cb16bc71d7f4879a1b37` | Belle Epoque workshop-town boulevard, alpine approaches, fitted ironwork, crisp clear light |
+| North America | `north-america.png` | `686c6c4a58cd3ac2ea0730392cf5960286bb04e2f4b83f721c97893a49920232` | Broad dirt fairground circuit, timber grandstands, water tower, windmill, open plains |
+| South America | `south-america.png` | `0adf3adccfe34dbb332b305d1195c1c0187f1112e5168990167981e52180a7fb` | Mountain-port circuit, cycle and motorcycle workshop details, lightweight local engineering character |
+| Northern Europe | `northern-europe.png` | `0f6e2a3a5677af031ac9236e36a38d3dbddd364307d357e841efd7dc491c21c4` | Forest-and-lake circuit, exposed rock, rough damp surface, timber suspension workshop shelter |
+| Mediterranean and North Africa | `mediterranean-north-africa.png` | `91915a392c9335aba26aa8cf202fce6459bb60cff72f03a94bc0c4887484e508` | Coastal stone town, dusty endurance ground, shaded cooling and airflow workshop equipment |
+| Paris International Exhibition | `paris-exhibition.png` | `2a154d5374c1c2889972cfbc6c408030c407f5e4d8b2e837421d1c3252bd0ac3` | Formal international exhibition ground, symmetrical grandstands, glass-and-iron hall, brass ceremony accents |
 
 ## First integration slice
 

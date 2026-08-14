@@ -538,3 +538,127 @@ export function pointAtProgress(track: Track, progress: number): TrackPoint {
     headingRadians: Math.atan2(end.y - start.y, end.x - start.x),
   };
 }
+
+// --- 027-race-legibility-integrity: authoritative track composition -------
+// summary for Results (contract §6, Decision 7). Pure and deterministic;
+// reuses cornerArcLength and the track's own retained characteristics —
+// introduces no new severity/length classification.
+
+export type TrackSummaryErrorCode = "empty-segments" | "unrecognized-segment-kind";
+
+/** Typed, inspectable failure so a malformed/legacy track never silently under-counts (spec.md Edge Cases). */
+export class TrackSummaryError extends Error {
+  constructor(
+    public readonly code: TrackSummaryErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "TrackSummaryError";
+  }
+}
+
+export type VehicleCapabilityStat = "acceleration" | "topSpeed" | "brakingPower" | "corneringSpeed";
+
+export interface CapabilityNote {
+  stat: VehicleCapabilityStat;
+  /** Descriptive track trait, never an exact unrecorded time claim (FR-018). */
+  text: string;
+}
+
+export interface TrackCompositionSummary {
+  trackId: string;
+  trackName: string;
+  lapCount: number;
+  straightCount: number;
+  cornerCount: number;
+  totalStraightDistance: number;
+  totalCornerDistance: number;
+  totalDistance: number;
+  minCornerDegrees: number;
+  maxCornerDegrees: number;
+  meanCornerDegrees: number;
+  demands: {
+    power: number;
+    braking: number;
+    cornering: number;
+  };
+  capabilityNotes: readonly CapabilityNote[];
+}
+
+function buildCapabilityNotes(
+  characteristics: TrackCharacteristics,
+  straightCount: number,
+  cornerCount: number,
+  meanCornerDegrees: number,
+): readonly CapabilityNote[] {
+  return [
+    {
+      stat: "topSpeed",
+      text: `${straightCount} straight${straightCount === 1 ? "" : "s"} (Power demand ${characteristics.powerDemand}) reward Top Speed.`,
+    },
+    {
+      stat: "acceleration",
+      text: `${cornerCount} corner exit${cornerCount === 1 ? "" : "s"} reward Acceleration back up to speed.`,
+    },
+    {
+      stat: "brakingPower",
+      text: `Braking demand ${characteristics.brakingDemand} reflects how much hard braking this lap requires, rewarding Braking Power.`,
+    },
+    {
+      stat: "corneringSpeed",
+      text: `Cornering demand ${characteristics.corneringDemand} with a mean corner angle of ${meanCornerDegrees.toFixed(0)}° rewards Cornering Speed.`,
+    },
+  ];
+}
+
+/**
+ * The authoritative composition of an already-generated `Track`, for
+ * post-race explanation (contract §6). Never regenerates or reclassifies —
+ * every count/distance/angle is read directly from `track.segments`, and
+ * `demands` is `track.characteristics` verbatim.
+ */
+export function summarizeTrack(track: Track, lapCount: number): TrackCompositionSummary {
+  if (track.segments.length === 0) {
+    throw new TrackSummaryError("empty-segments", `Track ${track.id} has no segments to summarize`);
+  }
+
+  const straights = track.segments.filter(
+    (segment): segment is Extract<TrackSegment, { kind: "straight" }> => segment.kind === "straight",
+  );
+  const corners = track.segments.filter(
+    (segment): segment is Extract<TrackSegment, { kind: "corner" }> => segment.kind === "corner",
+  );
+  if (straights.length + corners.length !== track.segments.length) {
+    throw new TrackSummaryError(
+      "unrecognized-segment-kind",
+      `Track ${track.id} contains a segment kind this summary does not recognize`,
+    );
+  }
+
+  const totalStraightDistance = straights.reduce((sum, segment) => sum + segment.length, 0);
+  const totalCornerDistance = corners.reduce((sum, segment) => sum + cornerArcLength(segment.turnDegrees), 0);
+  const cornerDegrees = corners.map((segment) => segment.turnDegrees);
+  const meanCornerDegrees = cornerDegrees.length
+    ? cornerDegrees.reduce((sum, degrees) => sum + degrees, 0) / cornerDegrees.length
+    : 0;
+
+  return {
+    trackId: track.id,
+    trackName: track.name,
+    lapCount,
+    straightCount: straights.length,
+    cornerCount: corners.length,
+    totalStraightDistance,
+    totalCornerDistance,
+    totalDistance: totalStraightDistance + totalCornerDistance,
+    minCornerDegrees: cornerDegrees.length ? Math.min(...cornerDegrees) : 0,
+    maxCornerDegrees: cornerDegrees.length ? Math.max(...cornerDegrees) : 0,
+    meanCornerDegrees,
+    demands: {
+      power: track.characteristics.powerDemand,
+      braking: track.characteristics.brakingDemand,
+      cornering: track.characteristics.corneringDemand,
+    },
+    capabilityNotes: buildCapabilityNotes(track.characteristics, straights.length, corners.length, meanCornerDegrees),
+  };
+}

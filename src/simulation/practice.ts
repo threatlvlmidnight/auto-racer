@@ -3,14 +3,33 @@ import { resolveContest } from "./contest";
 import { buildPlaybackSchedule, type PlaybackSchedule } from "./playback";
 import { installedItems, storedItems } from "./slots";
 import type { Run } from "./run";
+import type { Track } from "./tracks";
 import type {
   Build,
   ContestResult,
   ContributionEffectKind,
   ContributionEvidence,
   ContributionSourceArea,
+  LockedRaceSetup,
   SampleGhost,
+  SetupControlFamily,
+  SetupSelections,
 } from "./types";
+
+/**
+ * 028-pre-race-setup data-model.md "Setup input and practice snapshot":
+ * navigation state only for the exact-track/uncommitted-setup Test Day path
+ * (contract §8, FR-012D/E). Never becomes `RunSetupMemory` and never
+ * completes the PvP encounter itself.
+ */
+export interface PracticeSetupSnapshot {
+  origin: "pre-race-setup";
+  track: Track;
+  setup: LockedRaceSetup;
+  draftSelections: SetupSelections;
+  rememberChecked: boolean;
+  focusFamily?: SetupControlFamily;
+}
 
 export type DeepReadonly<T> = T extends (...args: never[]) => unknown
   ? T
@@ -21,8 +40,8 @@ export type DeepReadonly<T> = T extends (...args: never[]) => unknown
       : T;
 
 export type PracticeOriginCategory = "run-hub" | "acquisition" | "pvp-briefing";
-export type PracticeOriginContext = "run-hub" | "supplier" | "reward-draft" | "pvp-briefing";
-export type PracticeRoute = "RunScene" | "PrepareScene";
+export type PracticeOriginContext = "run-hub" | "supplier" | "reward-draft" | "pvp-briefing" | "pre-race-setup";
+export type PracticeRoute = "RunScene" | "PrepareScene" | "PreRaceScene";
 
 export interface PracticeNavigationState {
   viewToken: string;
@@ -34,6 +53,8 @@ export interface PracticeOriginInput {
   context: PracticeOriginContext;
   selection: string | null;
   navigation: PracticeNavigationState;
+  /** Required (and meaningful) only when context is "pre-race-setup". */
+  setupSnapshot?: PracticeSetupSnapshot;
 }
 
 export interface ProtectedPreparationOrigin {
@@ -46,6 +67,7 @@ export interface ProtectedPreparationOrigin {
   purchases: readonly string[];
   restockUsed: boolean;
   navigation: PracticeNavigationState;
+  setupSnapshot?: PracticeSetupSnapshot;
 }
 
 export interface PracticeReturnContext {
@@ -241,7 +263,7 @@ export function createPracticeReturnContext(
   const category = categoryFor(input.context);
   const route: PracticeRoute = input.context === "supplier" || input.context === "reward-draft"
     ? "PrepareScene"
-    : "RunScene";
+    : input.context === "pre-race-setup" ? "PreRaceScene" : "RunScene";
   const encounterId = input.context === "run-hub" ? null : run.activeEncounter?.id ?? null;
   validateOrigin(run, input.context, encounterId);
   const payload = run.activeEncounter?.payload ?? null;
@@ -263,6 +285,9 @@ export function createPracticeReturnContext(
       purchases: structuredClone(supplierPayload?.purchases ?? []),
       restockUsed: supplierPayload?.restockUsed ?? false,
       navigation: structuredClone(input.navigation),
+      // Omitted entirely (never `undefined`-valued) when absent — practiceRecovery.ts's
+      // canonicalization rejects any object with an `undefined`-valued key.
+      ...(input.setupSnapshot ? { setupSnapshot: structuredClone(input.setupSnapshot) } : {}),
     },
     focusToken: input.navigation.focusToken,
   }) as PracticeReturnContext;
@@ -354,11 +379,24 @@ export function resolvePractice(session: PracticeSession): PracticeSession {
       failure: { code: "origin-mismatch" as const, message: "Practice cannot resolve from this state." },
     }) as PracticeSession;
   }
-  const contest = resolveContest(
-    session.snapshot.build as Build,
-    TEST_DAY_CONFIG.rival as SampleGhost,
-    TEST_DAY_CONFIG.lapCount,
-  );
+  // 028-pre-race-setup contract §8, FR-012D/E: setup-origin Test Day applies
+  // the exact retained upcoming track and a temporary locked setup snapshot
+  // through the same lap-stat fold as scored contests. Every other origin
+  // keeps the exact pre-028 generic (no-track) resolution.
+  const setupSnapshot = session.returnContext.originState.setupSnapshot;
+  const contest = setupSnapshot
+    ? resolveContest(
+      session.snapshot.build as Build,
+      TEST_DAY_CONFIG.rival as SampleGhost,
+      TEST_DAY_CONFIG.lapCount,
+      setupSnapshot.track as Track,
+      setupSnapshot.setup as LockedRaceSetup,
+    )
+    : resolveContest(
+      session.snapshot.build as Build,
+      TEST_DAY_CONFIG.rival as SampleGhost,
+      TEST_DAY_CONFIG.lapCount,
+    );
   const playback = buildPlaybackSchedule(contest);
   const reconciliation = reconcilePracticeResult(contest);
   if (!reconciliation.valid) {
@@ -436,10 +474,15 @@ export function reconcilePracticeResult(contest: ContestResult): ReconciliationR
     const evidence = lap.contributions ?? [];
     if (evidence.length === 0) return;
     const representative = evidence[0];
+    // 028-pre-race-setup: `resultingLapTime` is the pre-physics item/tier/
+    // buff-only time; a setup-origin practice lap's `playerLapTime` also
+    // includes the whole-lap track-physics addition (laps.ts), so that
+    // addition must be reconciled back in rather than assumed zero.
+    const physicsSeconds = lap.physics?.phases.reduce((sum, phase) => sum + phase.seconds, 0) ?? 0;
     checks.push(check(
       `lap-${lap.lap}-contributions`,
       lap.playerLapTime,
-      representative.resultingLapTime,
+      representative.resultingLapTime + physicsSeconds,
     ));
     checks.push(check(
       `lap-${lap.lap}-shared-pre-clamp`,
@@ -702,6 +745,10 @@ function validateOrigin(run: Run, context: PracticeOriginContext, encounterId: s
 
 function categoryFor(context: PracticeOriginContext): PracticeOriginCategory {
   if (context === "supplier" || context === "reward-draft") return "acquisition";
+  // 028-pre-race-setup: a distinct concrete origin, but still a pvp-briefing
+  // flavored one at the coarse category level nothing downstream needs to
+  // further distinguish.
+  if (context === "pre-race-setup") return "pvp-briefing";
   return context;
 }
 

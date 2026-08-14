@@ -97,6 +97,20 @@ function summarizeTrack(
 - Race and Results layouts preserve consequential content at 1920x1080,
   1366x768, 1024x768, 800x450, and 390x844.
 
+## 9. Consumer inventory (T004)
+
+Sourced by direct grep of `src/scenes/` and `src/simulation/` before any Phase 2+ change:
+
+| Symbol | Consumer | What changes |
+| --- | --- | --- |
+| `generateTrack(seed, level)` | `ContestScene.create()` (`src/scenes/ContestScene.ts:91`), independently of `resolveContest`'s own internal call in `src/simulation/contest.ts` | Phase 3: `ContestScene` stops calling this for a scored contest and builds its schedule from `result.track` instead. `resolveNCarContest` keeps its own call — that's the one and only generation per contest. |
+| `standingsAt(schedule, t)` | `src/simulation/playback.ts` (`nCarFrameStateAt`'s own `standings` field, `deriveTickerLines`'s `took-lead` detection) | Phase 4: no longer drives the always-visible display; `deriveTickerLines`'s `took-lead` line is removed (Decision 9) since the model it announces is retired from the primary UI. `standingsAt` itself is untouched — Results' `nCarFrameStateAt` field independence isn't required by anything else, so the function stays for its remaining use (frame-level marker/finish bookkeeping) unless Phase 4 proves it fully unused. |
+| `NCarFrameState.playerRank` / `playerGapToLeader` / `leaderName` | `ContestScene.update()` — currently unused directly (the scene reads `frame.standings` via `standingsRows`, not these three fields) | No direct scene consumer found; left in place as `NCarFrameState` shape unless Phase 4's cleanup (T036) proves them genuinely dead. |
+| `standingsRows()` (`src/scenes/contestFormatting.ts`) | `ContestScene.renderStandings()` — the continuously-reordering 8-row sidebar | Phase 4: `renderStandings`/the sidebar loop is replaced by the player-centered checkpoint projection view; `standingsRows` itself may become dead code once nothing calls it (confirm before deleting — `tests/unit/contestFormatting.test.ts` currently tests it directly). |
+| `deriveTickerLines`'s `"took-lead"` kind | `ContestScene.tickerText`, fed by `frame.newTickerLines` | Phase 4 (Decision 9): removed and replaced by checkpoint projection-change ticker lines. `"player-fired"` and `"finished"` kinds are untouched — both derive from immutable per-lap/finish evidence, not frame-level rank churn. |
+| Marker rendering (`ContestScene.positionMarker`, `renderTrails`) | Uses `CarProgress.lapProgress`/`pointAtProgress` only — never reads `standings` for placement | No change needed; already spatial-only per Decision 5. Phase 2 adds identity/lap-context presentation (`raceProjectionPresentation.ts`) alongside it. |
+| Result track evidence | `ResultScene.ts` has **no** track consumer today — it shows outcome, times, gap, standings, and items, but never a track name or composition (`ContestScene` is the only scene that shows `track.name`, at its own top-left corner) | Phase 5 adds the first Result-scene track consumer: `trackSummaryPresentation.ts` + `ResultScene.renderTrackSummary()`, reading `result.track` only — never calling `generateTrack`. |
+
 ## 8. Regression boundary
 
 Feature 027 MUST NOT change stock stats, items, Buff/Synergy rules, generated

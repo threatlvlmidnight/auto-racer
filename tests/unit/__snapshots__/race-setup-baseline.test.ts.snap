@@ -1,0 +1,50 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`baseline: Balanced/no-setup outputs before feature 028 migration > pins simulatePlayerLaps for a held-item build with all-zero setupDeltas explicitly passed 1`] = `
+[
+  27.588661715443802,
+  27.588661715443802,
+  27.588661715443802,
+  27.588661715443802,
+  27.588661715443802,
+  27.588661715443802,
+  27.588661715443802,
+  27.588661715443802,
+  27.588661715443802,
+  27.588661715443802,
+]
+`;
+
+exports[`baseline: Balanced/no-setup outputs before feature 028 migration > pins simulatePlayerLaps for an empty build with a track (no setupDeltas) 1`] = `
+[
+  27.90680548473969,
+  27.90680548473969,
+  27.90680548473969,
+  27.90680548473969,
+  27.90680548473969,
+  27.90680548473969,
+  27.90680548473969,
+  27.90680548473969,
+  27.90680548473969,
+  27.90680548473969,
+]
+`;
+
+exports[`baseline: Balanced/no-setup outputs before feature 028 migration > pins simulatePlayerLaps for an empty build with a track (no setupDeltas) 2`] = `
+{
+  "acceleration": 40,
+  "brakingPower": 60,
+  "corneringSpeed": 50,
+  "topSpeed": 90,
+}
+`;
+
+exports[`baseline: Balanced/no-setup outputs before feature 028 migration > pins the N-car resolveContest result for an empty build with no setup argument 1`] = `306.4617161109661`;
+
+exports[`baseline: Balanced/no-setup outputs before feature 028 migration > pins the N-car resolveContest result for an empty build with no setup argument 2`] = `8`;
+
+exports[`baseline: Balanced/no-setup outputs before feature 028 migration > pins the legacy 2-car resolveContest result for an empty build 1`] = `"loss"`;
+
+exports[`baseline: Balanced/no-setup outputs before feature 028 migration > pins the legacy 2-car resolveContest result for an empty build 2`] = `60`;
+
+exports[`baseline: Balanced/no-setup outputs before feature 028 migration > pins the legacy 2-car resolveContest result for an empty build 3`] = `1.499999999999993`;

@@ -43,6 +43,12 @@ import {
 } from "./demoTheme";
 import { GARAGE_BACKDROP_BY_ENTRANT } from "./visualAssets";
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
+import {
+  currentVehicleStatModel,
+  prospectiveVehicleStatModel,
+  type VehicleStatPanelModel,
+} from "./vehicleStatPresentation";
+import { STOCK_PHYSICAL_STATS } from "../simulation/tracks";
 
 /** Pre-commit outcome text for an offer that duplicates a held item (016-duplicate-item-tiering FR-011). */
 function resolutionOutcomeLabel(resolution: DuplicateResolution): string | null {
@@ -73,6 +79,8 @@ export class PrepareScene extends Phaser.Scene {
   private keyboardDestinations: { destination: GarageDestination; slotType: SlotType | null }[] = [];
   private keyboardItemIndex = -1;
   private keyboardDestinationIndex = -1;
+  /** False for Cross-Pollination, whose subtitle already occupies the only gap this compact readout would use. */
+  private vehicleStatSummaryVisible = false;
 
   constructor() {
     super("PrepareScene");
@@ -148,10 +156,13 @@ export class PrepareScene extends Phaser.Scene {
       fontStyle: "bold",
       color: "#f1eee5",
     }).setOrigin(0.5).setDepth(20));
+    this.vehicleStatSummaryVisible = !guestPayload;
     if (guestPayload) {
-      this.track(this.add.text(LOGICAL_WIDTH / 2, 60, "Choose one experimental part from another origin", {
-        fontSize: "11px", fontFamily: UI_FONT, color: "#9eb5c9",
+      this.track(this.add.text(LOGICAL_WIDTH / 2, 68, "Choose one experimental part from another origin", {
+        fontSize: "10px", fontFamily: UI_FONT, color: "#9eb5c9",
       }).setOrigin(0.5).setDepth(20));
+    } else {
+      this.showVehicleStatModel(currentVehicleStatModel({ build: this.run!.build, stock: STOCK_PHYSICAL_STATS }));
     }
 
     if (supplier) this.renderSupplier(encounter.payload as PartsSupplierPayload);
@@ -170,6 +181,40 @@ export class PrepareScene extends Phaser.Scene {
         wordWrap: { width: LOGICAL_WIDTH - 80 },
       }).setOrigin(0.5));
     }
+  }
+
+  /**
+   * The always-visible current-vehicle readout (025-vehicle-stat-display
+   * US1, FR-003/FR-004), also used to show a placement preview's prospective
+   * totals (US2, FR-007) without a full scene rebuild — mirrors the existing
+   * feature-024 pattern of swapping a tagged object in place on hover.
+   * Reward Draft/Parts Supplier have no free vertical band tall enough for
+   * the full tile panel (createVehicleStatPanel) without a broader
+   * responsive rework (contract §6 defers that reflow to feature 026's
+   * responsive frame); this renders the same model as one compact line in
+   * the gap between the title and the offer row.
+   */
+  private showVehicleStatModel(model: VehicleStatPanelModel): void {
+    if (!this.vehicleStatSummaryVisible) return;
+    this.objects.filter((object) => object.getData?.("vehicleStatSummary") === true).forEach((object) => object.destroy());
+    this.objects = this.objects.filter((object) => object.active);
+    const summary = model.lines.map((line) => {
+      const abbrev = line.compactLabel.slice(0, 3).toUpperCase();
+      const deltaLabel = line.comparisonDeltaLabel ?? (line.stockDelta ? line.stockDeltaLabel : null);
+      return `${abbrev} ${line.currentLabel}${deltaLabel && deltaLabel !== "No change" ? ` (${deltaLabel})` : ""}`;
+    }).join("   ");
+    const conditionalNote = model.conditionalSources.length > 0
+      ? `  ·  ${model.conditionalSources.length} conditional` : "";
+    const isPreview = model.context.kind === "placement-preview";
+    const text = this.add.text(LOGICAL_WIDTH / 2, 59, `${isPreview ? "PREVIEW  " : ""}${summary}${conditionalNote}`, {
+      fontSize: "10px",
+      fontFamily: UI_FONT,
+      fontStyle: isPreview ? "bold" : "normal",
+      color: isPreview ? "#f0ce73" : "#d7e4e7",
+    }).setOrigin(0.5).setDepth(20);
+    text.setData("accessibilityLabel", model.accessibilityLabel);
+    text.setData("vehicleStatSummary", true);
+    this.track(text);
   }
 
   private renderReward(payload: RewardDraftPayload | CrossPollinationPayload): void {
@@ -597,7 +642,39 @@ export class PrepareScene extends Phaser.Scene {
       width: LOGICAL_WIDTH - 48, height: INSPECTOR_HEIGHT,
     }).setDepth(75);
     inspector.setData("feature024Inspector", true);
+    this.updateVehicleStatPreview(garageContext, source, destination, preview);
     this.track(inspector);
+  }
+
+  /**
+   * Prospective totals reuse the exact garage commit authority (025 contract
+   * §4, research.md Decision 3) — never a duplicated placement/swap/tier
+   * computation. A destination that can't actually be committed as previewed
+   * (e.g. an offer onto an occupied slot, which still needs an explicit
+   * confirm) falls back to the current authoritative totals rather than
+   * guessing (FR-009).
+   */
+  private updateVehicleStatPreview(
+    garageContext: { build: Run["build"]; offers?: readonly { id: string; item: OfferedItem }[] },
+    source: GarageSource,
+    destination: GarageDestination,
+    preview: ReturnType<typeof previewGarageCommand>,
+  ): void {
+    const replacement: GarageReplacement = preview.disposition === "swap" ? "swap" : "none";
+    const commit = commitGarageCommand(garageContext, { source, destination, replacement });
+    if (commit.kind !== "committed") {
+      this.showVehicleStatModel(currentVehicleStatModel({ build: this.run!.build, stock: STOCK_PHYSICAL_STATS }));
+      return;
+    }
+    const destinationLabel = destination.area === "vehicle"
+      ? `Vehicle slot ${destination.slotId}` : `Storage ${destination.index + 1}`;
+    this.showVehicleStatModel(prospectiveVehicleStatModel({
+      currentBuild: this.run!.build,
+      preview,
+      prospectiveBuild: commit.build,
+      destinationLabel,
+      stock: STOCK_PHYSICAL_STATS,
+    }));
   }
 
   private commitSelectedDestination(destination: GarageDestination): void {

@@ -21,6 +21,8 @@ import { createItemCard, createItemInspector } from "./itemVisuals";
 import { resolvedItemEvidence, unresolvedPhysicalEvidence } from "./itemPresentation";
 import type { OfferedItem } from "../simulation/types";
 import { configureHiDpiScene, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "./layout";
+import { recordedLapVehicleStatModel } from "./vehicleStatPresentation";
+import { createVehicleStatPanel } from "./vehicleStatVisuals";
 
 export interface PracticeContestSceneData {
   run?: Run;
@@ -107,6 +109,14 @@ export class PracticeContestScene extends Phaser.Scene {
       align: "center",
       wordWrap: { width: Math.min(680, width - 48) },
     }).setOrigin(0.5);
+    // Test Day's legacy resolveContest() carries no track-aware physics
+    // evidence today (research.md Decision 7) — honestly report that ceiling
+    // rather than showing stock/stale values (FR-019), using the same
+    // model/renderer real races use once evidence exists.
+    const statModel = recordedLapVehicleStatModel({ lap: 1, lapCount: this.session!.result!.contest.lapCount, contextKind: "test-day" });
+    createVehicleStatPanel(this, width / 2, 250, statModel, {
+      viewport: { width: Math.min(680, width - 56), height: 60 },
+    }).setDepth(20);
     const held = [
       ...this.session!.snapshot.build.slots.flatMap((slot) => slot.item ? [{ item: slot.item, tier: slot.tier }] : []),
       ...this.session!.snapshot.build.storage.flatMap((position) => position.item ? [{ item: position.item, tier: position.tier }] : []),

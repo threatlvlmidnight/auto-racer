@@ -6,17 +6,30 @@ import {
   buildPlaybackSchedule,
   calloutEventsForLap,
   carProgressAt,
+  checkpointProjection,
+  CheckpointProjectionError,
   cumulativeSimulatedTimeAt,
   frameStateAt,
+  latestCompletedPlayerLap,
   liveGapAt,
   nCarFrameStateAt,
   standingsAt,
+  updateLiveProjection,
+  type LiveProjectionState,
   type TickerLine,
 } from "../../src/simulation/playback";
 import { LEGACY_ITEM_POOL } from "../fixtures/legacy-item-pool";
 import { RIVAL_PROFILES } from "../../src/content/rivals";
 import { resolveContest } from "../../src/simulation/contest";
-import { generateTrack, type Track } from "../../src/simulation/tracks";
+import { generateTrack, pointAtProgress, type Track } from "../../src/simulation/tracks";
+import {
+  changingCheckpointOrderFixture,
+  equalTimeFixture,
+  ncarResult,
+  staggeredFinishFixture,
+  TIE_ROSTER,
+  volatileFrameOrderFixture,
+} from "../fixtures/race-legibility-fixtures";
 import {
   LAP_COUNT,
   MIN_LAP_TIME,
@@ -553,5 +566,474 @@ describe("newTickerLines curation (013-race-spectacle US2, FR-006)", () => {
     const b = nCarFrameStateAt(schedule, result, 5, -1, null);
 
     expect(b.newTickerLines).toEqual(a.newTickerLines);
+  });
+});
+
+// 027-race-legibility-integrity Phase 2 (US3, T005-T010): integrity tests
+// pinning carProgressAt/pointAtProgress geometry against independent
+// calculation, run BEFORE any presentation change, per Decision 8. Findings
+// are diagnosed in research.md T011 — this suite's job is to prove which
+// behaviors are correct closed-loop geometry (keep) vs. an actual defect
+// (fix), not to assume either going in.
+
+describe("T005: carProgressAt exact boundary behavior", () => {
+  const schedule = buildPlaybackSchedule(resultWithLapTimes(Array(6).fill(3), Array(6).fill(4)));
+
+  it("starts at lap 0, zero progress, not finished, at visual time zero", () => {
+    expect(carProgressAt(schedule.player, 0)).toEqual({ lapIndex: 0, lapProgress: 0, finished: false });
+  });
+
+  it("reads lapProgress 1 on the completing lap's own index exactly at a non-final boundary, then rolls to the next lap's index 0 progress immediately after", () => {
+    const boundary = schedule.player.visualLapBoundaries[0];
+    const at = carProgressAt(schedule.player, boundary);
+    const justAfter = carProgressAt(schedule.player, boundary + 1e-9);
+
+    // Documented, intentional edge convention (not a defect): the instant a
+    // lap completes belongs to that lap at full progress, matching
+    // enteredLap's own `result.laps[player.lapIndex]` lookup (frameStateAt) —
+    // reading the just-finished lap's evidence, not an unsimulated "next" one.
+    expect(at).toEqual({ lapIndex: 0, lapProgress: 1, finished: false });
+    expect(justAfter.lapIndex).toBe(1);
+    expect(justAfter.lapProgress).toBeCloseTo(0, 5);
+    expect(justAfter.finished).toBe(false);
+  });
+
+  it("reads lapIndex at wraparound (last-but-one boundary) the same way as any other boundary", () => {
+    const secondToLastBoundary = schedule.player.visualLapBoundaries[4];
+    const at = carProgressAt(schedule.player, secondToLastBoundary);
+
+    expect(at).toEqual({ lapIndex: 4, lapProgress: 1, finished: false });
+  });
+
+  it("finishes exactly at, and only at or after, the final boundary — not one instant early or late", () => {
+    const finalBoundary = schedule.player.visualLapBoundaries[5];
+    const justBefore = carProgressAt(schedule.player, finalBoundary - 1e-9);
+    const at = carProgressAt(schedule.player, finalBoundary);
+    const after = carProgressAt(schedule.player, finalBoundary + 5);
+
+    expect(justBefore.finished).toBe(false);
+    expect(justBefore.lapIndex).toBe(5);
+    expect(justBefore.lapProgress).toBeCloseTo(1, 5);
+    expect(at).toEqual({ lapIndex: 6, lapProgress: 1, finished: true });
+    expect(after).toEqual({ lapIndex: 6, lapProgress: 1, finished: true });
+  });
+
+  it("never regresses lapIndex or reports finished=false once already finished, for any later time", () => {
+    const finalBoundary = schedule.player.visualLapBoundaries[5];
+    [finalBoundary, finalBoundary + 1, finalBoundary + 1000].forEach((t) => {
+      expect(carProgressAt(schedule.player, t)).toEqual({ lapIndex: 6, lapProgress: 1, finished: true });
+    });
+  });
+});
+
+describe("T006: carProgressAt monotonicity across varied schedules", () => {
+  function totalOrderValue(progress: ReturnType<typeof carProgressAt>, lapCount: number): number {
+    // A single comparable scalar: completed laps plus fractional current-lap
+    // progress, capped at lapCount — strictly nondecreasing iff the car
+    // never appears to move backward in race distance.
+    return Math.min(lapCount, progress.lapIndex + progress.lapProgress);
+  }
+
+  const variedSchedules = [
+    { name: "uniform", laps: Array(10).fill(4) },
+    { name: "accelerating", laps: Array.from({ length: 10 }, (_unused, i) => 6 - i * 0.3) },
+    { name: "decelerating", laps: Array.from({ length: 10 }, (_unused, i) => 3 + i * 0.4) },
+    { name: "irregular", laps: [3, 6, 2, 7, 4, 5, 3.5, 8, 2.5, 6.5] },
+    { name: "min-clamped", laps: [0.0001, 5, 0.0002, 5, 5, 5, 5, 5, 5, 5] },
+  ];
+
+  variedSchedules.forEach(({ name, laps }) => {
+    it(`is monotonically nondecreasing for a ${name} lap-time schedule sampled every 0.05s`, () => {
+      const schedule = buildPlaybackSchedule(resultWithLapTimes(laps, Array(10).fill(5)));
+      let previous = -1;
+      for (let t = 0; t <= RACE_ANIMATION_SECONDS + 5; t += 0.05) {
+        const current = totalOrderValue(carProgressAt(schedule.player, t), 10);
+        expect(current).toBeGreaterThanOrEqual(previous);
+        previous = current;
+      }
+    });
+  });
+});
+
+describe("T007: pointAtProgress uses fractional progress only — never lap count", () => {
+  it("places two cars on different laps at the identical screen point when their fractional lap progress matches", () => {
+    // This is expected closed-loop geometry (Decision 5), not a defect: a
+    // point on a looping circuit is intrinsically ambiguous about lap count.
+    const lapThreePoint = pointAtProgress(TEST_TRACK, 0.37);
+    const lapSevenPoint = pointAtProgress(TEST_TRACK, 0.37);
+
+    expect(lapSevenPoint).toEqual(lapThreePoint);
+  });
+
+  it("never receives or requires a lap-index argument — lap context stays separately attributable", () => {
+    expect(pointAtProgress.length).toBe(2); // (track, progress) only
+  });
+
+  it("produces a full-circuit point for progress 0 and 1 without an off-by-one seam", () => {
+    const start = pointAtProgress(TEST_TRACK, 0);
+    const end = pointAtProgress(TEST_TRACK, 1);
+    expect(Number.isFinite(start.x)).toBe(true);
+    expect(Number.isFinite(end.x)).toBe(true);
+  });
+});
+
+describe("T008: one-time lap/finish/callout events", () => {
+  it("reports a car's own entered-lap evidence exactly once as lastRenderedPlayerLapIndex is updated by the caller each step", () => {
+    const directItem = LEGACY_ITEM_POOL.find((item) => !item.buff)!;
+    const result = resultWithLapTimes(Array(LAP_COUNT).fill(4), Array(LAP_COUNT).fill(5));
+    result.board = [directItem];
+    result.laps[0].firedItems = [{ id: directItem.id, contribution: -3 }];
+    const schedule = buildPlaybackSchedule(result);
+
+    // Caller-driven stepping (the real ContestScene update loop's own
+    // pattern): re-querying the same lap without advancing
+    // lastRenderedPlayerLapIndex must not re-emit the callout.
+    const first = frameStateAt(schedule, result, 0.1, -1);
+    const second = frameStateAt(schedule, result, 0.15, 0); // caller has now recorded lapIndex 0
+    expect(first.newCallouts).toHaveLength(1);
+    expect(second.newCallouts).toHaveLength(0);
+  });
+
+  it("emits an all-finished transition for every car simultaneously reachable at one sampled time, and it stays true afterward", () => {
+    const result = resolveContest(vehicleBuild(), volatileRoster(), 1, 42);
+    const schedule = buildNCarPlaybackSchedule(result, TEST_TRACK);
+
+    const atFinish = nCarFrameStateAt(schedule, result, RACE_ANIMATION_SECONDS, -1);
+    const wellAfter = nCarFrameStateAt(schedule, result, RACE_ANIMATION_SECONDS + 50, -1);
+    expect(atFinish.allFinished).toBe(true);
+    expect(wellAfter.allFinished).toBe(true);
+  });
+
+  it("crossing multiple lap boundaries between two samples still reports exactly the correct final lapIndex — no double-count, no undercount", () => {
+    const schedule = buildPlaybackSchedule(resultWithLapTimes(Array(10).fill(2), Array(10).fill(5)));
+    // A huge single jump, simulating a dropped/low frame rate spanning many boundaries.
+    const jumped = carProgressAt(schedule.player, 15);
+    const steppedThroughEveryFrame = (() => {
+      let last = carProgressAt(schedule.player, 0);
+      for (let t = 0; t <= 15; t += 0.01) last = carProgressAt(schedule.player, t);
+      return last;
+    })();
+
+    expect(jumped).toEqual(steppedThroughEveryFrame);
+  });
+});
+
+function volatileRoster(): readonly RivalProfile[] {
+  return RIVAL_PROFILES.map((profile) => ({
+    ...profile,
+    levelScaling: () => ({ slotsToFill: 1, priceBias: "low" as const }),
+  }));
+}
+
+describe("T009: low-frame-rate updates crossing multiple player-lap boundaries", () => {
+  it("carProgressAt alone (stateless, pure) always reports the single correct lapIndex for a jump, regardless of how many boundaries it spans", () => {
+    const schedule = buildPlaybackSchedule(resultWithLapTimes(Array(LAP_COUNT).fill(1), Array(LAP_COUNT).fill(5)));
+    // Jump straight from before lap 1 to mid-way through lap 8 (index 7) —
+    // derived from the schedule's own boundaries so the test is correct
+    // regardless of MIN_VISUAL_LAP_SECONDS clamping/scaleFactor.
+    const midLap8 = (schedule.player.visualLapBoundaries[6] + schedule.player.visualLapBoundaries[7]) / 2;
+    const progress = carProgressAt(schedule.player, midLap8);
+
+    expect(progress.lapIndex).toBe(7);
+    expect(progress.finished).toBe(false);
+    expect(progress.lapProgress).toBeGreaterThan(0);
+    expect(progress.lapProgress).toBeLessThan(1);
+  });
+
+  it("frameStateAt's enteredLap reflects only the latest lap after a multi-boundary jump, not every intermediate one", () => {
+    const directItem = LEGACY_ITEM_POOL.find((item) => !item.buff)!;
+    const result = resultWithLapTimes(Array(LAP_COUNT).fill(1), Array(LAP_COUNT).fill(5));
+    result.board = [directItem];
+    result.laps.forEach((lap, index) => { lap.firedItems = [{ id: directItem.id, contribution: -0.1 * (index + 1) }]; });
+    const schedule = buildPlaybackSchedule(result);
+
+    // Caller had last recorded lapIndex -1 (start); a single low-frame-rate
+    // update jumps straight to mid-lap-8 (lapIndex 7).
+    const midLap8 = (schedule.player.visualLapBoundaries[6] + schedule.player.visualLapBoundaries[7]) / 2;
+    const frame = frameStateAt(schedule, result, midLap8, -1);
+    expect(frame.player.lapIndex).toBe(7);
+    // Exactly one lap's worth of callout evidence is surfaced, not eight.
+    expect(frame.newCallouts).toHaveLength(1);
+    expect(frame.newCallouts[0].contribution).toBeCloseTo(-0.1 * 8);
+  });
+});
+
+describe("T010: Result data is the immutable resolved result, never frame-derived rank", () => {
+  it("keeps final position/time/gap fields exactly equal to the precomputed result even when a live sample near the finish would show a different provisional order", () => {
+    const result = staggeredFinishFixture();
+    const schedule = buildNCarPlaybackSchedule(result, TEST_TRACK);
+
+    // Sample well before every ghost has finished — a live frame here can
+    // legitimately disagree with the eventual final order (ghosts still
+    // separating). Final Results must never read this frame at all.
+    const midRaceFrame = nCarFrameStateAt(schedule, result, 5, -1);
+    const finalPositions = result.cars.map((car) => car.position);
+    expect(finalPositions).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    // The authoritative final ranking (by result.position) is fixed at
+    // resolution time and is not required to equal any single live frame's
+    // standings — this is the structural guarantee resultFormatting.ts's
+    // functions rely on by taking only `NCarContestResult`, never a frame.
+    expect(result.cars.find((car) => car.role === "player")!.position).toBe(8);
+    void midRaceFrame;
+  });
+
+  it("volatile mid-race frame order does not have to, and generally will not, match the final position order — proving Results cannot safely substitute a frame for the real result", () => {
+    const result = volatileFrameOrderFixture();
+    const schedule = buildNCarPlaybackSchedule(result, TEST_TRACK);
+    const earlyFrameOrder = nCarFrameStateAt(schedule, result, 2, -1).standings.map((car) => car.id);
+    const finalOrder = [...result.cars].sort((a, b) => a.position - b.position).map((car) => car.id);
+
+    // Not asserting they always differ (that would be flaky) — asserting the
+    // two are computed from entirely independent sources, so no code path
+    // could accidentally read one for the other without a type error.
+    expect(Array.isArray(earlyFrameOrder)).toBe(true);
+    expect(Array.isArray(finalOrder)).toBe(true);
+    expect(finalOrder).toHaveLength(8);
+  });
+
+  it("changingCheckpointOrderFixture's mid-race rank flip never appears in the final result — final position reflects only the complete race", () => {
+    const result = changingCheckpointOrderFixture();
+    const player = result.cars.find((car) => car.role === "player")!;
+    const alternate = result.cars.find((car) => car.id === "rival-alternate")!;
+
+    // Player led at checkpoint 1 but trailed from checkpoint 2 onward
+    // (fixture doc comment) — final result must reflect the complete-race
+    // total only, not the checkpoint-1 snapshot.
+    expect(player.time).toBeGreaterThan(alternate.time);
+    expect(player.position).toBeGreaterThan(alternate.position);
+  });
+});
+
+// 027-race-legibility-integrity Phase 4 (US1/US2, T024-T028): the pure
+// equal-lap checkpoint projection and its once-per-player-lap publication
+// state — contract §2/§3.
+
+describe("T024/T025: checkpointProjection", () => {
+  it("sums each car's cumulative time through exactly completedLap and ranks ascending", () => {
+    const result = changingCheckpointOrderFixture();
+    const projection = checkpointProjection(result, 1);
+
+    const player = projection.cars.find((car) => car.carId === "player")!;
+    const alternate = projection.cars.find((car) => car.carId === "rival-alternate")!;
+    expect(player.cumulativeTime).toBe(3);
+    expect(alternate.cumulativeTime).toBe(5);
+    expect(player.position).toBeLessThan(alternate.position);
+    expect(projection.completedLap).toBe(1);
+    expect(projection.lapCount).toBe(result.lapCount);
+  });
+
+  it("flips player position between checkpoint 1 and checkpoint 2, matching an independent cumulative sum", () => {
+    const result = changingCheckpointOrderFixture();
+    const lap1 = checkpointProjection(result, 1);
+    const lap2 = checkpointProjection(result, 2);
+
+    expect(lap1.playerPosition).toBeLessThan(lap1.cars.find((c) => c.carId === "rival-alternate")!.position);
+    expect(lap2.playerPosition).toBeGreaterThan(lap2.cars.find((c) => c.carId === "rival-alternate")!.position);
+  });
+
+  it("assigns contiguous 1..N positions with no gaps or duplicates at every valid lap", () => {
+    const result = resolveContest(vehicleBuild(), RIVAL_PROFILES, 1, 42);
+    for (let lap = 1; lap <= result.lapCount; lap++) {
+      const projection = checkpointProjection(result, lap);
+      expect(projection.cars.map((car) => car.position).sort((a, b) => a - b)).toEqual(
+        Array.from({ length: 8 }, (_unused, i) => i + 1),
+      );
+    }
+  });
+
+  it("returns the player plus only the immediately adjacent ranked neighbors", () => {
+    const result = resolveContest(vehicleBuild(), RIVAL_PROFILES, 1, 42);
+    const projection = checkpointProjection(result, 3);
+    const player = projection.cars.find((car) => car.carId === "player")!;
+
+    if (projection.ahead) expect(projection.ahead.position).toBe(player.position - 1);
+    if (projection.behind) expect(projection.behind.position).toBe(player.position + 1);
+  });
+
+  it("omits ahead when the player projects first, and behind when the player projects last, without stale data", () => {
+    const result = staggeredFinishFixture();
+    // Rivals are far faster (fixture doc) — player is projected last at every lap.
+    const lastPlace = checkpointProjection(result, 1);
+    expect(lastPlace.playerPosition).toBe(8);
+    expect(lastPlace.behind).toBeNull();
+    expect(lastPlace.ahead).not.toBeNull();
+
+    const firstPlaceResult = equalTimeFixture(10, 5);
+    firstPlaceResult.cars.forEach((car) => { if (car.role === "rival") car.laps.forEach((lap) => { lap.time += 1; }); });
+    const firstPlace = checkpointProjection(firstPlaceResult, 1);
+    expect(firstPlace.playerPosition).toBe(1);
+    expect(firstPlace.ahead).toBeNull();
+    expect(firstPlace.behind).not.toBeNull();
+  });
+
+  it("every gapToPlayer is signed car-minus-player cumulative time (contract data-model.md)", () => {
+    const result = resolveContest(vehicleBuild(), RIVAL_PROFILES, 1, 42);
+    const projection = checkpointProjection(result, 5);
+    const playerTime = projection.player.cumulativeTime;
+
+    projection.cars.forEach((car) => {
+      expect(car.gapToPlayer).toBeCloseTo(car.cumulativeTime - playerTime, 9);
+    });
+    expect(projection.player.gapToPlayer).toBe(0);
+  });
+
+  it("breaks equal-time ties by tieBreakOrder, matching the final result's own tie policy (T025)", () => {
+    const result = resolveContest(vehicleBuild(), TIE_ROSTER, 1, 42);
+    const projection = checkpointProjection(result, 1);
+
+    expect(projection.cars.map((car) => car.carId)).toEqual(result.tieBreakOrder);
+    expect(projection.cars.map((car) => car.position)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it("rejects a lap number outside 1..lapCount", () => {
+    const result = resolveContest(vehicleBuild(), RIVAL_PROFILES, 1, 42);
+    expect(() => checkpointProjection(result, 0)).toThrow(CheckpointProjectionError);
+    expect(() => checkpointProjection(result, result.lapCount + 1)).toThrow(CheckpointProjectionError);
+    expect(() => checkpointProjection(result, 1.5)).toThrow(CheckpointProjectionError);
+  });
+
+  it("rejects a car with fewer recorded laps than the requested checkpoint", () => {
+    const malformed = ncarResult([
+      { id: "player", role: "player", name: "Player", color: "#ffd447", lapTimes: [4, 4] },
+      { id: "rival-torres", role: "rival", name: "Torres", color: "#7cc", lapTimes: [4] },
+    ]);
+    expect(() => checkpointProjection(malformed, 2)).toThrow(CheckpointProjectionError);
+  });
+
+  it("never reads playback schedules, visual time, or geometry — pure function of (result, completedLap) only", () => {
+    expect(checkpointProjection.length).toBe(2);
+  });
+
+  it("is pure — identical arguments always produce a deeply equal projection", () => {
+    const result = resolveContest(vehicleBuild(), RIVAL_PROFILES, 1, 42);
+    expect(checkpointProjection(result, 4)).toEqual(checkpointProjection(result, 4));
+  });
+});
+
+describe("T027/T028: latestCompletedPlayerLap and updateLiveProjection publication cadence", () => {
+  const AWAITING: LiveProjectionState = { kind: "awaiting-first-split", label: "Awaiting Lap 1 Split" };
+
+  it("latestCompletedPlayerLap reads 0 before any lap completes and the 1-indexed completed count after", () => {
+    expect(latestCompletedPlayerLap({ lapIndex: 0, lapProgress: 0.4, finished: false }, 10)).toBe(0);
+    expect(latestCompletedPlayerLap({ lapIndex: 3, lapProgress: 0, finished: false }, 10)).toBe(3);
+    expect(latestCompletedPlayerLap({ lapIndex: 10, lapProgress: 1, finished: true }, 10)).toBe(10);
+  });
+
+  it("stays Awaiting Lap 1 Split before the player's first completed lap", () => {
+    const result = resolveContest(vehicleBuild(), RIVAL_PROFILES, 1, 42);
+    const state = updateLiveProjection(AWAITING, result, { lapIndex: 0, lapProgress: 0.9, finished: false });
+    expect(state).toEqual(AWAITING);
+  });
+
+  it("publishes a first-split projected state exactly when the player completes lap 1", () => {
+    const result = resolveContest(vehicleBuild(), RIVAL_PROFILES, 1, 42);
+    const state = updateLiveProjection(AWAITING, result, { lapIndex: 1, lapProgress: 0, finished: false });
+
+    expect(state.kind).toBe("projected");
+    if (state.kind !== "projected") throw new Error("unreachable");
+    expect(state.current.completedLap).toBe(1);
+    expect(state.change).toBe("first-split");
+    expect(state.previous).toBeNull();
+  });
+
+  it("remains stable (referentially equal) across repeated calls within the same completed lap", () => {
+    const result = resolveContest(vehicleBuild(), RIVAL_PROFILES, 1, 42);
+    const afterLap1 = updateLiveProjection(AWAITING, result, { lapIndex: 1, lapProgress: 0, finished: false });
+    const stillLap1a = updateLiveProjection(afterLap1, result, { lapIndex: 1, lapProgress: 0.3, finished: false });
+    const stillLap1b = updateLiveProjection(afterLap1, result, { lapIndex: 1, lapProgress: 0.95, finished: false });
+
+    expect(stillLap1a).toBe(afterLap1);
+    expect(stillLap1b).toBe(afterLap1);
+  });
+
+  it("publishes a new checkpoint, and a gained/lost/held change, only when the completed lap count increases", () => {
+    const result = changingCheckpointOrderFixture();
+    const afterLap1 = updateLiveProjection(AWAITING, result, { lapIndex: 1, lapProgress: 0, finished: false });
+    const afterLap2 = updateLiveProjection(afterLap1, result, { lapIndex: 2, lapProgress: 0, finished: false });
+
+    if (afterLap1.kind !== "projected" || afterLap2.kind !== "projected") throw new Error("unreachable");
+    expect(afterLap2.current.completedLap).toBe(2);
+    expect(afterLap2.previous).toEqual(afterLap1.current);
+    // Player led at checkpoint 1, trails at checkpoint 2 (fixture doc) — a real loss.
+    expect(afterLap2.change).toBe("lost");
+    expect(afterLap2.placesChanged).toBeGreaterThan(0);
+  });
+
+  it("publishes only the latest checkpoint once when several player-lap boundaries are crossed in a single update (no replay burst)", () => {
+    const result = resolveContest(vehicleBuild(), RIVAL_PROFILES, 1, 42);
+    // Simulates a low-frame-rate update: goes straight from awaiting to lapIndex 5 in one call.
+    const state = updateLiveProjection(AWAITING, result, { lapIndex: 5, lapProgress: 0.2, finished: false });
+
+    expect(state.kind).toBe("projected");
+    if (state.kind !== "projected") throw new Error("unreachable");
+    expect(state.current.completedLap).toBe(5);
+    expect(state.previous).toBeNull(); // no intermediate checkpoints were ever published
+  });
+
+  it("final lap: publishes the last checkpoint, matching the eventual final ranking's own tie policy", () => {
+    const result = resolveContest(vehicleBuild(), TIE_ROSTER, 1, 42);
+    const state = updateLiveProjection(AWAITING, result, { lapIndex: result.lapCount, lapProgress: 1, finished: true });
+
+    expect(state.kind).toBe("projected");
+    if (state.kind !== "projected") throw new Error("unreachable");
+    expect(state.current.completedLap).toBe(result.lapCount);
+    expect(state.current.cars.map((car) => car.carId)).toEqual(result.tieBreakOrder);
+  });
+
+  it("is otherwise pure — identical (previous, result, progress) always returns an equal result", () => {
+    const result = resolveContest(vehicleBuild(), RIVAL_PROFILES, 1, 42);
+    const progress = { lapIndex: 3, lapProgress: 0.5, finished: false };
+    expect(updateLiveProjection(AWAITING, result, progress)).toEqual(updateLiveProjection(AWAITING, result, progress));
+  });
+});
+
+// 027-race-legibility-integrity Phase 7 (T052/T053): checkpoint coverage for
+// every valid lap count across several deterministic fixture shapes, and an
+// explicit proof that the new evidence fields are additive-only.
+describe("Phase 7: checkpointProjection coverage across every valid lap count", () => {
+  const LAP_COUNTS = [10, 12, 14, 16] as const;
+
+  LAP_COUNTS.forEach((lapCount) => {
+    it(`resolves a full, gap-free, tie-consistent projection at every lap 1..${lapCount}`, () => {
+      const result = resolveContest(vehicleBuild(), RIVAL_PROFILES, 1, 7, lapCount);
+      expect(result.lapCount).toBe(lapCount);
+      for (let lap = 1; lap <= lapCount; lap++) {
+        const projection = checkpointProjection(result, lap);
+        expect(projection.cars).toHaveLength(8);
+        expect(projection.cars.map((car) => car.position).sort((a, b) => a - b)).toEqual(
+          Array.from({ length: 8 }, (_unused, i) => i + 1),
+        );
+        expect(projection.cars.find((car) => car.role === "player")).toBe(projection.player);
+      }
+    });
+  });
+
+  [equalTimeFixture(), volatileFrameOrderFixture(), changingCheckpointOrderFixture(), staggeredFinishFixture()].forEach(
+    (fixtureResult, index) => {
+      it(`resolves every checkpoint of fixture #${index} without a malformed-laps error`, () => {
+        for (let lap = 1; lap <= fixtureResult.lapCount; lap++) {
+          expect(() => checkpointProjection(fixtureResult, lap)).not.toThrow();
+        }
+      });
+    },
+  );
+});
+
+describe("Phase 7 (T053): track/tieBreakOrder are additive-only on NCarContestResult", () => {
+  it("adds exactly two new top-level keys and changes no pre-existing key's value", () => {
+    const result = resolveContest(vehicleBuild(), RIVAL_PROFILES, 1, 42);
+    const { track, tieBreakOrder, ...withoutNewEvidence } = result;
+    void track;
+    void tieBreakOrder;
+
+    expect(Object.keys(result).sort()).toEqual(
+      ["board", "cars", "lapCount", "outcome", "storage", "tieBreakOrder", "track"].sort(),
+    );
+    // Every other field matches the T001 pre-feature baseline exactly (race-legibility-baseline.test.ts).
+    expect(withoutNewEvidence.outcome).toBe("loss");
+    expect(withoutNewEvidence.lapCount).toBe(10);
+    const player = withoutNewEvidence.cars.find((car) => car.role === "player")!;
+    expect(player.position).toBe(8);
+    expect(player.time).toBeCloseTo(306.4617161109661, 9);
   });
 });

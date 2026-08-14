@@ -256,6 +256,17 @@ that needed their own scope rather than being decided inline:
   `pre-race-setup` itself (the actual screen + control UI) remains
   unspecified until `018` lands.
 
+**Implemented, 2026-08-13** (`specs/028-pre-race-setup/`): shipped as
+specified above, once `018` (and `021`'s arcade physics, `027`'s track/stat
+presentation) landed. Rival Intel stayed split out, per the 2026-08-11 note
+above — still unspecified. The item-driven configurable control mechanic
+shipped as a universal Driver Aggression control (every car) plus seven
+launch items across six equipment families, not the single brake-bias-
+slider example sketched here — the "1-3 configurable dimensions" guardrail
+held (seven items, but six distinct control *families*, well within the
+spirit of "a small number of simple controls, not a full tuning
+simulation").
+
 ---
 
 ## 9. Sabotage / inspection risk

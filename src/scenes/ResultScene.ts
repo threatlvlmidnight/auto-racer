@@ -2,9 +2,11 @@ import Phaser from "phaser";
 import type { CarResult, NCarContestResult, OfferedItem } from "../simulation/types";
 import type { Run } from "../simulation/run";
 import {
+  carSetupLines,
   gapLabel,
   outcomeColor,
   outcomeLabel,
+  playerCar,
   standingsRow,
   timesLabel,
 } from "./resultFormatting";
@@ -19,6 +21,10 @@ import {
   UI_FONT,
 } from "./demoTheme";
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
+import { recordedLapVehicleStatModel } from "./vehicleStatPresentation";
+import { createVehicleStatPanel } from "./vehicleStatVisuals";
+import { buildTrackFitPresentation } from "./trackSummaryPresentation";
+import { createBuildTrackFitPanel } from "./trackFitVisuals";
 
 const STANDINGS_ROW_HEIGHT = 13;
 
@@ -52,10 +58,12 @@ export class ResultScene extends Phaser.Scene {
     this.encounterId = data.encounterId;
     const width = LOGICAL_WIDTH;
     addDemoBackdrop(this, "scene-finish-line", 0.6);
-    addRunStamp(this, this.run);
+    // Credits are not actionable on Results and the top-right space belongs to
+    // the build–track comparison legend. Keep the useful stage stamp only.
+    addRunStamp(this, this.run, { showCredits: false });
 
     this.add
-      .text(width / 2, 42, outcomeLabel(this.result), {
+      .text(width * 0.24, 42, outcomeLabel(this.result), {
         fontSize: "26px",
         fontFamily: DISPLAY_FONT,
         fontStyle: "bold",
@@ -64,6 +72,7 @@ export class ResultScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.renderDetails(width);
+    this.renderSetupEvidence(width);
 
     createDemoButton(this, width / 2, 402, "CONTINUE CHAMPIONSHIP", () => {
       const run = continueRunFromResult(this.run, this.encounterId, this.result);
@@ -73,28 +82,85 @@ export class ResultScene extends Phaser.Scene {
 
   private renderDetails(width: number): void {
     this.add
-      .text(width / 2, 68, timesLabel(this.result), { fontSize: "15px", color: "#ffffff" })
+      .text(width * 0.24, 68, timesLabel(this.result), { fontSize: "15px", color: "#ffffff" })
       .setFontFamily(UI_FONT)
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, 88, gapLabel(this.result), {
+      .text(width * 0.24, 88, gapLabel(this.result), {
         fontSize: "13px",
         fontFamily: UI_FONT,
         color: "#cccccc",
       })
       .setOrigin(0.5);
 
-    this.renderStandings(width, 106);
-    this.renderItemRow(width * 0.27, 250, "INSTALLED", this.result.board, "#d7e4e7");
-    this.renderItemRow(width * 0.73, 250, "WORKSHOP STORAGE", this.result.storage, "#8fd8ff");
+    this.renderStandings(width * 0.24, 106);
+    this.renderBuildTrackFit(width);
+    this.renderVehicleStatPanel(width);
+    this.renderItemRow(width * 0.24, 296, "INSTALLED", this.result.board, "#d7e4e7");
+    this.renderItemRow(width * 0.76, 338, "WORKSHOP STORAGE", this.result.storage, "#8fd8ff");
   }
 
-  private renderStandings(width: number, startY: number): void {
+  /**
+   * The exact generated track's composition (027-race-legibility-integrity
+   * US4) — read from `result.track` only, never regenerated. Placed beside
+   * the centered standings list, the one genuinely free column in this
+   * scene's layout (contract §6: Results MUST NOT call generateTrack;
+   * FR-019: missing/malformed evidence is labeled, not inferred).
+   */
+  private renderBuildTrackFit(width: number): void {
+    createBuildTrackFitPanel(
+      this,
+      width * 0.49,
+      18,
+      buildTrackFitPresentation(this.result),
+      { width: width * 0.49, height: 238 },
+    ).setDepth(18);
+  }
+
+  /**
+   * The player's effective four-stat profile for the final completed lap
+   * (025-vehicle-stat-display US3) — same recorded-evidence model and
+   * shared renderer as ContestScene/TestDayScene, using the final lap as
+   * this scene's one completed-lap inspection context (contract §5).
+   */
+  private renderVehicleStatPanel(width: number): void {
+    const player = this.result.cars.find((car) => car.role === "player");
+    const lapIndex = Math.max(0, (player?.laps.length ?? 1) - 1);
+    const lap = player?.laps[lapIndex];
+    const lookup = new Map([...this.result.board, ...this.result.storage].map((item) => [item.id, item] as const));
+    const model = recordedLapVehicleStatModel({
+      lap: lapIndex + 1,
+      lapCount: this.result.lapCount,
+      contextKind: "result-lap",
+      physics: lap?.physics,
+      itemLookup: lookup,
+    });
+    this.add.text(width * 0.51, 260, "YOUR VEHICLE", {
+      fontSize: "10px", fontFamily: UI_FONT, fontStyle: "bold", color: "#8fd8ff",
+    }).setDepth(20);
+    createVehicleStatPanel(this, width * 0.745, 292, model, {
+      viewport: { width: width * 0.48, height: 60 },
+    }).setDepth(20);
+  }
+
+  /**
+   * 028-pre-race-setup contract §10: reads the player's own `CarResult.setup`
+   * only — never infers or regenerates a setting. Missing evidence (a
+   * pre-028 legacy result) renders the explicit unavailable label.
+   */
+  private renderSetupEvidence(width: number): void {
+    const player = playerCar(this.result);
+    this.add.text(width * 0.76, 246, carSetupLines(player).join("\n"), {
+      fontSize: "10px", fontFamily: UI_FONT, color: "#ffd447", lineSpacing: 3,
+    }).setOrigin(0.5, 0);
+  }
+
+  private renderStandings(centerX: number, startY: number): void {
     this.result.cars.forEach((car, index) => {
       const isPlayer = car.role === "player";
       this.add
-        .text(width / 2, startY + index * STANDINGS_ROW_HEIGHT, standingsRow(car), {
+        .text(centerX, startY + index * STANDINGS_ROW_HEIGHT, standingsRow(car), {
           fontSize: "11px",
           fontFamily: UI_FONT,
           fontStyle: isPlayer ? "bold" : "normal",
@@ -126,11 +192,14 @@ export class ResultScene extends Phaser.Scene {
       return;
     }
 
-    const spacing = 104;
+    const availableWidth = 350;
+    const gap = 8;
+    const cardWidth = Math.min(140, Math.floor((availableWidth - gap * (items.length - 1)) / items.length));
+    const spacing = cardWidth + gap;
     const startX = centerX - ((items.length - 1) * spacing) / 2;
     items.forEach((item, index) => {
       const card = createItemCard(this, startX + index * spacing, y + 48, item, {
-        width: 96,
+        width: cardWidth,
         height: 82,
         iconSize: 44,
         layout: "column",

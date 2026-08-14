@@ -17,6 +17,7 @@ import {
   type IdentityTag,
   type OfferedItem,
   type RunIdentity,
+  type RunSetupMemory,
   type VehicleBuild,
 } from "./types";
 
@@ -288,6 +289,13 @@ export interface Run {
   history: RunHistoryEntry[];
   /** New (015-economy-depth FR-001). Floored at 0 — never negative (FR-004). */
   reputation: number;
+  /**
+   * 028-pre-race-setup: championship-local "Remember setup" state. Absent is
+   * equivalent to `{ enabled: false, selections: {} }` — every existing
+   * fixture/run predating this feature stays valid without migration
+   * (contract §7, data-model.md "Draft and remembered state").
+   */
+  setupMemory?: RunSetupMemory;
 }
 
 export type RunTransitionErrorCode =

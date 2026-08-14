@@ -53,3 +53,49 @@ describe("complete 70-item catalog", () => {
       .toBe(homeLaps[0]?.physics?.itemContributions?.[0]?.slotId);
   });
 });
+
+// 028-pre-race-setup T031: the launch configurable-item set is exactly the
+// authored 1/1/3/2 matrix (spec.md FR-008B) — nothing more, nothing less.
+describe("028-pre-race-setup launch configurable-item matrix", () => {
+  it("matches data-model.md's launch authoring matrix exactly, with no unintended configurable items", () => {
+    const expected: Record<string, string> = {
+      "mercer-hand-fitted-steering-knuckle": "steering-response",
+      "soto-two-speed-drive-hub": "gearing",
+      "rook-variable-pitch-propeller": "propeller-pitch",
+      "rook-differential-braking-valve": "brake-balance",
+      "rook-gyroscopic-stabilizer": "racing-line",
+      "voss-adjustable-bodywork-stay": "bodywork-trim",
+      "voss-split-circuit-brake-valve": "brake-balance",
+    };
+
+    const configurable = Object.values(EXCLUSIVE_ITEMS)
+      .flat()
+      .filter((item) => item.configurableSetup)
+      .map((item) => [item.id, item.configurableSetup!.family] as const);
+
+    expect(Object.fromEntries(configurable)).toEqual(expected);
+    expect(configurable).toHaveLength(7);
+  });
+
+  it("distributes exactly 1/1/3/2 configurable items across Evelyn/Lucien/Inez/Nell (FR-008B)", () => {
+    const counts = Object.fromEntries(
+      Object.entries(EXCLUSIVE_ITEMS).map(([entrantId, items]) =>
+        [entrantId, items.filter((item) => item.configurableSetup).length] as const),
+    );
+    expect(counts).toEqual({
+      "evelyn-mercer": 1,
+      "lucien-soto": 1,
+      "inez-rook": 3,
+      "nell-voss": 2,
+    });
+  });
+
+  it("every configurable item's launch magnitude is exactly 1", () => {
+    const configurable = Object.values(EXCLUSIVE_ITEMS).flat().filter((item) => item.configurableSetup);
+    configurable.forEach((item) => expect(item.configurableSetup!.magnitude).toBe(1));
+  });
+
+  it("no neutral item is configurable", () => {
+    expect(NEUTRAL_ITEMS.some((item) => item.configurableSetup)).toBe(false);
+  });
+});

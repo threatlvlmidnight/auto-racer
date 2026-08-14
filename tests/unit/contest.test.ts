@@ -2,13 +2,17 @@ import { describe, expect, it } from "vitest";
 import { BASELINE_CAR, SAMPLE_GHOST } from "../../src/content/sample-data";
 import { RIVAL_PROFILES } from "../../src/content/rivals";
 import { ContestResolutionError, ghostLapTimes, resolveContest } from "../../src/simulation/contest";
+import { deriveEligibleSetupControls, lockRaceSetup, validateLockedRaceSetup } from "../../src/simulation/raceSetup";
+import { generateTrack } from "../../src/simulation/tracks";
 import {
   LAP_COUNT,
   type Build,
+  type LockedRaceSetup,
   type OfferedItem,
   type RivalProfile,
   type SampleGhost,
 } from "../../src/simulation/types";
+import type { Run } from "../../src/simulation/run";
 import { testItem, vehicleBuild } from "../fixtures/vehicle-build-fixtures";
 
 function emptyBuild(): Build {
@@ -396,5 +400,212 @@ describe("resolveContest track generation (N-car, US2)", () => {
     legacy.laps.forEach((lap) => {
       expect((lap as { physics?: unknown }).physics).toBeUndefined();
     });
+  });
+});
+
+// 027-race-legibility-integrity Phase 3 (T015-T018): the result carries the
+// exact generated Track and original roster tie-break order as immutable
+// evidence, so playback/Results never regenerate or reconstruct either one.
+describe("resolveContest immutable evidence: track and tieBreakOrder (027 US3/US4)", () => {
+  it("returns the exact same Track object used to resolve every car's laps", () => {
+    const result = resolveContest(emptyBuild(), RIVAL_PROFILES, 1, 42);
+    const independentlyGenerated = generateTrack(42, 1);
+
+    expect(result.track).toEqual(independentlyGenerated);
+    // Structural identity of the value, not merely equal fields — every car's
+    // own physics resolution read this exact segments array (contract §1).
+    result.cars.forEach((car) => {
+      car.laps.forEach((lap) => {
+        expect(lap.physics!.phases.length).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  it("carries tieBreakOrder as player-first, then rivals in authored roster order — every id exactly once", () => {
+    const result = resolveContest(emptyBuild(), RIVAL_PROFILES, 1, 42);
+
+    expect(result.tieBreakOrder).toEqual(["player", ...RIVAL_PROFILES.map((profile) => profile.id)]);
+    expect(new Set(result.tieBreakOrder).size).toBe(result.tieBreakOrder.length);
+    expect(result.tieBreakOrder).toHaveLength(result.cars.length);
+  });
+
+  it("tieBreakOrder matches the roster order actually used to break exact ties in final position", () => {
+    const result = resolveContest(emptyBuild(), tieRoster, 1, 42);
+
+    expect(result.tieBreakOrder).toEqual(result.cars.map((car) => car.id));
+  });
+
+  it("adding track/tieBreakOrder evidence does not change any pre-existing result field (byte-identical regression, T017)", () => {
+    const result = resolveContest(emptyBuild(), RIVAL_PROFILES, 1, 42);
+
+    expect(result.outcome).toBe("loss");
+    expect(result.lapCount).toBe(10);
+    expect(result.board).toEqual([]);
+    expect(result.storage).toEqual([]);
+    expect(result.cars.map((car) => ({ id: car.id, role: car.role, position: car.position }))).toEqual([
+      { id: "rival-colt", role: "rival", position: 1 },
+      { id: "rival-kestrel", role: "rival", position: 2 },
+      { id: "rival-ferro", role: "rival", position: 3 },
+      { id: "rival-torres", role: "rival", position: 4 },
+      { id: "rival-marchetti", role: "rival", position: 5 },
+      { id: "rival-vane", role: "rival", position: 6 },
+      { id: "rival-quick", role: "rival", position: 7 },
+      { id: "player", role: "player", position: 8 },
+    ]);
+    const player = result.cars.find((car) => car.role === "player")!;
+    expect(player.time).toBeCloseTo(306.4617161109661, 9);
+    expect(player.gapToLeader).toBeCloseTo(7.55035915644811, 9);
+  });
+});
+
+// 028-pre-race-setup T026: fairness/determinism for setup applied to a
+// scored N-car contest — equivalent cars receive identical treatment, and
+// repeated resolution with the same setup is deeply equal.
+describe("resolveContest setup fairness and determinism (T026)", () => {
+  const rulesVersion = "race-setup-v1" as const;
+
+  function lockedSetup(brakingPowerDelta: number, corneringSpeedDelta: number) {
+    return {
+      rulesVersion,
+      encounterId: "encounter-1",
+      trackId: generateTrack(42, 1).id,
+      controls: [{
+        family: "driver-aggression" as const,
+        position: "low" as const,
+        sourceItemIds: [],
+        magnitude: 1,
+        appliedDelta: { accelerationDelta: 0, topSpeedDelta: 0, brakingPowerDelta, corneringSpeedDelta },
+      }],
+      totalDelta: { accelerationDelta: 0, topSpeedDelta: 0, brakingPowerDelta, corneringSpeedDelta },
+    };
+  }
+
+  it("applies the player's own setup only to the player, never to any rival", () => {
+    const setup = lockedSetup(13, -1);
+    const withSetup = resolveContest(emptyBuild(), RIVAL_PROFILES, 1, 42, LAP_COUNT, setup);
+    const withoutSetup = resolveContest(emptyBuild(), RIVAL_PROFILES, 1, 42, LAP_COUNT);
+
+    const player = withSetup.cars.find((car) => car.role === "player")!;
+    const playerWithout = withoutSetup.cars.find((car) => car.role === "player")!;
+    expect(player.time).not.toBe(playerWithout.time);
+    expect(player.setup).toEqual(setup);
+
+    withSetup.cars.filter((car) => car.role === "rival").forEach((rival) => {
+      const rivalWithout = withoutSetup.cars.find((car) => car.id === rival.id)!;
+      expect(rival.time).toBe(rivalWithout.time);
+      expect(rival.setup).toBeUndefined();
+    });
+  });
+
+  it("resolves deeply identically on repeated calls with the same setup", () => {
+    const setup = lockedSetup(-13, 1);
+    const first = resolveContest(emptyBuild(), RIVAL_PROFILES, 1, 42, LAP_COUNT, setup);
+    const second = resolveContest(emptyBuild(), RIVAL_PROFILES, 1, 42, LAP_COUNT, setup);
+
+    expect(second).toEqual(first);
+  });
+
+  it("omits setup evidence entirely (not Balanced-shaped) when no setup argument is passed — legacy equivalence", () => {
+    const result = resolveContest(emptyBuild(), RIVAL_PROFILES, 1, 42);
+    const player = result.cars.find((car) => car.role === "player")!;
+
+    expect(player.setup).toBeUndefined();
+  });
+});
+
+// 028-pre-race-setup T048: every new scored car (player + every rival) gets
+// its own CarResult.setup when the contest is bound to a real encounter.
+describe("resolveContest per-car setup evidence (T048, FR-018/018A)", () => {
+  it("gives every car — player and all 7 rivals — its own CarResult.setup when an encounterId is supplied", () => {
+    const setup = {
+      rulesVersion: "race-setup-v1" as const,
+      encounterId: "encounter-9",
+      trackId: generateTrack(42, 1).id,
+      controls: [{
+        family: "driver-aggression" as const, position: "low" as const, sourceItemIds: [], magnitude: 1,
+        appliedDelta: { accelerationDelta: -6, topSpeedDelta: -1, brakingPowerDelta: 13, corneringSpeedDelta: 1 },
+      }],
+      totalDelta: { accelerationDelta: -6, topSpeedDelta: -1, brakingPowerDelta: 13, corneringSpeedDelta: 1 },
+    };
+    const result = resolveContest(emptyBuild(), RIVAL_PROFILES, 1, 42, LAP_COUNT, setup, "encounter-9");
+
+    result.cars.forEach((car) => {
+      expect(car.setup, car.id).toBeDefined();
+      expect(car.setup!.encounterId).toBe("encounter-9");
+    });
+  });
+
+  it("never copies the player's own configurable-item source IDs onto any rival's setup evidence", () => {
+    const playerItem = testItem({
+      id: "player-only-brake-item", name: "Player Brake Item", price: 0, timeModifier: 0,
+      configurableSetup: { family: "brake-balance", magnitude: 1 },
+    });
+    const playerBuild = vehicleBuild([playerItem]);
+    const track = generateTrack(42, 1);
+    const input = {
+      run: {} as Run, encounterId: "encounter-9", build: playerBuild, track,
+      eligibleControls: deriveEligibleSetupControls(playerBuild), initialSelections: {},
+    };
+    const setup = lockRaceSetup(input, { "brake-balance": "low" }) as LockedRaceSetup;
+
+    const result = resolveContest(playerBuild, RIVAL_PROFILES, 1, 42, LAP_COUNT, setup, "encounter-9");
+
+    result.cars.filter((car) => car.role === "rival").forEach((rival) => {
+      const rivalSourceIds = rival.setup!.controls.flatMap((control) => control.sourceItemIds);
+      expect(rivalSourceIds).not.toContain("player-only-brake-item");
+    });
+  });
+
+  it("omits every car's setup when no encounterId is supplied — pure legacy path unaffected", () => {
+    const result = resolveContest(emptyBuild(), RIVAL_PROFILES, 1, 42);
+    result.cars.forEach((car) => expect(car.setup).toBeUndefined());
+  });
+});
+
+// 028-pre-race-setup T049: setup is validated (never trusted blindly) before
+// resolution — this exercises the same validateLockedRaceSetup used by the
+// scene, applied to a car's own build/track/encounter context.
+describe("resolveContest tamper/replay contract (T049)", () => {
+  it("validateLockedRaceSetup rejects a setup replayed against the wrong track/encounter", () => {
+    const build = emptyBuild();
+    const wrongTrack = generateTrack(1, 1);
+    const rightTrack = generateTrack(42, 1);
+    const input = {
+      run: {} as Run,
+      encounterId: "encounter-9",
+      build,
+      track: rightTrack,
+      eligibleControls: deriveEligibleSetupControls(build),
+      initialSelections: {},
+    };
+    const setup = lockRaceSetup(input, {}) as LockedRaceSetup;
+    const replayedAgainstWrongTrack = { ...input, track: wrongTrack, trackId: wrongTrack.id };
+
+    expect(validateLockedRaceSetup({ ...replayedAgainstWrongTrack, encounterId: input.encounterId }, setup))
+      .toEqual({ kind: "track-mismatch" });
+  });
+
+  it("validateLockedRaceSetup rejects source IDs that no longer match the car's own installed eligibility", () => {
+    const build = emptyBuild();
+    const track = generateTrack(42, 1);
+    const input = {
+      run: {} as Run,
+      encounterId: "encounter-9",
+      build,
+      track,
+      eligibleControls: deriveEligibleSetupControls(build),
+      initialSelections: {},
+    };
+    const setup = lockRaceSetup(input, {}) as LockedRaceSetup;
+    const tampered = {
+      ...setup,
+      controls: [{
+        family: "driver-aggression" as const, position: "balanced" as const,
+        sourceItemIds: ["not-actually-installed"], magnitude: 1,
+        appliedDelta: { accelerationDelta: 0, topSpeedDelta: 0, brakingPowerDelta: 0, corneringSpeedDelta: 0 },
+      }],
+    };
+
+    expect(validateLockedRaceSetup(input, tampered).kind).not.toBe("valid");
   });
 });

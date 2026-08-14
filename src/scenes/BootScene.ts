@@ -33,6 +33,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image("scene-sponsor-negotiation", "/assets/backgrounds/scenes/sponsor-negotiation.png");
     this.load.image("scene-road-circuit", "/assets/backgrounds/scenes/road-circuit.png");
     this.load.image("scene-finish-line", "/assets/backgrounds/scenes/finish-line-aftermath.png");
+    this.load.image("scene-pre-race-setup", "/assets/backgrounds/scenes/pre-race-setup.png");
 
     const entrants = ["evelyn-mercer", "lucien-soto", "inez-rook", "nell-voss"] as const;
     entrants.forEach((id) => {

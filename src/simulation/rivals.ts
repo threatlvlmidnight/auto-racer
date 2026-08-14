@@ -2,13 +2,24 @@ import { vehicleById } from "../content/entrants";
 import { createEmptyVehicleBuild } from "./build";
 import { poolForRival } from "./itemPools";
 import { drawItem } from "./draft";
+import { simulatePlayerLaps } from "./laps";
+import {
+  CANONICAL_POSITION_ORDER,
+  deriveEligibleSetupControls,
+  lockRaceSetup,
+} from "./raceSetup";
+import type { Run } from "./run";
 import { addItem } from "./slots";
 import { addItemToStorage } from "./storage";
+import type { Track } from "./tracks";
 import {
   ACTIVE_IDENTITY_TAG,
   TAG_WEIGHT,
+  type EligibleSetupControl,
   type ItemDefinition,
+  type LockedRaceSetup,
   type RivalProfile,
+  type SetupSelections,
   type VehicleBuild,
 } from "./types";
 
@@ -120,4 +131,62 @@ export function selectGhostRoster(
   }
 
   return shuffled.slice(0, selectionSize);
+}
+
+export interface GeneratedRivalSetupContext {
+  encounterId: string;
+  lapCount: number;
+}
+
+/** Cartesian product of every eligible control's three positions, in canonical family/position order (contract §6). */
+function enumerateLegalSelections(eligibleControls: readonly EligibleSetupControl[]): SetupSelections[] {
+  return eligibleControls.reduce<SetupSelections[]>(
+    (partials, control) => partials.flatMap((partial) =>
+      CANONICAL_POSITION_ORDER.map((position) => ({ ...partial, [control.family]: position }))),
+    [{}],
+  );
+}
+
+/**
+ * 028-pre-race-setup contract §6 / FR-018A: until recorded multiplayer
+ * ghosts exist, a generated rival's setup is chosen by exhaustively
+ * enumerating every legal position combination for its own resolved build,
+ * resolving the complete race time for each by summing canonical
+ * `simulatePlayerLaps` output on the exact upcoming track, and selecting
+ * the lowest-time combination. Exact ties keep the first candidate found in
+ * canonical family-then-position enumeration order (research.md Decision
+ * 5). Delegates locking to the same `lockRaceSetup` humans use and never
+ * calls the N-car contest resolver — this function returns a single car's
+ * setup, nothing else. Pure, deterministic, contains no randomness, and
+ * runs synchronously before playback.
+ */
+export function selectGeneratedRivalSetup(
+  build: VehicleBuild,
+  track: Track,
+  context: GeneratedRivalSetupContext,
+): LockedRaceSetup {
+  const eligibleControls = deriveEligibleSetupControls(build);
+  const input = {
+    // Never read by lockRaceSetup — RaceSetupInput's `run` field exists only
+    // for the player-facing scene flow (data-model.md).
+    run: {} as Run,
+    encounterId: context.encounterId,
+    build,
+    track,
+    eligibleControls,
+    initialSelections: {},
+  };
+
+  let best: { selections: SetupSelections; time: number } | undefined;
+  for (const selections of enumerateLegalSelections(eligibleControls)) {
+    const candidate = lockRaceSetup(input, selections);
+    if (!("controls" in candidate)) continue;
+    const time = simulatePlayerLaps(build, context.lapCount, track, candidate.totalDelta)
+      .reduce((sum, lap) => sum + lap.time, 0);
+    if (!best || time < best.time) best = { selections, time };
+  }
+
+  // `driver-aggression` is always eligible, so at least one legal
+  // combination always exists — `best` is never undefined here.
+  return lockRaceSetup(input, best!.selections) as LockedRaceSetup;
 }

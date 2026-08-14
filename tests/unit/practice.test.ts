@@ -14,6 +14,7 @@ import {
 } from "../../src/simulation/practice";
 import type { Run } from "../../src/simulation/run";
 import {
+  preRaceSetupPracticeFixture,
   pvpBriefingPracticeFixture,
   rewardDraftPracticeFixture,
   runHubPracticeFixture,
@@ -358,5 +359,66 @@ describe("practice latest-two comparison", () => {
     const otherRun: Run = { ...fixture.run, id: "another-run" };
     expect(latestPracticeComparison(otherRun)).toBeNull();
     expect(latestPracticeComparison(fixture.run)).not.toBeNull();
+  });
+});
+
+// 028-pre-race-setup T066: setup-origin Test Day practice domain (contract §8, FR-012D/E).
+describe("setup-origin Test Day (T066)", () => {
+  function openSetupOriginSession(fixture: ReturnType<typeof preRaceSetupPracticeFixture>) {
+    const returnContext = createPracticeReturnContext(fixture.run, {
+      context: "pre-race-setup",
+      selection: fixture.selection,
+      navigation: fixture.navigation,
+      setupSnapshot: fixture.setupSnapshot,
+    });
+    return createPracticeSession(fixture.run, returnContext);
+  }
+
+  it("routes back to PreRaceScene, not RunScene", () => {
+    const fixture = preRaceSetupPracticeFixture();
+    const returnContext = createPracticeReturnContext(fixture.run, {
+      context: "pre-race-setup",
+      selection: fixture.selection,
+      navigation: fixture.navigation,
+      setupSnapshot: fixture.setupSnapshot,
+    });
+
+    expect(returnContext.route).toBe("PreRaceScene");
+  });
+
+  it("resolves against the exact retained upcoming track — laps carry real physics evidence", () => {
+    const fixture = preRaceSetupPracticeFixture();
+    const session = resolvePractice(openSetupOriginSession(fixture));
+
+    expect(session.state).toBe("completed");
+    expect(session.result!.contest.laps[0].physics).toBeDefined();
+    expect(session.result!.contest.laps[0].physics!.stats).toBeDefined();
+  });
+
+  it("applies the exact temporary locked setup delta to the player's lap-stat fold", () => {
+    const conservative = resolvePractice(openSetupOriginSession(preRaceSetupPracticeFixture({ "driver-aggression": "low" })));
+    const balanced = resolvePractice(openSetupOriginSession(preRaceSetupPracticeFixture({})));
+
+    // Conservative (low): acceleration -6 relative to the exact same track/build at Balanced.
+    expect(conservative.result!.contest.laps[0].physics!.stats.acceleration)
+      .toBe(balanced.result!.contest.laps[0].physics!.stats.acceleration - 6);
+  });
+
+  it("remains explicitly unscored — result carries no run/encounterId/scored authority", () => {
+    const fixture = preRaceSetupPracticeFixture();
+    const session = resolvePractice(openSetupOriginSession(fixture));
+
+    expect(session.result!.authority).toBe("practice-only");
+    expect(session.result).not.toHaveProperty("run");
+    expect(session.result).not.toHaveProperty("encounterId");
+  });
+
+  it("does not write remembered setup or advance/settle the run", () => {
+    const fixture = preRaceSetupPracticeFixture();
+    const before = structuredClone(fixture.run);
+    resolvePractice(openSetupOriginSession(fixture));
+
+    expect(fixture.run).toEqual(before);
+    expect(fixture.run.setupMemory).toBeUndefined();
   });
 });

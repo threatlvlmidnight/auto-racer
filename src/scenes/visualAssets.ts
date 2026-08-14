@@ -6,6 +6,7 @@ export type ProductionBackdropKey =
   | "scene-sponsor-negotiation"
   | "scene-road-circuit"
   | "scene-finish-line"
+  | "scene-pre-race-setup"
   | "garage-evelyn-mercer"
   | "garage-lucien-soto"
   | "garage-inez-rook"

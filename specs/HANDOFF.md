@@ -1,6 +1,84 @@
 # Handoff
 
-## Latest session — feature 025 packaged, feature 027 specification started
+## Latest session — features 025 and 027 both fully implemented
+
+**Updated**: 2026-08-13 after `/speckit.implement`-ing both `025-vehicle-
+stat-display` and `027-race-legibility-integrity` end to end in one session.
+`main` was already in sync with `origin/main`; everything below is
+uncommitted in the working tree — do not commit until told to.
+
+### What shipped
+
+**`025-vehicle-stat-display`** (50/50 tasks): `src/simulation/laps.ts` gained
+`resolveCurrentBuildPhysicalStats` (unconditional current-build stats,
+correctly excluding track-conditional/lap-stacking potential). New
+`src/scenes/vehicleStatPresentation.ts` (pure) and `vehicleStatVisuals.ts`
+(Phaser renderer) provide `currentVehicleStatModel`/
+`prospectiveVehicleStatModel`/`recordedLapVehicleStatModel`, wired into
+`PrepareScene` (current totals + live placement preview), `ContestScene`/
+`ResultScene` (per-lap effective stats), and `TestDayScene`/
+`PracticeContestScene`/`PracticeResultScene` (honest "no track-aware
+evidence" state, since Test Day's legacy `resolveContest` path genuinely
+has none today). **One recorded deviation**: Reward Draft/Parts Supplier use
+a compact single-line stat readout instead of the full tile panel — no free
+vertical band without reworking tuned layouts; deferred to feature 026's
+responsive frame (`specs/DEFERRED.md`).
+
+**`027-race-legibility-integrity`** (57/57 tasks): `NCarContestResult`
+gained immutable `track`/`tieBreakOrder` evidence (`types.ts`, emitted by
+`resolveNCarContest` in `contest.ts`); `ContestScene` now builds playback
+from `result.track` instead of an independent `generateTrack` call.
+`src/simulation/playback.ts` gained `checkpointProjection`,
+`latestCompletedPlayerLap`, and `updateLiveProjection` — the equal-lap,
+once-per-completed-player-lap projection that replaces the old
+continuously-reordering 8-row standings sidebar. New
+`src/scenes/raceProjectionPresentation.ts` (marker identity/lap context,
+projection text) and `trackSummaryPresentation.ts` (wraps the new
+`summarizeTrack` in `tracks.ts`) back the new `ContestScene` sidebar
+("PROJECTED PACE": headline/split/ahead/behind/change, updated only at
+checkpoints) and a new `ResultScene` track-composition panel. **Playback
+integrity diagnosis (Phase 2, required before any UI change) found zero
+actual defects** — `carProgressAt`/`pointAtProgress`/`nCarFrameStateAt` were
+already correct; the diagnosis is recorded in full in `research.md`.
+
+Combined: 887 tests passing (up from 780 at session start), `tsc`/lint/build
+all clean throughout. Full acceptance evidence for each feature is in its
+own `quickstart.md`.
+
+### What wasn't verified live, and why
+
+Both features' scene wiring was verified live in the browser for everything
+reachable quickly (empty-build stats, item-install deltas, placement
+preview hover/commit/revert, Test Day/Practice panels, the race's initial
+"Awaiting Lap 1 Split" state). **A full 10-lap race was never watched to
+completion in the browser** — this environment throttles a backgrounded
+tab's `requestAnimationFrame` severely (confirmed independent of any code
+change: 40+ seconds of real wait advanced the 20-second animation only
+marginally), making that impractical to sit through via the tool-driven
+browser. `ResultScene`'s vehicle-stat panel (025) and the checkpoint
+publish transition + Results track-summary panel (027) were therefore
+verified by code review, `tsc`, and the automated suite only — not by
+watching them render. If picking this up next, either watch a race in a
+real foregrounded browser tab once, or trust the test coverage (both
+features' hardest logic — checkpoint math, projection state machine, track
+summary — has dedicated exhaustive unit coverage independent of Phaser).
+
+### Start here next session
+
+Nothing is blocked. Natural next steps, in rough priority order:
+1. Manually watch one full race in a real (non-throttled) browser to close
+   the live-verification gap noted above.
+2. Feature 026's responsive frame, when picked up, should swap
+   `PrepareScene`'s compact vehicle-stat line for the real tile panel
+   (`specs/DEFERRED.md`).
+3. `contestFormatting.ts`'s `standingsRows` is now unused by any scene
+   (kept only because `contestFormatting.test.ts` still covers it as a pure
+   formatter, per feature 027 T036) — safe to delete in a future cleanup
+   pass if nothing else adopts it.
+
+---
+
+## Previous session — feature 025 packaged, feature 027 specification started
 
 **Updated**: 2026-08-13 after completing feature 025's specification package
 and drafting feature 027.
@@ -484,3 +562,52 @@ placeholder until the deferred capability lands. Full stat blocks live in
 5. `specs/DEFERRED.md` / `specs/skribidi-gap-decisions.md` — longer-
    standing out-of-scope tracking, still accurate, unrelated to this
    session's work.
+
+## 2026-08-13 — Feature 028 implemented; feature 029 specified
+
+- `specs/028-pre-race-setup/spec.md` is the authoritative full specification.
+  Implementation is complete: the proof singular brake-balance control
+  (`BrakeBalanceSetting`/`LockedRaceSetup.setting`/`.statDeltas`) is fully
+  replaced by a versioned, multi-control domain in `simulation/raceSetup.ts`
+  — seven launch families (universal Driver Aggression plus six
+  installed-item equipment families), same-family cross-pool aggregation,
+  and `lockRaceSetup`/`validateLockedRaceSetup` with full tamper rejection.
+- `PreRaceScene.ts` (backed by pure `scenes/raceSetupPresentation.ts`) shows
+  the exact upcoming track, current/prospective four-stat comparison, every
+  eligible control with keyboard/touch/mouse-operable positions, and a
+  factual track-capability-alignment line — with zero opponent/field/purse/
+  sponsor/prediction data anywhere in the model (verified by string-scan
+  tests). All seven launch items are authored: Hand-Fitted Steering Knuckle
+  (steering-response), Two-Speed Drive Hub (gearing), Variable-Pitch
+  Propeller (propeller-pitch), Differential Braking Valve + Split-Circuit
+  Brake Valve (shared brake-balance), Gyroscopic Stabilizer (racing-line),
+  Adjustable Bodywork Stay (bodywork-trim) — the authored 1/1/3/2 Evelyn/
+  Lucien/Inez/Nell distribution (FR-008B).
+- Setup is canonical and per-car: `CarResult.setup` (not a top-level
+  `NCarContestResult` field) holds each car's own locked setup.
+  `simulation/rivals.ts`'s `selectGeneratedRivalSetup` gives every generated
+  rival a deterministic, exhaustively-searched (≤3^5=243 candidates) legal
+  setup via the same `lockRaceSetup`/`simulatePlayerLaps` authorities humans
+  use — gated behind a new optional `encounterId` parameter on
+  `resolveContest`'s N-car overload so every pre-028 call site (tests,
+  fixtures) keeps its exact legacy numeric output unchanged; only
+  `ContestScene` (real gameplay) supplies it. Worst-case measured cost is
+  ~50ms/rival, ~350ms for a fully-equipped 8-car field, one-time at race
+  start (not per-frame).
+- Remember setup (`Run.setupMemory`, optional/absent-by-default) and
+  exact-track Test Day (`PracticeSetupSnapshot`, a new `"pre-race-setup"`
+  practice origin routing back to `PreRaceScene` instead of `RunScene`) are
+  both implemented — Test Day now resolves against the real upcoming track
+  and a temporary locked setup snapshot rather than the generic no-track
+  path, restoring the exact prior draft/checkbox/focus on return, and never
+  writing remembered or scored state. Verified live in-browser end to end.
+- `specs/029-championship-expansion/spec.md` specifies the next schedule as
+  24 stages / 8 rounds (`[choice, choice, PvP] × 8`). It is deliberately
+  specified but not implemented yet.
+- Verification after 028: full suite green (1000+ tests, up from the
+  pre-028 894), lint clean, production build/typecheck clean (only the
+  pre-existing bundle-size warning). One known gap: the 2-4-installed-
+  equipment control-row layout was verified at the unit/presentation level
+  (exhaustively) but not re-confirmed live in-browser at 800×450 — reaching
+  that state through the real draft economy is RNG-gated; worth a follow-up
+  manual pass before considering the visual polish fully closed.

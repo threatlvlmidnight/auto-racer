@@ -238,7 +238,7 @@ const ORIGIN_LABELS: Record<ItemDefinition["origin"], string> = {
   coachworks: "Coachworks", velodrome: "Velodrome", fieldworks: "Fieldworks", backroads: "Backroads",
 };
 
-function conditionLabel(condition: PhysicsCondition): string {
+export function conditionLabel(condition: PhysicsCondition): string {
   const comparison = condition.direction === "at-least" ? "at least" : "at most";
   return `WHEN corner is ${comparison} ${condition.turnDegrees}°`;
 }
