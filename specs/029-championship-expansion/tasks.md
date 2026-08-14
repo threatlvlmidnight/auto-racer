@@ -114,14 +114,14 @@ economically distinct, and unambiguous to players.
 whose reduced difficulty comes solely from legal builds and setups.
 
 - [X] T035 Add failing content-schema/count tests in `tests/unit/localOpponents.test.ts` for 42 selectable-region profiles, seven Paris profiles, unique stable IDs, correct region counts, identity/tendency completeness, and no portrait requirement
-- [ ] T036 Add failing Qualifier/Challenge generation tests in `tests/unit/localOpponents.test.ts` for allowed occupied-slot bands, tier caps, Balanced Qualifiers, track-aware legal Challenges, legs 1–2 lower bias, legs 3–4 upper bias, and no tier 3
-- [ ] T037 Add failing legality/transparency/determinism tests in `tests/unit/localOpponents.test.ts` for canonical slot/build/setup validators, inspectable evidence, deterministic fallback, same-profile visible upgrade, and repeated equality
+- [X] T036 Add failing Qualifier/Challenge generation tests in `tests/unit/localOpponents.test.ts` for allowed occupied-slot bands, tier caps, Balanced Qualifiers, track-aware legal Challenges, legs 1–2 lower bias, legs 3–4 upper bias, and no tier 3
+- [X] T037 Add failing legality/transparency/determinism tests in `tests/unit/localOpponents.test.ts` for canonical slot/build/setup validators, inspectable evidence, deterministic fallback, same-profile visible upgrade, and repeated equality
 - [X] T038 [P] Author seven British Isles and seven Continental Europe profiles in `src/content/localTeams/britishIsles.ts` and `src/content/localTeams/continentalEurope.ts`
 - [X] T039 [P] Author seven North America and seven South America profiles in `src/content/localTeams/northAmerica.ts` and `src/content/localTeams/southAmerica.ts`
 - [X] T040 [P] Author seven Northern Europe and seven Mediterranean & North Africa profiles in `src/content/localTeams/northernEurope.ts` and `src/content/localTeams/mediterraneanNorthAfrica.ts`
 - [X] T041 [P] Author seven Paris international exhibition profiles in `src/content/localTeams/parisExhibition.ts`
-- [ ] T042 Assemble and validate the profile catalog in `src/content/localTeams/index.ts`, then implement deterministic legal item/build selection, slot/tier scaling, setup selection, and fallback provenance in `src/simulation/localOpponents.ts` (catalog, slot scaling, legal build/setup selection, and provenance landed; explicit Challenge tier-2 upgrade policy remains)
-- [ ] T043 Integrate seven generated local snapshots into Local Race contest assembly in `src/simulation/run.ts` through the shared setup/contest boundary (seven persistent Local identities and build scaling are routed through shared contest input; exact prelocked Qualifier/Challenge setup snapshots remain)
+- [X] T042 Assemble and validate the profile catalog in `src/content/localTeams/index.ts`, then implement deterministic legal item/build selection, slot/tier scaling, setup selection, and fallback provenance in `src/simulation/localOpponents.ts`
+- [X] T043 Integrate seven generated local snapshots into Local Race contest assembly in `src/simulation/run.ts` through the shared setup/contest boundary
 - [ ] T044 Extend per-car Results inspection in `src/scenes/ResultScene.ts` to show local identity, legal build, setup, and fallback label from recorded evidence
 - [ ] T045 Run T035-T037 across every profile, leg, and Local tier; reject content that requires a hidden pace modifier to meet difficulty goals
 
@@ -175,8 +175,8 @@ sparse, duplicate, invalid, and full-record cases; verify field and classificati
 
 - [X] T060 [US4] Define the injected exact-track recorded-ghost source, validation, and provenance contracts in `src/simulation/types.ts` and `src/simulation/rivals.ts` without adding networking
 - [X] T061 [US4] Implement finale derivation, record filtering/ranking, seven-slot selection, and deterministic exhibition fallback generation in `src/simulation/rivals.ts`
-- [ ] T062 [US4] Persist `FinaleSelection` after Championship Race nine and assemble normal versus elite race-ten input exactly once in `src/simulation/run.ts` (normal/elite mode persists after race nine; elite field assembly at race ten remains)
-- [ ] T063 [US4] Freeze standings in elite mode and implement finish-only elite classification in `src/simulation/standings.ts`
+- [X] T062 [US4] Persist `FinaleSelection` after Championship Race nine and assemble normal versus elite race-ten input exactly once in `src/simulation/run.ts`
+- [X] T063 [US4] Freeze standings in elite mode and implement finish-only elite classification in `src/simulation/standings.ts`
 - [ ] T064 [US4] Add elite qualification, opponent provenance, frozen-table, and title-result presentation in `src/scenes/worldTourPresentation.ts`, `RunScene.ts`, `PreRaceScene.ts`, and `ResultScene.ts`
 - [ ] T065 [US4] Run T056-T059 plus invalid/tampered ghost regression cases
 
@@ -201,10 +201,10 @@ completed legs/current stages, and force each background plus neutral fallback.
 ### Implementation
 
 - [ ] T069 [US5] Implement pure world-map anchors, route lines, leg/history cards, current-stage sequence, header, and destination presentation in `src/scenes/worldTourPresentation.ts` (destination cards, leg states, current sequence, and header landed; map anchors/route lines/history cards remain)
-- [ ] T070 [US5] Recompose `src/scenes/RunScene.ts` as the stylized map itinerary with inspectable completed-leg histories and expanded current leg
+- [ ] T070 [US5] Recompose `src/scenes/RunScene.ts` as the stylized map itinerary with inspectable completed-leg histories and expanded current leg (compact five-leg route and current eight-stage leg landed; interactive completed-leg history remains)
 - [ ] T071 [US5] Add all seven regional texture descriptors, preload keys, focal/crop metadata, and neutral fallback in `src/scenes/visualAssets.ts` and `src/scenes/BootScene.ts` (descriptors, preload keys, and neutral fallback landed; focal/crop metadata remains)
-- [ ] T072 [US5] Select regional backgrounds/dressing from recorded `regionTheme` in `src/scenes/ContestScene.ts` without importing region content into simulation
-- [ ] T073 [US5] Show canonical region and track identity in `src/scenes/PreRaceScene.ts` and `src/scenes/ResultScene.ts` even when visual loading falls back
+- [X] T072 [US5] Select regional backgrounds/dressing from recorded `regionTheme` in `src/scenes/ContestScene.ts` without importing region content into simulation
+- [X] T073 [US5] Show canonical region and track identity in `src/scenes/PreRaceScene.ts` and `src/scenes/ResultScene.ts` even when visual loading falls back
 - [ ] T074 [US5] Run T066-T068 and perform the regional-art/itinerary viewport matrix in `specs/029-championship-expansion/quickstart.md`
 
 **Checkpoint**: The world-tour fantasy is visible and usable without changing
@@ -230,7 +230,7 @@ including preparation traversal, recovery, repeat zero, and Paris-at-zero.
 
 - [X] T078 [US6] Implement pure Last Chance transitions and warning projection in `src/simulation/reputation.ts`
 - [X] T079 [US6] Initialize reputation/status and apply T078 once per final race settlement in `src/simulation/run.ts` and `src/simulation/settlement.ts`
-- [ ] T080 [US6] Add low-reputation, active Last Chance, consumed, recovery, and failure presentation to `src/scenes/worldTourPresentation.ts`, `RunScene.ts`, and `ResultScene.ts`
+- [ ] T080 [US6] Add low-reputation, active Last Chance, consumed, recovery, and failure presentation to `src/scenes/worldTourPresentation.ts`, `RunScene.ts`, and `ResultScene.ts` (low/active/failure hub presentation landed; explicit consumed/recovery Result messaging remains)
 - [ ] T081 [US6] Run T075-T077 and every Last Chance quickstart case
 
 **Checkpoint**: Reputation failure is predictable, single-use, and complete.

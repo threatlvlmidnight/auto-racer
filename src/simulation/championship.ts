@@ -109,6 +109,7 @@ export function createWorldTourState(seed: number): WorldTourState {
     standings: [],
     championshipRivals: [],
     finaleMode: null,
+    classification: null,
     lastChanceStatus: "available",
   };
 }

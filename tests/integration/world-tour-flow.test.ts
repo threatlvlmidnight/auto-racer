@@ -56,4 +56,22 @@ describe("world-tour run flow", () => {
     expect(run.stageIndex).toBe(8);
     expect(run.availableChoices).toHaveLength(2);
   });
+
+  it("completes four chosen regions and automatic Paris only after all 40 stages", () => {
+    let run = newRun();
+    expect(run.reputation).toBe(12);
+    for (let regionalLeg = 0; regionalLeg < 4; regionalLeg += 1) {
+      run = confirmRunDestination(run, run.worldTour!.destinationOffer!.options[0], () => 0);
+      run = completeCurrentLeg(run);
+      if (regionalLeg < 3) expect(run.worldTour!.phase).toBe("awaiting-destination");
+    }
+    expect(run.worldTour!.phase).toBe("racing");
+    expect(run.worldTour!.legs[4].regionId).toBe("paris-exhibition");
+    expect(run.stages).toHaveLength(40);
+    run = completeCurrentLeg(run);
+    expect(run.status).toBe("completed");
+    expect(run.stageIndex).toBe(40);
+    expect(run.history).toHaveLength(40);
+    expect(run.worldTour).toMatchObject({ phase: "completed", currentGlobalStageIndex: 40 });
+  });
 });

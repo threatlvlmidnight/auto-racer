@@ -79,7 +79,7 @@ export function runPresentation(run: Run): RunPresentation {
     choices: run.availableChoices,
     remainingStages: tourActive ? Math.max(0, 40 - run.stageIndex) : progress.remaining,
     pendingSponsorLabel: run.activeSponsorContract
-      ? `Pending sponsor: ${sponsorObjectiveLabel(run.activeSponsorContract.objective)} on the next race for 7 credits`
+      ? `Pending sponsor: ${sponsorObjectiveLabel(run.activeSponsorContract.objective)} ${run.activeSponsorContract.objective.kind === "trigger-tagged-items" ? "during either race type" : "in the next Championship Race"} for 7 credits`
       : null,
     statusLabel: run.status === "unavailable"
       ? "Unavailable"
@@ -168,6 +168,11 @@ export interface ContestSceneInput {
   /** The current scheduled PvP stage's ordinal (data-model.md "in-run level"). */
   level: number;
   seed: number;
+  raceKind: "local" | "championship";
+  regionId?: import("../simulation/types").RegionId;
+  localRaceTier?: import("../simulation/types").LocalRaceTier;
+  legOrdinal?: 1 | 2 | 3 | 4 | 5;
+  eliteFinale: boolean;
 }
 
 export function contestSceneInput(run: Run, encounterId: string): ContestSceneInput {
@@ -199,6 +204,11 @@ export function contestSceneInput(run: Run, encounterId: string): ContestSceneIn
       : selectGhostRoster(GHOST_POOL, run.seed, level),
     level,
     seed: run.seed,
+    raceKind: stage?.raceKind ?? "championship",
+    regionId: stage?.regionId,
+    localRaceTier: stage?.localRaceTier,
+    legOrdinal: activeTourLeg?.ordinal,
+    eliteFinale: stage?.pvpOrdinal === 10 && run.worldTour?.finaleMode === "elite",
   };
 }
 

@@ -26,6 +26,7 @@ import {
   type PracticeFocusHandle,
 } from "./demoTheme";
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
+import { regionDefinition } from "../content/regions";
 
 const CONTROL_TOP_Y = 216;
 // Tight enough that Driver Aggression plus the natural maximum of four
@@ -188,6 +189,13 @@ export class PreRaceScene extends Phaser.Scene {
     this.track(this.add.text(LOGICAL_WIDTH / 2, 26, "PRE-RACE SETUP", {
       fontSize: "24px", fontFamily: DISPLAY_FONT, fontStyle: "bold", color: "#f4d58d",
     }).setOrigin(0.5));
+    const stage = this.setupInput.run.stages[this.setupInput.run.stageIndex];
+    if (stage?.regionId) {
+      const raceLabel = stage.raceKind === "local" ? "LOCAL RACE" : "CHAMPIONSHIP RACE";
+      this.track(this.add.text(LOGICAL_WIDTH / 2, 51, `${regionDefinition(stage.regionId).name} · ${raceLabel}`, {
+        fontSize: "11px", fontFamily: UI_FONT, fontStyle: "bold", color: "#cddbd2",
+      }).setOrigin(0.5));
+    }
 
     this.renderVehicle(model);
     this.renderTrack(model);

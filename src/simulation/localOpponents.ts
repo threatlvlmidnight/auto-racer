@@ -98,7 +98,13 @@ export function resolveLocalOpponentSnapshot(
   encounterId: string,
 ): LocalOpponentSnapshot {
   const slots = occupiedSlots(tier, legOrdinal);
-  const build = resolveRivalBuild(asRivalProfile(profile, slots), legOrdinal, seed);
+  const baseBuild = resolveRivalBuild(asRivalProfile(profile, slots), legOrdinal, seed);
+  const build = tier === "challenge"
+    ? {
+        ...baseBuild,
+        slots: baseBuild.slots.map((slot, index) => index === 0 && slot.item ? { ...slot, tier: 2 as const } : slot),
+      }
+    : baseBuild;
   const setup = tier === "qualifier"
     ? balancedSetup(build, track, encounterId)
     : selectGeneratedRivalSetup(build, track, { encounterId, lapCount: 16 });
@@ -123,7 +129,7 @@ export function resolveLocalField(
 ): readonly LocalOpponentSnapshot[] {
   const profiles = localProfilesForRegion(regionId);
   if (profiles.length !== 7) throw new Error(`Region ${regionId} does not have seven Local teams`);
-  return profiles.map((profile, index) => resolveLocalOpponentSnapshot(
-    profile, tier, legOrdinal, seed + index * 1009, track, `${encounterId}-${profile.id}`,
+  return profiles.map((profile) => resolveLocalOpponentSnapshot(
+    profile, tier, legOrdinal, seed, track, `${encounterId}-${profile.id}`,
   ));
 }

@@ -9,7 +9,7 @@ import {
   type LiveProjectionState,
   type NCarPlaybackSchedule,
 } from "../simulation/playback";
-import { pointAtProgress } from "../simulation/tracks";
+import { generateTrack, pointAtProgress } from "../simulation/tracks";
 import {
   SLOT_CAPACITY,
   type NCarContestResult,
@@ -26,6 +26,10 @@ import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
 import { recordedLapVehicleStatModel, vehicleItemLookup } from "./vehicleStatPresentation";
 import { createVehicleStatPanel } from "./vehicleStatVisuals";
 import { projectionPresentation } from "./raceProjectionPresentation";
+import { regionalRaceBackdrop } from "./visualAssets";
+import { resolveLocalField } from "../simulation/localOpponents";
+import { selectEliteFinaleOpponents } from "../simulation/rivals";
+import type { RivalProfile } from "../simulation/types";
 
 const BOARD_SLOT_WIDTH = 190;
 const BOARD_SLOT_HEIGHT = 58;
@@ -93,8 +97,37 @@ export class ContestScene extends Phaser.Scene {
     this.run = input.run;
     this.encounterId = input.encounterId;
     this.playedBuild = input.build;
+    const authoritativeTrack = generateTrack(input.seed, input.level);
+    const localSetups = input.raceKind === "local" && input.regionId && input.localRaceTier && input.legOrdinal
+      ? resolveLocalField(
+          input.regionId,
+          input.localRaceTier,
+          input.legOrdinal,
+          input.seed,
+          authoritativeTrack,
+          input.encounterId,
+        ).map((snapshot) => snapshot.setup)
+      : undefined;
+    const eliteOpponents = input.eliteFinale
+      ? selectEliteFinaleOpponents([], authoritativeTrack, input.run.identity.entrantId, input.seed)
+      : undefined;
+    const eliteRoster: readonly RivalProfile[] | undefined = eliteOpponents?.map((opponent, index) => ({
+      id: opponent.id,
+      name: opponent.displayName,
+      color: ["#c0524a", "#4a90c0", "#c0a34a", "#7a4ac0", "#4ac077", "#c04a9e", "#c07a4a"][index],
+      vehicleId: opponent.build.vehicleId,
+      levelScaling: () => ({ slotsToFill: 4, priceBias: "high" as const }),
+    }));
     this.result = resolveContest(
-      input.build, input.rivalRoster, input.level, input.seed, input.lapCount, data.setup, input.encounterId,
+      input.build,
+      eliteRoster ?? input.rivalRoster,
+      input.level,
+      input.seed,
+      input.lapCount,
+      data.setup,
+      input.encounterId,
+      eliteOpponents?.map((opponent) => opponent.setup) ?? localSetups,
+      eliteOpponents?.map((opponent) => opponent.build),
     );
     // 027-race-legibility-integrity (contract §1): playback reads the
     // contest's own retained track — it never regenerates one independently,
@@ -173,7 +206,8 @@ export class ContestScene extends Phaser.Scene {
   private renderTrack(board: (OfferedItem | null)[], lapCount: number): void {
     const width = LOGICAL_WIDTH;
     const track = this.schedule!.track;
-    addDemoBackdrop(this, "scene-road-circuit", 0.22);
+    const regionId = this.run?.stages[this.run.stageIndex]?.regionId;
+    addDemoBackdrop(this, regionalRaceBackdrop(regionId), 0.22);
     addRunStamp(this, this.run!);
     this.add
       .text(width / 2, 34, "CONTEST", {

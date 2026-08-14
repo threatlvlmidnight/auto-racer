@@ -1,8 +1,6 @@
-import type { StandingEntry } from "./types";
+import type { ChampionshipClassification, StandingEntry } from "./types";
 
 export const CHAMPIONSHIP_POINTS_BY_POSITION = [10, 8, 6, 5, 4, 3, 2, 1] as const;
-
-export type ChampionshipClassification = "world-champion" | "podium" | "classified";
 
 export function createStandings(entrantIds: readonly string[]): readonly StandingEntry[] {
   if (entrantIds.length !== 8 || new Set(entrantIds).size !== 8) {

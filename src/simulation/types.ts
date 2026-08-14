@@ -28,6 +28,7 @@ export type RegionId = SelectableRegionId | "paris-exhibition";
 export type RaceKind = "local" | "championship";
 export type LocalRaceTier = "qualifier" | "challenge";
 export type FinaleMode = "normal" | "elite";
+export type ChampionshipClassification = "world-champion" | "podium" | "classified";
 export type LastChanceStatus = "available" | "active" | "consumed" | "failed";
 
 export interface DestinationOffer {
@@ -80,6 +81,7 @@ export interface WorldTourState {
   standings: readonly StandingEntry[];
   championshipRivals: readonly ChampionshipRivalState[];
   finaleMode: FinaleMode | null;
+  classification: ChampionshipClassification | null;
   lastChanceStatus: LastChanceStatus;
 }
 

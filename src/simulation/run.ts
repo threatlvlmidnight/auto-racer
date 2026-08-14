@@ -18,7 +18,9 @@ import { settleWorldTourReputation, WORLD_TOUR_REPUTATION_START } from "./reputa
 import { raceSettlementPolicy } from "./settlement";
 import {
   applyChampionshipResult,
+  classificationForPosition,
   createStandings,
+  normalFinaleClassification,
   qualifiesForEliteFinale,
 } from "./standings";
 import {
@@ -817,21 +819,32 @@ export function completePvpEncounter(
       status: reputation.failed ? "failed" : next.status,
       worldTour: { ...next.worldTour, lastChanceStatus: reputation.lastChanceStatus },
     };
-    if (raceKind === "championship" && result.finishingOrder) {
+    const settledTour = next.worldTour!;
+    const eliteFinale = stage.pvpOrdinal === 10 && settledTour.finaleMode === "elite";
+    if (eliteFinale) {
+      next = {
+        ...next,
+        worldTour: { ...settledTour, classification: classificationForPosition(position) },
+      };
+    } else if (raceKind === "championship" && result.finishingOrder) {
       const finishingOrder = result.finishingOrder.map((entrantId) =>
         entrantId === "player" ? run.identity.entrantId : entrantId);
       if (finishingOrder.length === 8) {
-        const currentTour = next.worldTour!;
+        const currentTour = settledTour;
         const standings = applyChampionshipResult(currentTour.standings, finishingOrder);
         const championshipRaceCount = standings[0]?.championshipFinishes.length ?? 0;
+        const finaleMode = championshipRaceCount === 9
+          ? (qualifiesForEliteFinale(standings, run.identity.entrantId) ? "elite" : "normal")
+          : currentTour.finaleMode;
         next = {
           ...next,
           worldTour: {
             ...currentTour,
             standings,
-            finaleMode: championshipRaceCount === 9
-              ? (qualifiesForEliteFinale(standings, run.identity.entrantId) ? "elite" : "normal")
-              : currentTour.finaleMode,
+            finaleMode,
+            classification: championshipRaceCount === 10
+              ? normalFinaleClassification(standings, run.identity.entrantId)
+              : currentTour.classification,
           },
         };
       }
