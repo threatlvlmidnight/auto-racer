@@ -118,13 +118,13 @@
 
 **Purpose**: Prove the assembled deployment feature is safe, repeatable, and ready for an owner-authorized first demo.
 
-- [ ] T043 [P] Audit all source/runtime paths for root-absolute URLs, traversal, mixed base handling, and unversioned stable public assets in `src/`, `index.html`, and `vite.config.ts`
-- [ ] T044 [P] Audit workflow triggers, permissions, environments, concurrency, secret exposure, tag validation order, action pins, and artifact path scope in `.github/workflows/`
-- [ ] T045 Run `npm ci`, focused deployment suites, full `npm test`, `npm run lint`, `npm run build`, simulated-prefix build, artifact audit, and local smoke checks; record exact results in `specs/031-demo-deployment/acceptance-evidence.md`
-- [ ] T046 Perform clean-cache browser QA at 1920×1080, 1366×768, 1024×768, and 800×450 against the simulated `/auto-racer/` deployment; record console/network evidence in `specs/031-demo-deployment/acceptance-evidence.md`
-- [ ] T047 Re-run the Constitution Check from `plan.md` against delivered code and record final PASS evidence in `specs/031-demo-deployment/acceptance-evidence.md`
-- [ ] T048 Reconcile `specs/HANDOFF.md` and `specs/DEFERRED.md` with the deployed-demo boundary and feature 032 multiplayer dependency
-- [ ] T049 Prepare—but do not push—the proposed first `demo-v0.1.0` tag command and owner checklist in `specs/031-demo-deployment/acceptance-evidence.md`
+- [X] T043 [P] Audit all source/runtime paths for root-absolute URLs, traversal, mixed base handling, and unversioned stable public assets in `src/`, `index.html`, and `vite.config.ts`
+- [X] T044 [P] Audit workflow triggers, permissions, environments, concurrency, secret exposure, tag validation order, action pins, and artifact path scope in `.github/workflows/`
+- [X] T045 Run `npm ci`, focused deployment suites, full `npm test`, `npm run lint`, `npm run build`, simulated-prefix build, artifact audit, and local smoke checks; record exact results in `specs/031-demo-deployment/acceptance-evidence.md`
+- [X] T046 Perform clean-cache browser QA at 1920×1080, 1366×768, 1024×768, and 800×450 against the simulated `/auto-racer/` deployment; record console/network evidence in `specs/031-demo-deployment/acceptance-evidence.md`
+- [X] T047 Re-run the Constitution Check from `plan.md` against delivered code and record final PASS evidence in `specs/031-demo-deployment/acceptance-evidence.md`
+- [X] T048 Reconcile `specs/HANDOFF.md` and `specs/DEFERRED.md` with the deployed-demo boundary and feature 032 multiplayer dependency
+- [X] T049 Prepare—but do not push—the proposed first `demo-v0.1.0` tag command and owner checklist in `specs/031-demo-deployment/acceptance-evidence.md`
 - [ ] T050 After explicit owner authorization and one-time Pages enablement, create/push `demo-v0.1.0`, manually dispatch it, verify the public URL/build footer/smoke result, and record the live evidence in `specs/031-demo-deployment/acceptance-evidence.md`
 
 ---

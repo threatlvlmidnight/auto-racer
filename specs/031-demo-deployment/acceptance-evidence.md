@@ -247,4 +247,104 @@ Against `npm run build:pages` + `npm run preview:pages`
 
 ## Phase 6 — Polish and release gates
 
-_(pending)_
+### T043 — source/runtime path audit (PASS)
+
+- Codified static audits (T013/T043 tests): zero root-absolute `/assets/`
+  literals in `src/` or `index.html`; all 39 authored assets load through
+  `runtimeAssetUrl()`; no traversal/leading-slash arguments; no hardcoded
+  `/auto-racer` string literal in runtime sources; exactly one normalized
+  base in `vite.config.ts`.
+- Manual scans confirmed: the only root-absolute reference anywhere is
+  `index.html`'s dev-time `<script src="/src/main.ts">`, which Vite rewrites
+  base-aware at build time (dist entry verified as
+  `/auto-racer/assets/index-*.js`); the only `../` hits in `src/` are
+  type-only import specifiers; the only `auto-racer` string hit is the
+  `auto-racer:test-day-recovery:v1` localStorage key (not a URL).
+- Stable public assets are revision-stamped at runtime in release builds
+  (`?rev=<short>`); Vite-hashed modules remain un-stamped (Decision 6).
+  Observation (not a violation): `public/assets/entrants/` legacy PNGs ship
+  in the artifact but are unreferenced by BootScene — content decision, not
+  a deployment-rule breach.
+
+### T044 — workflow audit (PASS)
+
+- Codified: 15 T024 + 5 T035 static tests — trigger isolation (dispatch-only
+  release, push/PR-only verify), least-privilege permissions per job,
+  pre-checkout grammar/ref validation order, gated job dependencies,
+  protected `github-pages` environment, serialized deployment concurrency,
+  immutable 40-hex action pins, no mutable action tags, no secrets, no
+  recursive deployment/rollback paths, artifact path scope `dist`.
+- Manual confirmation: `.github/workflows/` contains exactly `verify.yml`
+  and `deploy-demo.yml`; `.github/dependabot.yml` monitors the pinned
+  actions weekly.
+
+### T045 — release gate sequence (all PASS)
+
+After a clean `npm ci` (exit 0):
+
+1. Focused deployment suites: **241/241 passed**.
+2. Full `npm test`: **63 files, 1432/1432 passed**.
+3. `npm run lint`: clean.
+4. `npm run build`: ✓ (pre-existing chunk-size warning only).
+5. Simulated prefixed release build (`demo-v0.1.0` + HEAD revision):
+   `dist/index.html` 1.30 kB, `dist/assets/index-5Irz2J7K.js` 1,715.81 kB.
+6. `audit-production-artifact.mjs dist --expect-tag demo-v0.1.0
+   --expect-revision <HEAD>`: **PASS**.
+7. Local smoke against `preview:pages`: **healthy, 1 attempt, 83 ms**.
+
+### T046 — viewport QA (network-level complete; interactive remains manual)
+
+- Clean-cache network verification under `/auto-racer/`: entry 200/html,
+  generated module 200/javascript with compiled identity, all 39 authored
+  assets 200 with `?rev=` stamps, direct reload 200 (recorded at T022/T042).
+- **Remaining manual item**: human-driven interactive walkthrough at
+  1920×1080, 1366×768, 1024×768, and 800×450 (title → entrant → garage →
+  pre-race → race → Results, seven regional backgrounds). Tool-driven canvas
+  input was not attempted this session, mirroring feature 030's recorded
+  approach.
+
+### T047 — Constitution Check re-run against delivered code (PASS)
+
+| Principle | Status | Delivered-code evidence |
+|---|---|---|
+| I. Prepare → Contest Integrity | PASS | No prepare/simulation/contest/settlement code changed; full 1432-test suite green; deployment has zero outcome authority |
+| II. Fairness | PASS | One identical public artifact for every tester; no paid or privileged path introduced |
+| III. Transparency & Legibility | PASS | Running demo visibly identifies its exact tag and short revision; identity is compiled, audited, and smoke-checked |
+| IV. Spectation-First | PASS | Watched-race experience untouched; the feature only makes it shareable by URL |
+| V. Build Testing Access | PASS | Test Day ships inside the same verified static artifact with no service dependency |
+| VI. Async-First Architecture | PASS | Demo is entirely static/serverless; no live matchmaking or backend; `specs/DEFERRED.md` now guards the feature-032 boundary |
+| Product constraints | PASS | No 2D/topology/parity/theme rule touched |
+| Development Workflow | PASS | specify → clarify → plan → tasks → implement with checklist PASS, TDD task gates, and recorded evidence |
+
+Complexity Tracking: no constitutional violations or exceptional architecture.
+
+### T049 — prepared first release (NOT pushed)
+
+```sh
+# After merging codex/031-demo-deployment into the default branch:
+git checkout main && git pull
+git tag -a demo-v0.1.0 -m "First public demo release" <approved-default-branch-commit>
+git push origin demo-v0.1.0
+# Then: Actions → Deploy demo release → Run workflow → release_tag: demo-v0.1.0
+```
+
+Owner checklist:
+
+1. Merge this branch into the default branch (quickstart requires the first
+   release tag to point at default-branch history).
+2. One-time: Settings → Pages → Build and deployment → Source → **GitHub
+   Actions**; confirm the `github-pages` environment permits the workflow
+   (optional: add required reviewers for a second human gate).
+3. Create and push `demo-v0.1.0` at the approved commit (tagging alone
+   deploys nothing).
+4. Manually dispatch **Deploy demo release** with `demo-v0.1.0`.
+5. Confirm every stage is green and the workflow summary reports the URL,
+   tag, revision, and healthy smoke result.
+6. Open the URL in a clean browser; confirm the title footer shows
+   `demo-v0.1.0 · <short-revision>` and the game is playable.
+
+### T050 — awaiting owner authorization
+
+Deliberately not executed: the live first release requires the owner's
+explicit authorization and the one-time Pages enablement above. Everything
+it needs is prepared in T049.
