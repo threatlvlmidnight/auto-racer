@@ -113,14 +113,14 @@ economically distinct, and unambiguous to players.
 **Purpose**: Supply every Local Race with seven inspectable regional opponents
 whose reduced difficulty comes solely from legal builds and setups.
 
-- [ ] T035 Add failing content-schema/count tests in `tests/unit/localOpponents.test.ts` for 42 selectable-region profiles, seven Paris profiles, unique stable IDs, correct region counts, identity/tendency completeness, and no portrait requirement
+- [X] T035 Add failing content-schema/count tests in `tests/unit/localOpponents.test.ts` for 42 selectable-region profiles, seven Paris profiles, unique stable IDs, correct region counts, identity/tendency completeness, and no portrait requirement
 - [ ] T036 Add failing Qualifier/Challenge generation tests in `tests/unit/localOpponents.test.ts` for allowed occupied-slot bands, tier caps, Balanced Qualifiers, track-aware legal Challenges, legs 1–2 lower bias, legs 3–4 upper bias, and no tier 3
 - [ ] T037 Add failing legality/transparency/determinism tests in `tests/unit/localOpponents.test.ts` for canonical slot/build/setup validators, inspectable evidence, deterministic fallback, same-profile visible upgrade, and repeated equality
-- [ ] T038 [P] Author seven British Isles and seven Continental Europe profiles in `src/content/localTeams/britishIsles.ts` and `src/content/localTeams/continentalEurope.ts`
-- [ ] T039 [P] Author seven North America and seven South America profiles in `src/content/localTeams/northAmerica.ts` and `src/content/localTeams/southAmerica.ts`
-- [ ] T040 [P] Author seven Northern Europe and seven Mediterranean & North Africa profiles in `src/content/localTeams/northernEurope.ts` and `src/content/localTeams/mediterraneanNorthAfrica.ts`
-- [ ] T041 [P] Author seven Paris international exhibition profiles in `src/content/localTeams/parisExhibition.ts`
-- [ ] T042 Assemble and validate the profile catalog in `src/content/localTeams/index.ts`, then implement deterministic legal item/build selection, slot/tier scaling, setup selection, and fallback provenance in `src/simulation/localOpponents.ts`
+- [X] T038 [P] Author seven British Isles and seven Continental Europe profiles in `src/content/localTeams/britishIsles.ts` and `src/content/localTeams/continentalEurope.ts`
+- [X] T039 [P] Author seven North America and seven South America profiles in `src/content/localTeams/northAmerica.ts` and `src/content/localTeams/southAmerica.ts`
+- [X] T040 [P] Author seven Northern Europe and seven Mediterranean & North Africa profiles in `src/content/localTeams/northernEurope.ts` and `src/content/localTeams/mediterraneanNorthAfrica.ts`
+- [X] T041 [P] Author seven Paris international exhibition profiles in `src/content/localTeams/parisExhibition.ts`
+- [ ] T042 Assemble and validate the profile catalog in `src/content/localTeams/index.ts`, then implement deterministic legal item/build selection, slot/tier scaling, setup selection, and fallback provenance in `src/simulation/localOpponents.ts` (catalog, slot scaling, legal build/setup selection, and provenance landed; explicit Challenge tier-2 upgrade policy remains)
 - [ ] T043 Integrate seven generated local snapshots into Local Race contest assembly in `src/simulation/run.ts` through the shared setup/contest boundary
 - [ ] T044 Extend per-car Results inspection in `src/scenes/ResultScene.ts` to show local identity, legal build, setup, and fallback label from recorded evidence
 - [ ] T045 Run T035-T037 across every profile, leg, and Local tier; reject content that requires a hidden pace modifier to meet difficulty goals
@@ -137,14 +137,14 @@ reconcile points, wins, podiums, recent finishes, ties, and classification.
 
 ### Tests
 
-- [ ] T046 [P] [US3] Add failing standings tests in `tests/unit/standings.test.ts` for `10,8,6,5,4,3,2,1`, Local exclusion, wins, podiums, recent finish, and immutable history
-- [ ] T047 [P] [US3] Add failing exhaustive tie-break tests in `tests/unit/standings.test.ts` for points → wins → podiums → most-recent Championship finish → stable entrant order
+- [X] T046 [P] [US3] Add failing standings tests in `tests/unit/standings.test.ts` for `10,8,6,5,4,3,2,1`, Local exclusion, wins, podiums, recent finish, and immutable history
+- [X] T047 [P] [US3] Add failing exhaustive tie-break tests in `tests/unit/standings.test.ts` for points → wins → podiums → most-recent Championship finish → stable entrant order
 - [ ] T048 [P] [US3] Add failing rival persistence/evolution tests in `tests/unit/rivals.test.ts` for seven stable identities, canonical legal snapshots, deterministic leg evolution, and same-seed equality
 - [ ] T049 [P] [US3] Add failing standings-flow tests in `tests/integration/world-tour-flow.test.ts` proving only Championship Results mutate standings and normal race ten determines final classification
 
 ### Implementation
 
-- [ ] T050 [US3] Implement pure standings creation, result application, sorting, histories, qualification projection, and normal classification in `src/simulation/standings.ts`
+- [X] T050 [US3] Implement pure standings creation, result application, sorting, histories, qualification projection, and normal classification in `src/simulation/standings.ts`
 - [ ] T051 [US3] Extend championship rival content/state generation in `src/content/rivals.ts` and `src/simulation/rivals.ts` with seven persistent identities and versioned evolving snapshots
 - [ ] T052 [US3] Integrate standings mutation after Championship settlement only in `src/simulation/run.ts`, recording canonical per-race standings snapshots for history
 - [ ] T053 [US3] Add standings table/history presentation models in `src/scenes/worldTourPresentation.ts` with text/symbol tie-break meaning and Local-team exclusion
@@ -166,7 +166,7 @@ sparse, duplicate, invalid, and full-record cases; verify field and classificati
 
 ### Tests
 
-- [ ] T056 [P] [US4] Add failing finale qualification tests in `tests/unit/standings.test.ts` for sole raw-points lead, raw-points tie that secondary tie-breaks place first, raw-points tie that secondary tie-breaks place below first, lower points total, exact race-nine boundary, and derive-once behavior
+- [X] T056 [P] [US4] Add failing finale qualification tests in `tests/unit/standings.test.ts` for sole raw-points lead, raw-points tie that secondary tie-breaks place first, raw-points tie that secondary tie-breaks place below first, lower points total, exact race-nine boundary, and derive-once behavior
 - [ ] T057 [P] [US4] Add failing record-selection tests in `tests/unit/rivals.test.ts` for exact track fingerprint, eligibility/ranking, player exclusion, deduplication, invalid evidence rejection, top seven, and stable ordering
 - [ ] T058 [P] [US4] Add failing fallback tests in `tests/unit/rivals.test.ts` for zero-to-six records, deterministic legal exhibition ghosts, visible provenance labels, and an unchanged total field of eight
 - [ ] T059 [P] [US4] Add failing elite flow tests in `tests/integration/elite-finale.test.ts` for frozen standings, shared setup/contest/results pipeline, ghost standings exclusion, and finish-based World Champion/Podium/Classified outcomes

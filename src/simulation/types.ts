@@ -83,6 +83,25 @@ export interface WorldTourState {
   lastChanceStatus: LastChanceStatus;
 }
 
+export interface LocalTeamProfile {
+  id: string;
+  regionId: RegionId;
+  name: string;
+  teamName: string;
+  vehicleId: VehicleId;
+  engineeringTendency: string;
+}
+
+export interface LocalOpponentSnapshot {
+  profileId: string;
+  regionId: RegionId;
+  localRaceTier: LocalRaceTier;
+  legOrdinal: 1 | 2 | 3 | 4 | 5;
+  build: VehicleBuild;
+  setup: LockedRaceSetup;
+  provenance: "authored-local" | "deterministic-legal-fallback";
+}
+
 // --- Feature 010: entrant identity and vehicle topology -------------------
 
 export type EntrantId = "evelyn-mercer" | "lucien-soto" | "inez-rook" | "nell-voss";
