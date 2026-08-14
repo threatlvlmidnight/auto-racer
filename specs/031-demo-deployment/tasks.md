@@ -10,11 +10,11 @@
 
 **Purpose**: Capture the current artifact and runtime-path behavior before changing build/deployment boundaries.
 
-- [ ] T001 Record the current production artifact size, top-level contents, source-map state, and representative asset inventory in `specs/031-demo-deployment/acceptance-evidence.md`
-- [ ] T002 [P] Add deployment fixture values for local, Pages-prefix, valid-tag, invalid-tag, and prior-release cases in `tests/fixtures/deployment-fixtures.ts`
-- [ ] T003 [P] Add a static baseline test enumerating every root-absolute runtime asset reference in `tests/integration/deployment-boundaries.test.ts`
-- [ ] T004 [P] Add a production build baseline asserting the current entry document and expected public asset families in `tests/integration/production-artifact.test.ts`
-- [ ] T005 Run T003-T004 against the pre-migration build and record intentional failures/legacy expectations in `specs/031-demo-deployment/acceptance-evidence.md`
+- [X] T001 Record the current production artifact size, top-level contents, source-map state, and representative asset inventory in `specs/031-demo-deployment/acceptance-evidence.md`
+- [X] T002 [P] Add deployment fixture values for local, Pages-prefix, valid-tag, invalid-tag, and prior-release cases in `tests/fixtures/deployment-fixtures.ts`
+- [X] T003 [P] Add a static baseline test enumerating every root-absolute runtime asset reference in `tests/integration/deployment-boundaries.test.ts`
+- [X] T004 [P] Add a production build baseline asserting the current entry document and expected public asset families in `tests/integration/production-artifact.test.ts`
+- [X] T005 Run T003-T004 against the pre-migration build and record intentional failures/legacy expectations in `specs/031-demo-deployment/acceptance-evidence.md`
 
 ---
 
