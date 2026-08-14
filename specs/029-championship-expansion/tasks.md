@@ -69,8 +69,8 @@ Paris; verify offers, cadence, navigation, history, and stage-40 completion.
 
 - [ ] T019 [US1] Extend run creation/advancement/history in `src/simulation/run.ts` to use committed `TourLeg`/`TourStage` state and complete only after stage 40 or explicit failure
 - [ ] T020 [US1] Add region-flavor descriptors around unchanged encounter selection in `src/simulation/encounters.ts` without changing its probability/economy authority
-- [ ] T021 [US1] Implement `DestinationScene` in `src/scenes/DestinationScene.ts` with two persistent cards, disclosed theme/cadence/tendency, Back, focus/input parity, and explicit travel confirmation
-- [ ] T022 [US1] Register destination routing in `src/main.ts`, `src/scenes/EntrantSelectScene.ts`, `src/scenes/RunScene.ts`, and result-to-next-stage navigation without counting travel as a stage
+- [X] T021 [US1] Implement `DestinationScene` in `src/scenes/DestinationScene.ts` with two persistent cards, disclosed theme/cadence/tendency, Back, focus/input parity, and explicit travel confirmation
+- [ ] T022 [US1] Register destination routing in `src/main.ts`, `src/scenes/EntrantSelectScene.ts`, `src/scenes/RunScene.ts`, and result-to-next-stage navigation without counting travel as a stage (scene registration, first-leg route, Back, and confirmation landed; post-leg result routing remains)
 - [ ] T023 [US1] Update run history/summary formatting in `src/scenes/runPresentation.ts` and `src/scenes/resultFormatting.ts` for five legs, 40 chronological outcomes, and stage-40 completion
 - [ ] T024 [US1] Run T016-T018 and execute the complete-route quickstart scenario with at least two distinct seeded routes
 
@@ -194,15 +194,15 @@ completed legs/current stages, and force each background plus neutral fallback.
 
 ### Tests
 
-- [ ] T066 [P] [US5] Add failing itinerary-model tests in `tests/unit/worldTourPresentation.test.ts` for selected route, visible locked Paris, completed history, current expanded eight-stage leg, dominant action, and shared header values
+- [ ] T066 [P] [US5] Add failing itinerary-model tests in `tests/unit/worldTourPresentation.test.ts` for selected route, visible locked Paris, completed history, current expanded eight-stage leg, dominant action, and shared header values (selected route, locked Paris, current eight-stage leg, and header model landed; completed-history/dominant-action cases remain)
 - [ ] T067 [P] [US5] Add failing responsive/accessibility tests in `tests/unit/worldTourPresentation.test.ts` for 800×450 fit, non-color stage states, focus order, compact history, and no unvisited-region clutter
-- [ ] T068 [P] [US5] Add failing asset/preload/fallback tests in `tests/unit/visualAssets.test.ts` for seven stable region keys, correct file mapping, crop configuration, and neutral fallback
+- [ ] T068 [P] [US5] Add failing asset/preload/fallback tests in `tests/unit/visualAssets.test.ts` for seven stable region keys, correct file mapping, crop configuration, and neutral fallback (keys, mapping, preload, and fallback landed; explicit crop metadata remains)
 
 ### Implementation
 
-- [ ] T069 [US5] Implement pure world-map anchors, route lines, leg/history cards, current-stage sequence, header, and destination presentation in `src/scenes/worldTourPresentation.ts`
+- [ ] T069 [US5] Implement pure world-map anchors, route lines, leg/history cards, current-stage sequence, header, and destination presentation in `src/scenes/worldTourPresentation.ts` (destination cards, leg states, current sequence, and header landed; map anchors/route lines/history cards remain)
 - [ ] T070 [US5] Recompose `src/scenes/RunScene.ts` as the stylized map itinerary with inspectable completed-leg histories and expanded current leg
-- [ ] T071 [US5] Add all seven regional texture descriptors, preload keys, focal/crop metadata, and neutral fallback in `src/scenes/visualAssets.ts` and `src/scenes/BootScene.ts`
+- [ ] T071 [US5] Add all seven regional texture descriptors, preload keys, focal/crop metadata, and neutral fallback in `src/scenes/visualAssets.ts` and `src/scenes/BootScene.ts` (descriptors, preload keys, and neutral fallback landed; focal/crop metadata remains)
 - [ ] T072 [US5] Select regional backgrounds/dressing from recorded `regionTheme` in `src/scenes/ContestScene.ts` without importing region content into simulation
 - [ ] T073 [US5] Show canonical region and track identity in `src/scenes/PreRaceScene.ts` and `src/scenes/ResultScene.ts` even when visual loading falls back
 - [ ] T074 [US5] Run T066-T068 and perform the regional-art/itinerary viewport matrix in `specs/029-championship-expansion/quickstart.md`

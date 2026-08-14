@@ -32,6 +32,7 @@ import {
   UI_FONT,
 } from "./demoTheme";
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
+import { worldTourItineraryModel } from "./worldTourPresentation";
 
 export class RunScene extends Phaser.Scene {
   private run!: Run;
@@ -148,6 +149,21 @@ export class RunScene extends Phaser.Scene {
         });
       });
       this.addControl(width / 2, 405, "Choose Entrant · New Run", () => this.startNewRun());
+      return;
+    }
+
+    const itinerary = worldTourItineraryModel(this.run);
+    if (this.run.worldTour?.phase === "awaiting-destination" && itinerary) {
+      this.add.text(width / 2, 150, "WORLD CHAMPIONSHIP ITINERARY", {
+        fontSize: "22px", fontFamily: DISPLAY_FONT, fontStyle: "bold", color: "#f1eee5",
+      }).setOrigin(0.5);
+      this.add.text(width / 2, 195, "Paris International Exhibition · FINALE LOCKED", {
+        fontSize: "14px", fontFamily: UI_FONT, color: "#9eb5c9",
+      }).setOrigin(0.5);
+      this.add.text(width / 2, 235, "Choose from two unvisited destinations to begin the next leg.", {
+        fontSize: "14px", fontFamily: UI_FONT, color: "#cddbd2",
+      }).setOrigin(0.5);
+      this.addControl(width / 2, 310, "CHOOSE DESTINATION", () => this.scene.start("DestinationScene", { run: this.run }));
       return;
     }
 

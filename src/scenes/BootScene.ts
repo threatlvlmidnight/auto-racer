@@ -34,6 +34,13 @@ export class BootScene extends Phaser.Scene {
     this.load.image("scene-road-circuit", "/assets/backgrounds/scenes/road-circuit.png");
     this.load.image("scene-finish-line", "/assets/backgrounds/scenes/finish-line-aftermath.png");
     this.load.image("scene-pre-race-setup", "/assets/backgrounds/scenes/pre-race-setup.png");
+    this.load.image("region-british-isles", "/assets/backgrounds/regions/british-isles.png");
+    this.load.image("region-continental-europe", "/assets/backgrounds/regions/continental-europe.png");
+    this.load.image("region-north-america", "/assets/backgrounds/regions/north-america.png");
+    this.load.image("region-south-america", "/assets/backgrounds/regions/south-america.png");
+    this.load.image("region-northern-europe", "/assets/backgrounds/regions/northern-europe.png");
+    this.load.image("region-mediterranean-north-africa", "/assets/backgrounds/regions/mediterranean-north-africa.png");
+    this.load.image("region-paris-exhibition", "/assets/backgrounds/regions/paris-exhibition.png");
 
     const entrants = ["evelyn-mercer", "lucien-soto", "inez-rook", "nell-voss"] as const;
     entrants.forEach((id) => {
