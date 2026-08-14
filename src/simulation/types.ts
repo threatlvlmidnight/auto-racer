@@ -14,6 +14,47 @@ export interface SpecCar {
 
 export type IdentityTag = "performance";
 
+// --- Feature 029: versioned world championship ---------------------------
+
+export type SelectableRegionId =
+  | "british-isles"
+  | "continental-europe"
+  | "north-america"
+  | "south-america"
+  | "northern-europe"
+  | "mediterranean-north-africa";
+
+export type RegionId = SelectableRegionId | "paris-exhibition";
+export type RaceKind = "local" | "championship";
+export type LocalRaceTier = "qualifier" | "challenge";
+export type FinaleMode = "normal" | "elite";
+export type LastChanceStatus = "available" | "active" | "consumed" | "failed";
+
+export interface DestinationOffer {
+  transitionOrdinal: 0 | 1 | 2 | 3;
+  options: readonly [SelectableRegionId, SelectableRegionId];
+}
+
+export interface TourStage {
+  id: string;
+  globalOrdinal: number;
+  legOrdinal: 1 | 2 | 3 | 4 | 5;
+  legStageOrdinal: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  regionId: RegionId;
+  kind: "arrival" | "preparation" | "race";
+  raceKind?: RaceKind;
+  localRaceTier?: LocalRaceTier;
+  raceOrdinalInLeg?: 1 | 2 | 3 | 4;
+  championshipRaceOrdinal?: number;
+  lapCount?: 8 | 10 | 12 | 14 | 16;
+}
+
+export interface TourLeg {
+  ordinal: 1 | 2 | 3 | 4 | 5;
+  regionId: RegionId;
+  stages: readonly TourStage[];
+}
+
 // --- Feature 010: entrant identity and vehicle topology -------------------
 
 export type EntrantId = "evelyn-mercer" | "lucien-soto" | "inez-rook" | "nell-voss";
