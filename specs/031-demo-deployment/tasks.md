@@ -24,13 +24,13 @@
 
 **Critical**: Blocks all user-story implementation.
 
-- [ ] T006 Add failing unit tests for local/release identity parsing, missing/malformed release inputs, short revision derivation, UTC time validation, and secret-free public fields in `tests/unit/buildIdentity.test.ts`
-- [ ] T007 Add failing unit tests for `/`, `/auto-racer/`, normalization, leading-slash rejection, traversal rejection, URL encoding, and revision cache stamps in `tests/unit/buildIdentity.test.ts`
-- [ ] T008 Implement immutable `BuildIdentity`, release/local validation, and `runtimeAssetUrl()` in `src/buildIdentity.ts`
-- [ ] T009 Extend `vite.config.ts` to consume one normalized build base and inject only the public tag, revision, and UTC build-time fields defined by `contracts/build-identity-contract.md`
-- [ ] T010 Add release/local TypeScript environment declarations for injected build fields in `src/vite-env.d.ts`
-- [ ] T011 Add a test-only build-identity factory or reset seam without exposing mutable production authority in `tests/fixtures/deployment-fixtures.ts` and `src/buildIdentity.ts`
-- [ ] T012 Run T006-T011 and existing BootScene/title/build regressions, recording resolved identity/base failures in `specs/031-demo-deployment/acceptance-evidence.md`
+- [X] T006 Add failing unit tests for local/release identity parsing, missing/malformed release inputs, short revision derivation, UTC time validation, and secret-free public fields in `tests/unit/buildIdentity.test.ts`
+- [X] T007 Add failing unit tests for `/`, `/auto-racer/`, normalization, leading-slash rejection, traversal rejection, URL encoding, and revision cache stamps in `tests/unit/buildIdentity.test.ts`
+- [X] T008 Implement immutable `BuildIdentity`, release/local validation, and `runtimeAssetUrl()` in `src/buildIdentity.ts`
+- [X] T009 Extend `vite.config.ts` to consume one normalized build base and inject only the public tag, revision, and UTC build-time fields defined by `contracts/build-identity-contract.md`
+- [X] T010 Add release/local TypeScript environment declarations for injected build fields in `src/vite-env.d.ts`
+- [X] T011 Add a test-only build-identity factory or reset seam without exposing mutable production authority in `tests/fixtures/deployment-fixtures.ts` and `src/buildIdentity.ts`
+- [X] T012 Run T006-T011 and existing BootScene/title/build regressions, recording resolved identity/base failures in `specs/031-demo-deployment/acceptance-evidence.md`
 
 **Checkpoint**: Local and tagged release builds have one validated public identity and one safe runtime asset URL boundary.
 
@@ -46,7 +46,7 @@
 
 - [ ] T013 [P] [US1] Replace the baseline with failing static tests rejecting root-absolute runtime asset literals and requiring every authored BootScene asset key/path in `tests/integration/deployment-boundaries.test.ts`
 - [ ] T014 [P] [US1] Add failing title-footer presentation tests for release and local-development identities in `tests/unit/titlePresentation.test.ts`
-- [ ] T015 [P] [US1] Add failing prefixed production-artifact tests for entry module URLs, representative asset paths, cache stamps, and absent source-only trees in `tests/integration/production-artifact.test.ts`
+- [X] T015 [P] [US1] Add failing prefixed production-artifact tests for entry module URLs, representative asset paths, cache stamps, and absent source-only trees in `tests/integration/production-artifact.test.ts`
 
 ### Implementation
 

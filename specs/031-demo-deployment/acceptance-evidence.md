@@ -42,4 +42,42 @@ Captured from `npm run build` (vite v5.4.21, Node v20.19.5) on commit `4bf783d`
 
 ## Phase 2 — Foundational build identity and URL boundaries
 
+### T006-T011 — build identity boundary (test-first)
+
+- `tests/unit/buildIdentity.test.ts` written first (red), then
+  `src/buildIdentity.ts`, `src/vite-env.d.ts`, and the `vite.config.ts`
+  boundary implemented.
+- `npx vitest run tests/unit/buildIdentity.test.ts`: **59/59 tests passed**
+  covering release/local parsing, missing/malformed release inputs, short
+  revision derivation, strict UTC validation, secret-free public fields
+  (rejection without echoing the secret), base normalization (`/`,
+  `/auto-racer/`, trailing-slash normalization, duplicate-separator and
+  traversal rejection), leading-slash/traversal/absolute-URL/encoding
+  rejection in `runtimeAssetUrl`, revision cache stamps, and the T011
+  `createBuildIdentity(env)` test seam.
+- `vite.config.ts` now consumes one normalized base
+  (`VITE_DEMO_BASE_URL`, default `/`) and validates release inputs at
+  configuration time; public identity fields are injected through
+  `define` on `import.meta.env.VITE_DEMO_*` (tag, revision, UTC build time
+  only — contract `build-identity-contract.md`).
+- `npm run lint` clean; `npm run build` (vite + `tsc --noEmit`) clean;
+  baseline `deployment-boundaries.test.ts` still **5/5** (BootScene
+  untouched in this phase).
+
+### T012 — regression run and recorded deviation
+
+- BootScene/TitleScene unchanged, so their existing suites are unaffected.
+- **Ordering deviation (recorded)**: the T015 prefixed-artifact tests were
+  pulled forward into this phase because the T009 base change
+  (`"./"` → normalized `/`) invalidated the T004 baseline's relative-entry
+  expectation; leaving the old baseline would have committed a red suite.
+  With the T009 config, the prefixed build produces
+  `src="/auto-racer/assets/index-*.js"` as required.
+- Expected red until Phase 3 wiring: one production-artifact test
+  ("generated module carries the compiled public build identity") fails
+  because `src/buildIdentity.ts` is not yet imported by any scene, so it is
+  tree-shaken from the bundle. T016/T018 wire it in and turn this green.
+
+## Phase 3 — User Story 1: playable prefixed demo
+
 _(pending)_

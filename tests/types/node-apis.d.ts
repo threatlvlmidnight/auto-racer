@@ -79,3 +79,8 @@ declare module "node:http" {
 }
 
 declare const __dirname: string;
+
+declare const process: {
+  execPath: string;
+  env: Record<string, string | undefined>;
+};
