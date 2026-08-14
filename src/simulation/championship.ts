@@ -5,6 +5,7 @@ import type {
   SelectableRegionId,
   TourLeg,
   TourStage,
+  WorldTourState,
 } from "./types";
 
 export const WORLD_TOUR_SCHEDULE_VERSION = "world-tour-v1" as const;
@@ -95,4 +96,111 @@ export function buildCommittedWorldTour(runId: string, selectedRegions: readonly
     ...selectedRegions.map((regionId, index) => buildTourLeg(runId, (index + 1) as 1 | 2 | 3 | 4, regionId)),
     buildTourLeg(runId, 5, "paris-exhibition"),
   ];
+}
+
+export function createWorldTourState(seed: number): WorldTourState {
+  return {
+    scheduleVersion: WORLD_TOUR_SCHEDULE_VERSION,
+    phase: "awaiting-destination",
+    selectedRegions: [],
+    destinationOffer: createDestinationOffer(seed, 0, []),
+    legs: [],
+    currentGlobalStageIndex: 0,
+    standings: [],
+    championshipRivals: [],
+    finaleMode: null,
+    lastChanceStatus: "available",
+  };
+}
+
+export function confirmWorldTourDestination(
+  runId: string,
+  tour: WorldTourState,
+  selected: SelectableRegionId,
+): WorldTourState {
+  if (tour.phase !== "awaiting-destination" || !tour.destinationOffer) {
+    throw new Error("The world tour is not awaiting a destination");
+  }
+  const selectedRegions = confirmDestination(tour.destinationOffer, selected, tour.selectedRegions);
+  const ordinal = selectedRegions.length as 1 | 2 | 3 | 4;
+  return {
+    ...tour,
+    phase: "racing",
+    selectedRegions,
+    destinationOffer: null,
+    legs: [...tour.legs, buildTourLeg(runId, ordinal, selected)],
+  };
+}
+
+export function completeCurrentTourLeg(runId: string, seed: number, tour: WorldTourState): WorldTourState {
+  if (tour.phase !== "racing" || tour.legs.length === 0) {
+    throw new Error("No active tour leg can be completed");
+  }
+  const completedLegCount = tour.legs.length;
+  const currentGlobalStageIndex = completedLegCount * 8;
+  if (completedLegCount < 4) {
+    const transitionOrdinal = completedLegCount as 1 | 2 | 3;
+    return {
+      ...tour,
+      phase: "awaiting-destination",
+      destinationOffer: createDestinationOffer(seed, transitionOrdinal, tour.selectedRegions),
+      currentGlobalStageIndex,
+    };
+  }
+  if (completedLegCount === 4) {
+    return {
+      ...tour,
+      phase: "racing",
+      destinationOffer: null,
+      legs: [...tour.legs, buildTourLeg(runId, 5, "paris-exhibition")],
+      currentGlobalStageIndex,
+    };
+  }
+  return {
+    ...tour,
+    phase: "completed",
+    destinationOffer: null,
+    currentGlobalStageIndex: WORLD_TOUR_STAGE_COUNT,
+  };
+}
+
+export interface WorldTourProgress {
+  completedStages: number;
+  totalStages: 40;
+  currentLegOrdinal: 1 | 2 | 3 | 4 | 5 | null;
+  currentLegStageOrdinal: number | null;
+  phase: WorldTourState["phase"];
+}
+
+export function worldTourProgress(tour: WorldTourState): WorldTourProgress {
+  const currentLeg = tour.phase === "racing" ? tour.legs[tour.legs.length - 1] : undefined;
+  return {
+    completedStages: tour.currentGlobalStageIndex,
+    totalStages: WORLD_TOUR_STAGE_COUNT,
+    currentLegOrdinal: currentLeg?.ordinal ?? null,
+    currentLegStageOrdinal: currentLeg
+      ? Math.min(8, tour.currentGlobalStageIndex - (currentLeg.ordinal - 1) * 8 + 1)
+      : null,
+    phase: tour.phase,
+  };
+}
+
+export type WorldTourCompatibility =
+  | { kind: "compatible" }
+  | { kind: "unavailable"; code: "legacy-championship-schedule" | "malformed-world-tour" };
+
+export function validateWorldTourCompatibility(value: unknown): WorldTourCompatibility {
+  if (!value || typeof value !== "object" || !("scheduleVersion" in value)) {
+    return { kind: "unavailable", code: "legacy-championship-schedule" };
+  }
+  const candidate = value as Partial<WorldTourState>;
+  if (
+    candidate.scheduleVersion !== WORLD_TOUR_SCHEDULE_VERSION
+    || !Array.isArray(candidate.selectedRegions)
+    || !Array.isArray(candidate.legs)
+    || typeof candidate.currentGlobalStageIndex !== "number"
+  ) {
+    return { kind: "unavailable", code: "malformed-world-tour" };
+  }
+  return { kind: "compatible" };
 }

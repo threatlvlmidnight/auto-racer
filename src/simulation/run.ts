@@ -6,6 +6,7 @@ import {
   type RandomSource,
 } from "./encounters";
 import { createEmptyVehicleBuild } from "./build";
+import { createWorldTourState, validateWorldTourCompatibility } from "./championship";
 import { installedItems, storedItems } from "./slots";
 import {
   ACTIVE_IDENTITY_TAG,
@@ -19,6 +20,7 @@ import {
   type RunIdentity,
   type RunSetupMemory,
   type VehicleBuild,
+  type WorldTourState,
 } from "./types";
 
 /** The immutable entrant/vehicle association for a run, or undefined if unknown. */
@@ -296,6 +298,12 @@ export interface Run {
    * (contract §7, data-model.md "Draft and remembered state").
    */
   setupMemory?: RunSetupMemory;
+  /**
+   * Feature 029 authoritative schedule state. Absent means the active run uses
+   * an incompatible legacy championship schedule and must be restarted; it is
+   * never inferred from the old flat `stages` array.
+   */
+  worldTour?: WorldTourState;
 }
 
 export type RunTransitionErrorCode =
@@ -393,8 +401,15 @@ export function createRun(input: CreateRunInput): Run {
     activeSponsorContract: null,
     history: [],
     reputation: REPUTATION_START,
+    worldTour: createWorldTourState(input.seed),
   };
   return { ...run, availableChoices: generateEncounterChoices(run, input.rng) };
+}
+
+export type RunScheduleCompatibility = ReturnType<typeof validateWorldTourCompatibility>;
+
+export function validateRunScheduleCompatibility(run: Pick<Run, "worldTour">): RunScheduleCompatibility {
+  return validateWorldTourCompatibility(run.worldTour);
 }
 
 export type EntrantSelectionGuardResult =

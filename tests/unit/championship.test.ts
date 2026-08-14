@@ -4,8 +4,13 @@ import {
   WORLD_TOUR_STAGE_COUNT,
   buildCommittedWorldTour,
   buildTourLeg,
+  completeCurrentTourLeg,
   confirmDestination,
+  confirmWorldTourDestination,
   createDestinationOffer,
+  createWorldTourState,
+  validateWorldTourCompatibility,
+  worldTourProgress,
 } from "../../src/simulation/championship";
 import type { SelectableRegionId } from "../../src/simulation/types";
 
@@ -62,5 +67,52 @@ describe("five-leg schedule", () => {
       .toThrow(/four unique/);
     expect(() => buildTourLeg("run", 4, "paris-exhibition")).toThrow(/reserved/);
     expect(() => buildTourLeg("run", 5, "british-isles")).toThrow(/must be Paris/);
+  });
+});
+
+describe("incremental world-tour state", () => {
+  it("persists an offer until confirmation and automatically appends Paris after leg four", () => {
+    let tour = createWorldTourState(1901);
+    const originalOffer = tour.destinationOffer;
+    expect(createWorldTourState(1901).destinationOffer).toEqual(originalOffer);
+
+    for (let leg = 0; leg < 4; leg += 1) {
+      const selected = tour.destinationOffer!.options[0];
+      tour = confirmWorldTourDestination("run-029", tour, selected);
+      expect(tour.phase).toBe("racing");
+      expect(tour.destinationOffer).toBeNull();
+      tour = completeCurrentTourLeg("run-029", 1901, tour);
+    }
+
+    expect(tour.selectedRegions).toHaveLength(4);
+    expect(new Set(tour.selectedRegions).size).toBe(4);
+    expect(tour.legs).toHaveLength(5);
+    expect(tour.legs[4].regionId).toBe("paris-exhibition");
+    expect(worldTourProgress(tour)).toMatchObject({
+      completedStages: 32,
+      totalStages: 40,
+      currentLegOrdinal: 5,
+      currentLegStageOrdinal: 1,
+      phase: "racing",
+    });
+
+    tour = completeCurrentTourLeg("run-029", 1901, tour);
+    expect(worldTourProgress(tour)).toEqual({
+      completedStages: 40,
+      totalStages: 40,
+      currentLegOrdinal: null,
+      currentLegStageOrdinal: null,
+      phase: "completed",
+    });
+  });
+
+  it("rejects legacy and malformed schedules instead of silently migrating them", () => {
+    expect(validateWorldTourCompatibility(undefined)).toEqual({
+      kind: "unavailable", code: "legacy-championship-schedule",
+    });
+    expect(validateWorldTourCompatibility({ scheduleVersion: "world-tour-v0" })).toEqual({
+      kind: "unavailable", code: "malformed-world-tour",
+    });
+    expect(validateWorldTourCompatibility(createWorldTourState(42))).toEqual({ kind: "compatible" });
   });
 });

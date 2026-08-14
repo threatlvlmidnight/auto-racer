@@ -39,11 +39,11 @@ stories.
 - [X] T007 Add failing deterministic offer tests in `tests/unit/championship.test.ts` for two ordered unvisited options, seed equality, back-navigation persistence, confirmation-only commitment, four unique choices, and automatic Paris
 - [ ] T008 [P] Add failing region isolation tests in `tests/unit/tracks.test.ts` proving `regionTheme` survives track/race evidence but cannot change geometry, characteristics, stats, lap times, or settlement
 - [ ] T009 [P] Add failing legacy compatibility tests in `tests/integration/legacy-run-guard.test.ts` proving old active schedules are rejected while entrant unlocks/settings are preserved
-- [ ] T010 Add `RegionId`, `RaceKind`, `LocalRaceTier`, `FinaleMode`, `LastChanceStatus`, `TourLeg`, `TourStage`, destination-offer, standings, and versioned run shapes to `src/simulation/types.ts` (region, race, offer, leg, and stage shapes landed; standings and full versioned run shape remain)
+- [X] T010 Add `RegionId`, `RaceKind`, `LocalRaceTier`, `FinaleMode`, `LastChanceStatus`, `TourLeg`, `TourStage`, destination-offer, standings, and versioned run shapes to `src/simulation/types.ts`
 - [X] T011 [P] Author immutable region labels, engineering tendencies, presentation theme keys, and Paris metadata in `src/content/regions.ts`
-- [ ] T012 Implement versioned offer generation, travel confirmation, five-leg construction, exact 40-stage cadence, lap lookup, and progress derivation in `src/simulation/championship.ts` (offer, confirmation, leg construction, cadence, and lap lookup landed; incremental run progress derivation remains)
+- [X] T012 Implement versioned offer generation, travel confirmation, five-leg construction, exact 40-stage cadence, lap lookup, and progress derivation in `src/simulation/championship.ts`
 - [ ] T013 Extend track/race evidence with presentation-only `regionTheme` in `src/simulation/tracks.ts` and enforce simulation isolation through typed boundaries
-- [ ] T014 Implement old-schedule detection and explicit unavailable/restart projection in `src/simulation/championship.ts` and `src/simulation/run.ts` without mutating persistent settings/unlocks
+- [ ] T014 Implement old-schedule detection and explicit unavailable/restart projection in `src/simulation/championship.ts` and `src/simulation/run.ts` without mutating persistent settings/unlocks (pure schedule-version detection is integrated; unavailable UI/restart projection remains)
 - [ ] T015 Run T006-T009 plus current run/track regression suites and resolve every stale 12/24-stage or four/eight-race assumption explicitly
 
 **Checkpoint**: A pure deterministic five-leg schedule can be created,

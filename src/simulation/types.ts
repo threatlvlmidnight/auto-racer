@@ -55,6 +55,34 @@ export interface TourLeg {
   stages: readonly TourStage[];
 }
 
+export interface StandingEntry {
+  entrantId: string;
+  points: number;
+  wins: number;
+  podiums: number;
+  championshipFinishes: readonly number[];
+  stableOrder: number;
+}
+
+export interface ChampionshipRivalState {
+  entrantId: string;
+  stableOrder: number;
+  championshipFinishes: readonly number[];
+}
+
+export interface WorldTourState {
+  scheduleVersion: "world-tour-v1";
+  phase: "awaiting-destination" | "racing" | "completed";
+  selectedRegions: readonly SelectableRegionId[];
+  destinationOffer: DestinationOffer | null;
+  legs: readonly TourLeg[];
+  currentGlobalStageIndex: number;
+  standings: readonly StandingEntry[];
+  championshipRivals: readonly ChampionshipRivalState[];
+  finaleMode: FinaleMode | null;
+  lastChanceStatus: LastChanceStatus;
+}
+
 // --- Feature 010: entrant identity and vehicle topology -------------------
 
 export type EntrantId = "evelyn-mercer" | "lucien-soto" | "inez-rook" | "nell-voss";
