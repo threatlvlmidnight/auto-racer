@@ -97,8 +97,8 @@ export class ContestScene extends Phaser.Scene {
     this.run = input.run;
     this.encounterId = input.encounterId;
     this.playedBuild = input.build;
-    const authoritativeTrack = generateTrack(input.seed, input.level);
-    const localSetups = input.raceKind === "local" && input.regionId && input.localRaceTier && input.legOrdinal
+    const authoritativeTrack = generateTrack(input.seed, input.level, input.regionId);
+    const localOpponents = input.raceKind === "local" && input.regionId && input.localRaceTier && input.legOrdinal
       ? resolveLocalField(
           input.regionId,
           input.localRaceTier,
@@ -106,7 +106,7 @@ export class ContestScene extends Phaser.Scene {
           input.seed,
           authoritativeTrack,
           input.encounterId,
-        ).map((snapshot) => snapshot.setup)
+        )
       : undefined;
     const eliteOpponents = input.eliteFinale
       ? selectEliteFinaleOpponents([], authoritativeTrack, input.run.identity.entrantId, input.seed)
@@ -126,8 +126,9 @@ export class ContestScene extends Phaser.Scene {
       input.lapCount,
       data.setup,
       input.encounterId,
-      eliteOpponents?.map((opponent) => opponent.setup) ?? localSetups,
-      eliteOpponents?.map((opponent) => opponent.build),
+      eliteOpponents?.map((opponent) => opponent.setup) ?? localOpponents?.map((opponent) => opponent.setup),
+      eliteOpponents?.map((opponent) => opponent.build) ?? localOpponents?.map((opponent) => opponent.build),
+      input.regionId,
     );
     // 027-race-legibility-integrity (contract §1): playback reads the
     // contest's own retained track — it never regenerates one independently,

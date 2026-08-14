@@ -67,15 +67,16 @@ export function buildTourLeg(runId: string, ordinal: 1 | 2 | 3 | 4 | 5, regionId
   if (ordinal < 5 && regionId === "paris-exhibition") throw new Error("Paris is reserved for the fifth leg");
   const globalStart = (ordinal - 1) * 8;
   const championshipStart = (ordinal - 1) * 2;
+  const raceStart = (ordinal - 1) * 4;
   const descriptors = [
     { kind: "arrival" as const },
-    { kind: "race" as const, raceKind: "local" as const, localRaceTier: "qualifier" as const, raceOrdinalInLeg: 1 as const, lapCount: LAPS_BY_LEG[ordinal - 1][0] },
+    { kind: "race" as const, raceKind: "local" as const, localRaceTier: "qualifier" as const, raceOrdinalInLeg: 1 as const, raceOrdinalGlobal: raceStart + 1, lapCount: LAPS_BY_LEG[ordinal - 1][0] },
     { kind: "preparation" as const },
-    { kind: "race" as const, raceKind: "championship" as const, raceOrdinalInLeg: 2 as const, championshipRaceOrdinal: championshipStart + 1, lapCount: LAPS_BY_LEG[ordinal - 1][1] },
+    { kind: "race" as const, raceKind: "championship" as const, raceOrdinalInLeg: 2 as const, raceOrdinalGlobal: raceStart + 2, championshipRaceOrdinal: championshipStart + 1, lapCount: LAPS_BY_LEG[ordinal - 1][1] },
     { kind: "preparation" as const },
-    { kind: "race" as const, raceKind: "local" as const, localRaceTier: "challenge" as const, raceOrdinalInLeg: 3 as const, lapCount: LAPS_BY_LEG[ordinal - 1][2] },
+    { kind: "race" as const, raceKind: "local" as const, localRaceTier: "challenge" as const, raceOrdinalInLeg: 3 as const, raceOrdinalGlobal: raceStart + 3, lapCount: LAPS_BY_LEG[ordinal - 1][2] },
     { kind: "preparation" as const },
-    { kind: "race" as const, raceKind: "championship" as const, raceOrdinalInLeg: 4 as const, championshipRaceOrdinal: championshipStart + 2, lapCount: LAPS_BY_LEG[ordinal - 1][3] },
+    { kind: "race" as const, raceKind: "championship" as const, raceOrdinalInLeg: 4 as const, raceOrdinalGlobal: raceStart + 4, championshipRaceOrdinal: championshipStart + 2, lapCount: LAPS_BY_LEG[ordinal - 1][3] },
   ];
   const stages: TourStage[] = descriptors.map((descriptor, index) => ({
     id: `${runId}-leg-${ordinal}-stage-${index + 1}`,

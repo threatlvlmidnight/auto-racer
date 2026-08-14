@@ -46,6 +46,7 @@ export interface TourStage {
   raceKind?: RaceKind;
   localRaceTier?: LocalRaceTier;
   raceOrdinalInLeg?: 1 | 2 | 3 | 4;
+  raceOrdinalGlobal?: number;
   championshipRaceOrdinal?: number;
   lapCount?: 8 | 10 | 12 | 14 | 16;
 }

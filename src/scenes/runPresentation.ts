@@ -208,7 +208,7 @@ export function contestSceneInput(run: Run, encounterId: string): ContestSceneIn
     regionId: stage?.regionId,
     localRaceTier: stage?.localRaceTier,
     legOrdinal: activeTourLeg?.ordinal,
-    eliteFinale: stage?.pvpOrdinal === 10 && run.worldTour?.finaleMode === "elite",
+    eliteFinale: stage?.championshipRaceOrdinal === 10 && run.worldTour?.finaleMode === "elite",
   };
 }
 

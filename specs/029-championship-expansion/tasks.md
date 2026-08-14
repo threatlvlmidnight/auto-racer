@@ -37,12 +37,12 @@ stories.
 
 - [X] T006 Add failing type/contract tests in `tests/unit/championship.test.ts` for seven stable region IDs, Local/Championship race kinds, five legs, 40 stages, and the exact per-leg cadence/lap tables
 - [X] T007 Add failing deterministic offer tests in `tests/unit/championship.test.ts` for two ordered unvisited options, seed equality, back-navigation persistence, confirmation-only commitment, four unique choices, and automatic Paris
-- [ ] T008 [P] Add failing region isolation tests in `tests/unit/tracks.test.ts` proving `regionTheme` survives track/race evidence but cannot change geometry, characteristics, stats, lap times, or settlement
+- [X] T008 [P] Add failing region isolation tests in `tests/unit/tracks.test.ts` proving `regionTheme` survives track/race evidence but cannot change geometry, characteristics, stats, lap times, or settlement
 - [ ] T009 [P] Add failing legacy compatibility tests in `tests/integration/legacy-run-guard.test.ts` proving old active schedules are rejected while entrant unlocks/settings are preserved
 - [X] T010 Add `RegionId`, `RaceKind`, `LocalRaceTier`, `FinaleMode`, `LastChanceStatus`, `TourLeg`, `TourStage`, destination-offer, standings, and versioned run shapes to `src/simulation/types.ts`
 - [X] T011 [P] Author immutable region labels, engineering tendencies, presentation theme keys, and Paris metadata in `src/content/regions.ts`
 - [X] T012 Implement versioned offer generation, travel confirmation, five-leg construction, exact 40-stage cadence, lap lookup, and progress derivation in `src/simulation/championship.ts`
-- [ ] T013 Extend track/race evidence with presentation-only `regionTheme` in `src/simulation/tracks.ts` and enforce simulation isolation through typed boundaries
+- [X] T013 Extend track/race evidence with presentation-only `regionTheme` in `src/simulation/tracks.ts` and enforce simulation isolation through typed boundaries
 - [ ] T014 Implement old-schedule detection and explicit unavailable/restart projection in `src/simulation/championship.ts` and `src/simulation/run.ts` without mutating persistent settings/unlocks (pure schedule-version detection is integrated; unavailable UI/restart projection remains)
 - [ ] T015 Run T006-T009 plus current run/track regression suites and resolve every stale 12/24-stage or four/eight-race assumption explicitly
 
@@ -62,7 +62,7 @@ Paris; verify offers, cadence, navigation, history, and stage-40 completion.
 ### Tests
 
 - [ ] T016 [P] [US1] Add failing complete-route property/table tests in `tests/unit/championship.test.ts` over representative seeds and all valid destination-choice paths
-- [ ] T017 [P] [US1] Add failing navigation tests in `tests/integration/world-tour-flow.test.ts` for first offer after entrant selection, Back with no mutation, explicit confirmation, post-leg offers, automatic Paris, and exact completion
+- [X] T017 [P] [US1] Add failing navigation tests in `tests/integration/world-tour-flow.test.ts` for first offer after entrant selection, Back with no mutation, explicit confirmation, post-leg offers, automatic Paris, and exact completion
 - [ ] T018 [P] [US1] Add failing encounter compatibility tests in `tests/unit/encounters.test.ts` proving Arrival plus three preparation stages use the existing two-choice catalog and regional flavor cannot alter odds/prices/rewards/mechanics
 
 ### Implementation
@@ -123,7 +123,7 @@ whose reduced difficulty comes solely from legal builds and setups.
 - [X] T042 Assemble and validate the profile catalog in `src/content/localTeams/index.ts`, then implement deterministic legal item/build selection, slot/tier scaling, setup selection, and fallback provenance in `src/simulation/localOpponents.ts`
 - [X] T043 Integrate seven generated local snapshots into Local Race contest assembly in `src/simulation/run.ts` through the shared setup/contest boundary
 - [ ] T044 Extend per-car Results inspection in `src/scenes/ResultScene.ts` to show local identity, legal build, setup, and fallback label from recorded evidence
-- [ ] T045 Run T035-T037 across every profile, leg, and Local tier; reject content that requires a hidden pace modifier to meet difficulty goals
+- [X] T045 Run T035-T037 across every profile, leg, and Local tier; reject content that requires a hidden pace modifier to meet difficulty goals
 
 ---
 
@@ -247,8 +247,8 @@ and constitutional guarantees as one shippable slice.
 - [ ] T084 [P] Add static audits/tests rejecting region reads in lap/contest math, Local-only simulators, hidden pace fields, leaked PvE/PvP copy, every-race interest, and stale immediate-zero elimination in `tests/integration/world-tour-boundaries.test.ts`
 - [ ] T085 [P] Reconcile `specs/HANDOFF.md`, `specs/DEFERRED.md`, and relevant gap/vision documents with the finalized World Tour, Local/Championship terminology, elite finale, Last Chance, and feature-030 playback-speed boundary
 - [ ] T086 Run `rg` audits for stale 12/24-stage, four/eight-race, max-20-lap, immediate-zero-failure, every-race-interest, and flat-round-map assumptions; update each intentional survivor with explicit legacy context
-- [ ] T087 Run focused feature suites and all existing run, encounter, setup, contest, playback, result, track, rival, and item tests; resolve regressions without weakening assertions
-- [ ] T088 Run full `npm test`, `npm run lint`, and `npm run build`; accept only already documented non-feature warnings
+- [X] T087 Run focused feature suites and all existing run, encounter, setup, contest, playback, result, track, rival, and item tests; resolve regressions without weakening assertions
+- [X] T088 Run full `npm test`, `npm run lint`, and `npm run build`; accept only already documented non-feature warnings
 - [ ] T089 Perform browser visual/input QA at 1920×1080, 1366×768, 1024×768, 800×450, and 390×844 for Destination, itinerary, setup, race, Results, history, standings, Last Chance, normal finale, elite finale, and missing-art fallback
 - [ ] T090 Execute every scenario in `specs/029-championship-expansion/quickstart.md` and record evidence in `specs/029-championship-expansion/acceptance-evidence.md`
 - [ ] T091 Re-run the Constitution Check from `plan.md` against delivered code and record final PASS evidence in `specs/029-championship-expansion/acceptance-evidence.md`

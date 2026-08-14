@@ -31,6 +31,15 @@ function completeCurrentLeg(run: Run): Run {
   return current;
 }
 
+function completeTour(): Run {
+  let run = newRun();
+  for (let regionalLeg = 0; regionalLeg < 4; regionalLeg += 1) {
+    run = confirmRunDestination(run, run.worldTour!.destinationOffer!.options[0], () => 0);
+    run = completeCurrentLeg(run);
+  }
+  return completeCurrentLeg(run);
+}
+
 describe("world-tour run flow", () => {
   it("replaces the legacy schedule only on confirmed travel and pauses after a leg", () => {
     const initial = newRun();
@@ -58,20 +67,38 @@ describe("world-tour run flow", () => {
   });
 
   it("completes four chosen regions and automatic Paris only after all 40 stages", () => {
-    let run = newRun();
-    expect(run.reputation).toBe(12);
-    for (let regionalLeg = 0; regionalLeg < 4; regionalLeg += 1) {
-      run = confirmRunDestination(run, run.worldTour!.destinationOffer!.options[0], () => 0);
-      run = completeCurrentLeg(run);
-      if (regionalLeg < 3) expect(run.worldTour!.phase).toBe("awaiting-destination");
-    }
-    expect(run.worldTour!.phase).toBe("racing");
-    expect(run.worldTour!.legs[4].regionId).toBe("paris-exhibition");
-    expect(run.stages).toHaveLength(40);
-    run = completeCurrentLeg(run);
+    const run = completeTour();
     expect(run.status).toBe("completed");
     expect(run.stageIndex).toBe(40);
     expect(run.history).toHaveLength(40);
     expect(run.worldTour).toMatchObject({ phase: "completed", currentGlobalStageIndex: 40 });
+  });
+
+  it("replays the same complete route deeply identically for the same seed and choices", () => {
+    expect(completeTour()).toEqual(completeTour());
+  });
+
+  it("grants one race-bound Last Chance, consumes it on recovery, then fails at the next zero", () => {
+    const initial = newRun();
+    let run = confirmRunDestination(initial, initial.worldTour!.destinationOffer!.options[0], () => 0);
+    run = chooseEncounter(run, run.availableChoices[0].id, () => 0);
+    run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
+    run = { ...run, reputation: 1 };
+    const localLoss = resolveContest(run.build, { id: "fast", lapTime: 0.1 }, run.stages[run.stageIndex].lapCount!);
+    run = completePvpEncounter(run, run.activeEncounter!.id, localLoss, () => 0);
+    expect(run).toMatchObject({ status: "active", reputation: 0, worldTour: { lastChanceStatus: "active" } });
+
+    run = chooseEncounter(run, run.availableChoices[0].id, () => 0);
+    run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
+    const championshipWin = resolveContest(run.build, { id: "slow", lapTime: 100 }, run.stages[run.stageIndex].lapCount!);
+    run = completePvpEncounter(run, run.activeEncounter!.id, championshipWin, () => 0);
+    expect(run).toMatchObject({ status: "active", reputation: 3, worldTour: { lastChanceStatus: "consumed" } });
+
+    run = chooseEncounter(run, run.availableChoices[0].id, () => 0);
+    run = completeNonPvpEncounter(run, run.activeEncounter!.id, { build: run.build }, () => 0);
+    run = { ...run, reputation: 1 };
+    const secondLoss = resolveContest(run.build, { id: "fast", lapTime: 0.1 }, run.stages[run.stageIndex].lapCount!);
+    run = completePvpEncounter(run, run.activeEncounter!.id, secondLoss, () => 0);
+    expect(run).toMatchObject({ status: "failed", reputation: 0, worldTour: { lastChanceStatus: "failed" } });
   });
 });

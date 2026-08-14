@@ -193,6 +193,7 @@ export interface RunStage {
   kind: "choice" | "pvp";
   choiceOrdinal?: number;
   pvpOrdinal?: number;
+  championshipRaceOrdinal?: number;
   lapCount?: 8 | 10 | 12 | 14 | 16;
   raceKind?: RaceKind;
   localRaceTier?: LocalRaceTier;
@@ -442,7 +443,8 @@ function runStagesForTourLeg(runId: string, leg: TourLeg, existingStageCount: nu
     };
     if (kind === "choice") mapped.choiceOrdinal = choiceOrdinal++;
     else {
-      mapped.pvpOrdinal = stage.championshipRaceOrdinal;
+      mapped.pvpOrdinal = stage.raceOrdinalGlobal;
+      mapped.championshipRaceOrdinal = stage.championshipRaceOrdinal;
       mapped.lapCount = stage.lapCount;
       mapped.raceKind = stage.raceKind;
       mapped.localRaceTier = stage.localRaceTier;
@@ -820,7 +822,7 @@ export function completePvpEncounter(
       worldTour: { ...next.worldTour, lastChanceStatus: reputation.lastChanceStatus },
     };
     const settledTour = next.worldTour!;
-    const eliteFinale = stage.pvpOrdinal === 10 && settledTour.finaleMode === "elite";
+    const eliteFinale = stage.championshipRaceOrdinal === 10 && settledTour.finaleMode === "elite";
     if (eliteFinale) {
       next = {
         ...next,

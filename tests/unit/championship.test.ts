@@ -60,6 +60,8 @@ describe("five-leg schedule", () => {
     }
     expect(legs.flatMap((leg) => leg.stages).filter((stage) => stage.raceKind === "championship")
       .map((stage) => stage.championshipRaceOrdinal)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(legs.flatMap((leg) => leg.stages).filter((stage) => stage.kind === "race")
+      .map((stage) => stage.raceOrdinalGlobal)).toEqual(Array.from({ length: 20 }, (_, index) => index + 1));
   });
 
   it("rejects duplicate routes and Paris outside the finale", () => {

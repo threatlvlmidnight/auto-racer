@@ -91,6 +91,7 @@ export function resolveContest(
   encounterId?: string,
   rivalSetups?: readonly LockedRaceSetup[],
   rivalBuilds?: readonly VehicleBuild[],
+  regionTheme?: import("./types").RegionId,
 ): NCarContestResult;
 export function resolveContest(
   build: Build,
@@ -102,11 +103,12 @@ export function resolveContest(
   seventh?: string,
   eighth?: readonly LockedRaceSetup[],
   ninth?: readonly VehicleBuild[],
+  tenth?: import("./types").RegionId,
 ): ContestResult | NCarContestResult {
   if (Array.isArray(second)) {
     return resolveNCarContest(
       build, second, third ?? 1, (fourth as number | undefined) ?? 0, (fifth as number | undefined) ?? LAP_COUNT,
-      sixth, seventh, eighth, ninth,
+      sixth, seventh, eighth, ninth, tenth,
     );
   }
   return resolveLegacyContest(
@@ -162,6 +164,7 @@ function resolveNCarContest(
   encounterId?: string,
   rivalSetups?: readonly LockedRaceSetup[],
   rivalBuilds?: readonly VehicleBuild[],
+  regionTheme?: import("./types").RegionId,
 ): NCarContestResult {
   if (rivalRoster.length !== REQUIRED_RIVAL_COUNT) {
     throw new ContestResolutionError(
@@ -175,7 +178,7 @@ function resolveNCarContest(
   // FR-009). This is a new call, separate from ContestScene.ts's own
   // rendering-side generateTrack call, which given the same (seed, level)
   // always agrees with this one since generateTrack is pure.
-  const track = generateTrack(seed, level);
+  const track = generateTrack(seed, level, regionTheme);
   const playerLaps = simulatePlayerLaps(playerBuild, lapCount, track, setup?.totalDelta);
   const rosterOrder: Omit<CarResult, "position" | "gapToLeader">[] = [
     {

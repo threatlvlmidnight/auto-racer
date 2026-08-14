@@ -132,11 +132,16 @@ export class RunScene extends Phaser.Scene {
     }
 
     if (this.run.status === "completed") {
-      this.add.text(width / 2, 115, "Run Summary", {
+      const classification = this.run.worldTour?.classification;
+      const classificationLabel = classification === "world-champion"
+        ? "WORLD CHAMPION"
+        : classification === "podium" ? "CHAMPIONSHIP PODIUM" : "CHAMPIONSHIP CLASSIFIED";
+      this.add.text(width / 2, 115, classification ? classificationLabel : "Run Summary", {
         fontSize: "21px",
         color: "#ffffff",
       }).setOrigin(0.5);
-      model.history.forEach((entry, index) => {
+      const recentHistory = model.history.slice(-7);
+      recentHistory.forEach((entry, index) => {
         this.add.text(70, 150 + index * 36, this.historyEntryLabel(entry), {
           fontSize: "11px",
           color: entry.type === "pvp" ? "#8fd8ff" : "#d7e1e6",
@@ -156,7 +161,7 @@ export class RunScene extends Phaser.Scene {
         fontSize: "12px",
         color: "#c8d2d8",
       }).setOrigin(0.5);
-      model.history.forEach((entry, index) => {
+      model.history.slice(-7).forEach((entry, index) => {
         this.add.text(70, 165 + index * 36, this.historyEntryLabel(entry), {
           fontSize: "11px",
           color: entry.type === "pvp" ? "#8fd8ff" : "#d7e1e6",
@@ -215,13 +220,8 @@ export class RunScene extends Phaser.Scene {
       });
     }
 
-    this.add.text(24, 145, `${model.remainingStages} stages remaining`, {
-      fontSize: "11px",
-      color: "#9eb5c9",
-    });
-
     if (model.history.length > 0) {
-      const path = model.history.map((entry) => `${entry.stagePosition}. ${entry.type.replace(/-/g, " ")}`).join("  >  ");
+      const path = model.history.slice(-8).map((entry) => `${entry.stagePosition}. ${entry.type.replace(/-/g, " ")}`).join("  >  ");
       this.add.text(width / 2, 365, path, {
         fontSize: "10px",
         color: "#9eb5c9",

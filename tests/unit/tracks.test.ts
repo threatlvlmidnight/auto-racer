@@ -108,6 +108,17 @@ describe("generateTrack determinism (T011, FR-002)", () => {
       expect(b).toEqual(a);
     }
   });
+
+  it("retains regionTheme as presentation evidence without changing geometry or characteristics", () => {
+    const neutral = generateTrack(17, 2);
+    const british = generateTrack(17, 2, "british-isles");
+    const paris = generateTrack(17, 2, "paris-exhibition");
+    expect(british.regionTheme).toBe("british-isles");
+    expect(paris.regionTheme).toBe("paris-exhibition");
+    expect(british.segments).toEqual(neutral.segments);
+    expect(paris.points).toEqual(neutral.points);
+    expect(british.characteristics).toEqual(neutral.characteristics);
+  });
 });
 
 function isClosed(segments: readonly TrackSegment[]): boolean {

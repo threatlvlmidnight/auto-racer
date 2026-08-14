@@ -251,7 +251,7 @@ export function raceSetupInput(run: Run, encounterId: string): RaceSetupInput {
     run,
     encounterId,
     build,
-    track: generateTrack(run.seed, level),
+    track: generateTrack(run.seed, level, stage?.regionId),
     eligibleControls,
     initialSelections: initialSetupSelections(eligibleControls, run.setupMemory),
   };
