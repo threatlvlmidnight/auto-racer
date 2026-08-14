@@ -89,7 +89,7 @@ canonical race parity, and reconcile all different settlement outputs.
 
 ### Tests
 
-- [ ] T025 [P] [US2] Add failing settlement table tests in `tests/unit/settlement.test.ts` for all eight positions, Local `1+1` purse/no interest/no points, Championship `2+2` purse/interest/points, sponsor ordering, and zero-floor reputation
+- [ ] T025 [P] [US2] Add failing settlement table tests in `tests/unit/settlement.test.ts` for all eight positions, Local `1+1` purse/no interest/no points, Championship `2+2` purse/interest/points, sponsor ordering, and zero-floor reputation (all position/purse/interest/points policy tables landed; sponsor ordering and integrated zero-floor coverage remain)
 - [ ] T026 [P] [US2] Add failing shared-pipeline parity tests in `tests/integration/race-parity.test.ts` proving race kind selects inputs/policy only and never a second simulation, playback, setup, or Results resolver
 - [ ] T027 [P] [US2] Add failing sponsor tests in `tests/integration/contract-targeting.test.ts` for next-Championship skipping Local Races and explicitly race-agnostic objectives progressing in either type
 - [ ] T028 [P] [US2] Add failing player-copy/static-boundary tests in `tests/integration/world-tour-copy.test.ts` rejecting visible `PvE`/`PvP` and requiring Local Race/Championship Race across hub, setup, contracts, Results, history, and explanations
@@ -222,7 +222,7 @@ including preparation traversal, recovery, repeat zero, and Paris-at-zero.
 
 ### Tests
 
-- [ ] T075 [P] [US6] Add failing state-machine tests in `tests/unit/reputation.test.ts` for start 12, floor zero/no cap, warning threshold four, available→active→consumed, active→failed, and consumed→failed
+- [X] T075 [P] [US6] Add failing state-machine tests in `tests/unit/reputation.test.ts` for start 12, floor zero/no cap, warning threshold four, available→active→consumed, active→failed, and consumed→failed
 - [ ] T076 [P] [US6] Add failing settlement-boundary tests in `tests/unit/settlement.test.ts` proving position+sponsor deltas settle before one Last Chance evaluation and ordering cannot change the outcome
 - [ ] T077 [P] [US6] Add failing flow tests in `tests/integration/world-tour-flow.test.ts` for preparation while active, next-race-only recovery, later zero, no-next-race Paris zero, and explicit success/failure explanations
 
