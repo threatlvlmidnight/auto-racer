@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-14
 
-**Status**: Draft
+**Status**: Implemented — manual four-viewport acceptance remains open (T047)
 
 **Input**: User description: "Slow watched races by 50% so the action is readable, and add 1× and 2× controls so the player can speed playback up. Playback controls must never change race outcomes."
 

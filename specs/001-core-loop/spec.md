@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-26
 
-**Status**: Draft
+**Status**: Implemented — owner browser validation remains open (T015, T019, T023)
 
 **Input**: User description: "Build the smallest complete version of the core game loop: a player views the shared baseline spec car, makes at least one change to it in a prepare phase, then runs that build in a contest phase as a 1v1 race against a fixed sample ghost. After the contest resolves, the player sees a results view with enough data to understand why they won or lost. Team identity, the draft/acquisition system, a ladder, and real player-vs-player ghosts are out of scope for this feature — the goal is only to prove the prepare→contest loop end to end and confirm it's legible."
 

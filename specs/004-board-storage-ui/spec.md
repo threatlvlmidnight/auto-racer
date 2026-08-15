@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-26
 
-**Status**: Draft
+**Status**: Implementation complete
 
 **Input**: User description: "The current UI doesn't feel like a game. I want a static 'board' where players put their active items, and a storage where they can store a couple of additional items."
 

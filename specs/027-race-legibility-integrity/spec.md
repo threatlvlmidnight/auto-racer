@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-13
 
-**Status**: Ready for implementation
+**Status**: Implementation complete
 
 **Input**: User description: "Make the time-attack ghost race easier to read,
 update projected position once per lap instead of constantly reshuffling, verify

@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-11
 
-**Status**: Draft
+**Status**: Implementation complete
 
 **Input**: User description: "Extend the 021 arcade physics simulation so item effects can be conditional on track context (e.g. corner tightness), not just flat global stat deltas. Concrete motivating case: an item that only improves acceleration exiting tight corners, contributing nothing on gentle corners or straights."
 

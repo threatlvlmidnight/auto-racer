@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-26
 
-**Status**: Draft
+**Status**: Implementation complete
 
 **Input**: User description: "A third buff kind: count-synergy items boost matching-tag items based on how many are currently held across board and storage combined (active or inert), rather than a fixed constant or time-accumulated stacking value."
 

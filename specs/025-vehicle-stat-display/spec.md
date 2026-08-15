@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-12
 
-**Status**: Ready for implementation
+**Status**: Implementation complete
 
 **Input**: User description: "Display vehicle base and effective physical stats throughout a run, while building the vehicle, and during race playback."
 

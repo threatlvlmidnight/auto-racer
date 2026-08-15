@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-08
 
-**Status**: Draft
+**Status**: Partially implemented — legacy ledger reconciliation required
 
 **Input**: User description: "Add a character selection screen for the four committed launch entrants and replace the generic board with each entrant's actual named-car topology garage, preserving equal capacity, open item legality, deterministic contests, and the prepare-to-contest structure."
 

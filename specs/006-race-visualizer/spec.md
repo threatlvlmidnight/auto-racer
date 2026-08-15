@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-26
 
-**Status**: Draft
+**Status**: Implementation complete
 
 **Input**: User description: "An animated, watchable contest presentation: both cars travel around a simple oval track over a fixed ~20-second race, paced proportionally by each side's real per-lap times from 005's lap breakdown, with callouts for discrete item-firing events. Replaces the current instant ContestScene resolution."
 

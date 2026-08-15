@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-14
 
-**Status**: Draft
+**Status**: Implementation complete — demo-v0.1.0 published
 
 **Input**: User description: "Host a shareable demo copy on GitHub Pages before beginning actual multiplayer design. Releases should be deliberate and stable rather than publishing every unfinished change automatically."
 

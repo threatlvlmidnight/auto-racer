@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-26
 
-**Status**: Draft
+**Status**: Implementation complete
 
 **Input**: User description: "A headless, lap-by-lap contest simulation: races resolve as a fixed number of discrete laps, items carry a per-lap magnitude and a lap-based cooldown gating recurring effects, the ghost becomes a fixed-pace control car, and the result includes a lap-by-lap breakdown. No visuals in this feature."
 

@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-13
 
-**Status**: Clarified — ready for planning
+**Status**: Implementation complete
 
 **Input**: User description: "Fully spec and build the pre-race setup screen we discussed: preview the real upcoming track and allow a small amount of item-driven setup before the immutable race begins."
 

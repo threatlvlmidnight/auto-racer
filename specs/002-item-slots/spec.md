@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-26
 
-**Status**: Draft
+**Status**: Implementation complete
 
 **Input**: User description: "Introduce generic item slots with a flat per-team cap and evict-to-add: every team has the same number of slots regardless of identity; when offered a new item while full, the player must evict an existing item or decline. Identity expresses through which items a team is offered (draft tag-weighting), not through slot count or named capacity pools."
 

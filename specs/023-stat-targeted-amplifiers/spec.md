@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-12
 
-**Status**: Draft
+**Status**: Implementation complete
 
 **Input**: User description: "Give Buff and Synergy items a way to amplify a specific physical stat (acceleration, top speed, braking power, or cornering speed) delta on other held items, instead of only amplifying the legacy flat timeModifier field, since physics-first items now leave timeModifier at zero and are otherwise unreachable by any amplification mechanism. Extended in design discussion: a stacking buff's stat amplification must be able to grow — or, with a negative magnitude, shrink — over the course of a race, not just apply a single fixed value; this requires a build's resolved physical stats to vary lap to lap for the first time, superseding `021`'s existing 'resolved once per build' contract for this case specifically. Tiering must also scale a held item's own physics contribution, closing the same gap for duplicate-copy progression."
 

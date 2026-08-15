@@ -1,9 +1,29 @@
 # Handoff
 
+## Latest session — hygiene pass and Feature 035 specification drafted (2026-08-15)
+
+The active SpecKit marker is now `035-interface-clarity-reward-feedback` via
+`.specify/feature.json`. The historical stale status labels have been
+normalized; completed packages now say so, while Features 010 and 029 are
+explicitly marked partially implemented rather than implicitly complete.
+
+`specs/LEGACY-LEDGER-RECONCILIATION.md` is the closing protocol for the 010
+and 029 residual ledgers. It separates their remaining work into current
+feature-owned presentation work and future authoritative follow-ups—without
+silently closing tasks based on related later code. `specs/ROADMAP.md` records
+the committed execution order: implement 033, then 034; continue planning 035;
+then refresh Feature 026 and create a World Tour completion package.
+
+Feature 035 now has a bounded `spec.md` and is ready for
+`/speckit.clarify`. It is presentation-only: consistent circuit identity and
+location, reserved Adjustable vocabulary, non-color card rarity/upgrade cues,
+reduced-motion equivalents, and a landscape primary-scene overlap/readability
+audit. It deliberately does not take over Feature 026's responsive-host and
+390×844 work, Feature 032's upgrade transaction, or Feature 034's encounters.
+
 ## Latest session — Feature 034 planning complete (2026-08-15)
 
-The active SpecKit marker is now `034-roguelike-encounter-variety` via
-`.specify/feature.json`. Specification, owner clarification, research,
+Feature 034's former active marker has advanced to Feature 035. Specification, owner clarification, research,
 implementation plan, data model, internal contract, quickstart, requirements
 checklist, 78 dependency-ordered implementation tasks, and the final consistency
 pass are complete under `specs/034-roguelike-encounter-variety/`. There are no

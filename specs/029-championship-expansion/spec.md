@@ -2,7 +2,7 @@
 
 **Feature Branch**: `029-championship-expansion`  
 **Created**: 2026-08-13  
-**Status**: Clarified  
+**Status**: Partially implemented — legacy ledger reconciliation required
 **Input**: Extend the championship into a meaningful world tour with regional
 identity, lower-stakes local competition, asynchronous player races, and a
 prestigious Paris finale.

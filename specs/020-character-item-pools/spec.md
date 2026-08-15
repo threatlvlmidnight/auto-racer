@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-11
 
-**Status**: Draft
+**Status**: Implementation complete
 
 **Input**: User description: "Give each of the 4 entrants their own exclusive item pool, plus a small shared neutral pool, replacing today's flat generic item pool. Bazaar-style: a neutral pool shared by everyone, a per-character exclusive pool, and in-run encounters that let a player cross-pollinate into another character's pool. Target size: 10 neutral items, 15 items per character (70 total, a fresh pool, not additive to today's 20)."
 
