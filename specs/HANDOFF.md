@@ -9,8 +9,11 @@ reserved `Adjustable` vocabulary, whole-game overlap/readability QA, and
 rarity/upgrade card feedback. Both have intake files and deferred-backlog rows.
 
 Feature 033 remains the active design target while Feature 032 is implemented
-elsewhere. Its next action is one consolidated owner clarification round before
-the specification is finalized.
+elsewhere. The consolidated owner clarification response is recorded in
+`specs/033-race-enrichment/clarification-questionnaire.md`; only Q7's exact
+active-signature build-support rule remains unresolved before the specification
+is finalized. The repository-local `speckit.clarify` agent now presents all
+material questions in one recommended questionnaire and accepts a batch answer.
 
 ## Feature 032 tasks generated — analyze next
 

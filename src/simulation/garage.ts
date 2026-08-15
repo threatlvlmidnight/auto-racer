@@ -1,6 +1,7 @@
 import { resolveInstallation } from "./slots";
 import {
   VEHICLE_STORAGE_CAPACITY,
+  type HeldItemLocation,
   type InstallationResolution,
   type ItemDefinition,
   type VehicleBuild,
@@ -268,7 +269,6 @@ export function commitGarageCommand(context: GarageContext, command: GarageComma
 export type SellItemResult =
   | { kind: "sold"; build: VehicleBuild; item: ItemDefinition; creditsGained: number }
   | { kind: "failure"; code: "missing-source" };
-
 /**
  * Sell any held item (active or stored) for half its authored price,
  * rounded down (015-economy-depth contract §3). Not a GarageCommand
@@ -297,4 +297,47 @@ export function sellItem(
     item,
     creditsGained: Math.floor(item.price / 2),
   };
+}
+
+/** One held item with its exact location and tier evidence (feature 032 T012). */
+export interface HeldItemEntry {
+  item: ItemDefinition;
+  tier: 1 | 2 | 3;
+  location: HeldItemLocation;
+  /** True for vehicle-slot items; storage entries are false (even activeWhileStored). */
+  installed: boolean;
+}
+
+/**
+ * Enumerates every held item — installed vehicle-slot items first in slot
+ * order, then stored items in storage-index order — with exact location and
+ * tier evidence (032 data-model.md EconomyContribution/heldLocation,
+ * contract §5). Pure read: never mutates the build, never filters by
+ * activity. Economy scanning, tag-inspection matching, and inventory
+ * presentation all share this one enumeration so location evidence can
+ * never drift between surfaces.
+ */
+export function enumerateHeldItems(build: VehicleBuild): readonly HeldItemEntry[] {
+  const entries: HeldItemEntry[] = [];
+  build.slots.forEach((slot) => {
+    if (slot.item) {
+      entries.push({
+        item: slot.item,
+        tier: slot.tier,
+        location: { area: "vehicle", slotId: slot.slotId },
+        installed: true,
+      });
+    }
+  });
+  build.storage.forEach((position) => {
+    if (position.item) {
+      entries.push({
+        item: position.item,
+        tier: position.tier,
+        location: { area: "storage", index: position.index },
+        installed: false,
+      });
+    }
+  });
+  return entries;
 }

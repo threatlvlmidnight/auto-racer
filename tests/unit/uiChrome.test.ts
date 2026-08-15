@@ -2,6 +2,16 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { inflateSync } from "node:zlib";
+import {
+  EMPTY_UI_CHROME_REGISTRY,
+  UI_CHROME_MASTER_SIZE,
+  UI_CHROME_STATES,
+  nineSliceMarginsValid,
+  sourceRectInBounds,
+  uiChromeRegionByKey,
+  withUIChromeRegion,
+  type UIChromeRegion,
+} from "../../src/scenes/uiChrome";
 
 /**
  * Feature 032 T006: validation of the approved control-sheet masters.
@@ -149,3 +159,55 @@ describe("feature 032 approved control-sheet masters (T006)", () => {
     expect([chroma.width, chroma.height]).toEqual([master.width, master.height]);
   });
 });
+
+// --- Feature 032 T011: semantic crop-region registry contract ----------
+
+const sampleRegion: UIChromeRegion = {
+  key: "primary-button",
+  family: "primary",
+  sourceRect: { x: 16, y: 16, width: 320, height: 96 },
+  nineSliceMargins: { left: 24, top: 24, right: 24, bottom: 24 },
+};
+
+describe("semantic crop-region registry (T011)", () => {
+  it("starts empty: no region exists before T094 measures the master", () => {
+    expect(EMPTY_UI_CHROME_REGISTRY.regions).toEqual([]);
+  });
+
+  it("registers validated regions under stable unique keys", () => {
+    const registry = withUIChromeRegion(EMPTY_UI_CHROME_REGISTRY, sampleRegion);
+    expect(registry.regions).toHaveLength(1);
+    expect(uiChromeRegionByKey(registry, "primary-button")).toEqual(sampleRegion);
+    expect(uiChromeRegionByKey(registry, "missing")).toBeNull();
+    // The empty registry is never mutated.
+    expect(EMPTY_UI_CHROME_REGISTRY.regions).toEqual([]);
+  });
+
+  it("rejects duplicate keys, out-of-bounds rects, and invalid margins", () => {
+    const registry = withUIChromeRegion(EMPTY_UI_CHROME_REGISTRY, sampleRegion);
+    expect(() => withUIChromeRegion(registry, sampleRegion)).toThrow(/already registered/);
+    expect(() => withUIChromeRegion(EMPTY_UI_CHROME_REGISTRY, {
+      ...sampleRegion,
+      sourceRect: { x: UI_CHROME_MASTER_SIZE.width - 4, y: 16, width: 320, height: 96 },
+    })).toThrow(/outside the approved master/);
+    expect(() => withUIChromeRegion(EMPTY_UI_CHROME_REGISTRY, {
+      ...sampleRegion,
+      nineSliceMargins: { left: 300, top: 24, right: 300, bottom: 24 },
+    })).toThrow(/invalid nine-slice margins/);
+  });
+
+  it("keeps the semantic state vocabulary complete and non-color-only", () => {
+    expect(UI_CHROME_STATES).toEqual(["normal", "hover", "focus", "pressed", "disabled"]);
+  });
+
+  it("bounds and margin validators agree with registration guards", () => {
+    expect(sourceRectInBounds(sampleRegion.sourceRect)).toBe(true);
+    expect(sourceRectInBounds({ x: -1, y: 0, width: 10, height: 10 })).toBe(false);
+    expect(nineSliceMarginsValid(sampleRegion)).toBe(true);
+    expect(nineSliceMarginsValid({
+      ...sampleRegion,
+      nineSliceMargins: { left: 0, top: 0, right: 0, bottom: 97 },
+    })).toBe(false);
+  });
+});
+

@@ -12,7 +12,11 @@ import {
   resolvedItemEvidence,
   statDefinition,
   unresolvedPhysicalEvidence,
+  IDLE_TAG_INSPECTION,
+  reduceTagInspection,
+  tagInspectionProjection,
 } from "../../src/scenes/itemPresentation";
+import { testItem, vehicleBuild } from "../fixtures/vehicle-build-fixtures";
 
 const ALL_ITEMS = [NEUTRAL_ITEMS, ...Object.values(EXCLUSIVE_ITEMS)].flat();
 
@@ -123,3 +127,71 @@ describe("selection, layout, and unavailable evidence", () => {
     expect(evidence.contributionLines).toEqual([]);
   });
 });
+
+// --- Feature 032 T009: tag-inspection reducer and matching projection ----
+
+describe("tag inspection reducer (032 contract §2)", () => {
+  it("starts idle and previews on hover", () => {
+    const previewed = reduceTagInspection(IDLE_TAG_INSPECTION, { kind: "hover", tag: "airflow" });
+    expect(previewed).toEqual({ mode: "preview", tag: "airflow" });
+  });
+
+  it("pins on explicit selection and hover never overwrites a pin", () => {
+    const pinned = reduceTagInspection(IDLE_TAG_INSPECTION, { kind: "pin", tag: "airflow" });
+    expect(pinned).toEqual({ mode: "pinned", tag: "airflow" });
+
+    const hovered = reduceTagInspection(pinned, { kind: "hover", tag: "heat" });
+    expect(hovered).toBe(pinned);
+    const left = reduceTagInspection(pinned, { kind: "leave" });
+    expect(left).toBe(pinned);
+  });
+
+  it("pinning another tag moves the pin; unpin returns to the idle singleton", () => {
+    const first = reduceTagInspection(IDLE_TAG_INSPECTION, { kind: "pin", tag: "airflow" });
+    const second = reduceTagInspection(first, { kind: "pin", tag: "heat" });
+    expect(second).toEqual({ mode: "pinned", tag: "heat" });
+
+    expect(reduceTagInspection(second, { kind: "unpin" })).toBe(IDLE_TAG_INSPECTION);
+    expect(reduceTagInspection({ mode: "preview", tag: "heat" }, { kind: "leave" }))
+      .toBe(IDLE_TAG_INSPECTION);
+  });
+});
+
+describe("tag inspection matching projection (032 FR-004B)", () => {
+  const airflowInstalled = testItem({
+    id: "tag-installed", name: "Installed Airflow", price: 2, timeModifier: 0, synergyTags: ["airflow"],
+  });
+  const airflowStored = testItem({
+    id: "tag-stored", name: "Stored Airflow", price: 2, timeModifier: 0, synergyTags: ["airflow"],
+  });
+  const unrelated = testItem({
+    id: "tag-other", name: "Heat Item", price: 2, timeModifier: 0, synergyTags: ["heat"],
+  });
+
+  it("matches every held item on board and storage with exact locations", () => {
+    const build = vehicleBuild([airflowInstalled, unrelated], [airflowStored]);
+    const projection = tagInspectionProjection("airflow", "Airflow", build);
+
+    expect(projection.label).toBe("Airflow");
+    expect(projection.matchingHeldCount).toBe(2);
+    expect(projection.matchingLocations).toEqual([
+      { location: { area: "vehicle", slotId: build.slots[0].slotId }, itemId: "tag-installed" },
+      { location: { area: "storage", index: 0 }, itemId: "tag-stored" },
+    ]);
+  });
+
+  it("never counts the inspecting surface's own scan twice and reports zero cleanly", () => {
+    const build = vehicleBuild([unrelated]);
+    const projection = tagInspectionProjection("airflow", "Airflow", build);
+    expect(projection.matchingHeldCount).toBe(0);
+    expect(projection.matchingLocations).toEqual([]);
+  });
+
+  it("is a pure read: the build is never mutated", () => {
+    const build = vehicleBuild([airflowInstalled], [airflowStored]);
+    const snapshot = structuredClone(build);
+    tagInspectionProjection("airflow", "Airflow", build);
+    expect(build).toEqual(snapshot);
+  });
+});
+

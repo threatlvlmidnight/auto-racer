@@ -1,15 +1,18 @@
 import { isCountSynergyBuff, isValueScaledBuff, type PhysicalStatTarget } from "../simulation/buffs";
 import { applyTierBonus } from "../simulation/tiering";
+import { enumerateHeldItems } from "../simulation/garage";
 import type { GarageDisposition, PlacementPreview } from "../simulation/garage";
 import type {
   ConditionalPhysicsContribution,
   ContributionEvidence,
+  HeldItemLocation,
   InstallationState,
   ItemDefinition,
   ItemPhysicalContributionEvidence,
   ItemPhysicsContribution,
   PhysicsCondition,
   StatTarget,
+  VehicleBuild,
 } from "../simulation/types";
 
 export type ItemStatKey = StatTarget;
@@ -578,4 +581,77 @@ export function conditionMatchesForItem(
   itemId: string,
 ): readonly ConditionalPhysicsContribution[] {
   return contributions.filter((entry) => entry.sourceItemId === itemId);
+}
+
+// --- Feature 032: tag inspection contract (T009, research Decision 3) ----
+//
+// One pure selection model drives tag inspection on every surface. Hover may
+// preview; click/tap/keyboard pins. Preview never overwrites a pinned state.
+// Surfaces render this state rather than implementing their own tag scan.
+
+export type TagInspectionMode = "idle" | "preview" | "pinned";
+
+export interface TagInspectionState {
+  mode: TagInspectionMode;
+  tag: string | null;
+}
+
+export const IDLE_TAG_INSPECTION: TagInspectionState = Object.freeze({ mode: "idle", tag: null });
+
+export type TagInspectionAction =
+  | { kind: "hover"; tag: string }
+  | { kind: "leave" }
+  | { kind: "pin"; tag: string }
+  | { kind: "unpin" };
+
+/**
+ * The pure `idle | preview | pinned` reducer (032 data-model.md
+ * "TagInspectionState"). Pinning always wins; hover/leave only move between
+ * idle and preview. Pure: returns the same frozen idle singleton and never
+ * mutates its input.
+ */
+export function reduceTagInspection(
+  state: TagInspectionState,
+  action: TagInspectionAction,
+): TagInspectionState {
+  switch (action.kind) {
+    case "hover":
+      return state.mode === "pinned" ? state : { mode: "preview", tag: action.tag };
+    case "leave":
+      return state.mode === "pinned" ? state : IDLE_TAG_INSPECTION;
+    case "pin":
+      return { mode: "pinned", tag: action.tag };
+    case "unpin":
+      return IDLE_TAG_INSPECTION;
+  }
+}
+
+/** One matching held item's exact location, for board/storage highlights. */
+export interface TagMatchLocation {
+  location: HeldItemLocation;
+  itemId: string;
+}
+
+/**
+ * The matching-location projection (032 contract §2): full tag name, held
+ * match count, and every matching garage location — installed slots and
+ * storage alike (FR-004B). Pure: reads the build through the shared
+ * enumerateHeldItems authority, never mutates it.
+ */
+export interface TagInspectionProjection {
+  tag: string;
+  label: string;
+  matchingHeldCount: number;
+  matchingLocations: readonly TagMatchLocation[];
+}
+
+export function tagInspectionProjection(
+  tag: string,
+  label: string,
+  build: VehicleBuild,
+): TagInspectionProjection {
+  const matchingLocations = enumerateHeldItems(build)
+    .filter((entry) => entry.item.synergyTags.includes(tag))
+    .map((entry) => ({ location: entry.location, itemId: entry.item.id }));
+  return { tag, label, matchingHeldCount: matchingLocations.length, matchingLocations };
 }

@@ -2,11 +2,74 @@
 
 **Created**: 2026-08-15
 
-**Status**: Awaiting one consolidated owner response.
+**Status**: Owner response recorded; Q7 follow-up pending.
 
-Reply with the question number and either `Accept`, a listed alternative, or a
-replacement answer. Questions are grouped here to minimize clarification rounds;
-accepted answers will be incorporated into the formal feature specification.
+## Owner response — 2026-08-15
+
+- **Q1 accepted**: Use shared lap-relative Opening, Contest, and Final Push phases.
+- **Q2 accepted with constraint**: Phase structure applies evenly to every driver
+  before item and setup effects. No driver receives a privileged phase baseline.
+- **Q3 accepted**: Use one race-local Composure budget.
+- **Q4 accepted with constraint**: Signature resolution is deterministic and
+  reproducible from committed inputs and seed so every asynchronous viewer sees
+  the same authoritative race and events.
+- **Q5 accepted**: Give each driver one signature and one passive tendency.
+- **Q6 accepted**: Signature effects are temporary and evidence-backed; stock
+  physical stats remain equal.
+- **Q7 unresolved**: The owner favors an always-available passive with the named
+  active signature gated by item/build synergy, but the exact support rule still
+  needs selection below.
+- **Q8 accepted**: Passing uses proximity, pace advantage, and Composure-backed
+  attack/defense rules.
+- **Q9 accepted with constraint**: Winner-change and time-swing acceptance bands
+  must be centralized, easily tunable developer configuration rather than
+  scattered constants.
+- **Q10 accepted with constraint**: Bounded non-retirement incidents ship behind
+  one engine-level feature toggle so they can be disabled cleanly without
+  changing unrelated race rules.
+- **Q11 accepted**: Risk sources are inspectable before the race without spoiling
+  the resolved incident outcome.
+- **Q12 accepted**: Pre-race presentation exposes phases, driver rules,
+  Composure, activation conditions, and incident-risk sources.
+- **Q13 accepted with staged presentation**: Feature 033 uses text and bounded
+  animation. Dramatic picture-in-picture character cutscenes for each watching
+  player's overtakes/signatures are deferred until the required asset set and
+  presentation feature are planned.
+- **Q14 accepted with revised speed baseline**: Rename the current `2x` playback
+  rate as the new `1x` baseline (approximately 20 seconds for the legacy race),
+  and make the new `2x` twice that rate (approximately 10 seconds). Remove the
+  current slow approximately 40-second playback rate. Both speeds consume the
+  same retained authoritative event schedule.
+- **Q15 accepted**: Retain inspectable before/after evidence for consequential
+  events.
+- **Q16 accepted**: The first slice covers all drivers, generated opponents,
+  simulation, presentation, and deterministic fixtures.
+- **Q17 accepted with monitoring**: Adopt the proposed initial watchability
+  target, measure it continuously against a representative deterministic corpus,
+  and keep its balance thresholds tunable during development.
+
+## Q7 follow-up — active-signature build support
+
+All options keep the passive tendency active even with an empty build.
+
+**Recommendation: Option A — tag threshold.** Each driver signature names one or
+more thematic item tags and requires at least a tunable number of matching held
+items (recommended initial threshold: one). Race context and Composure still
+decide whether and when it fires. This makes the synergy visible on existing
+cards, works with character-specific pools, and avoids a signature being
+secretly enabled by an opaque aggregate score.
+
+| Option | Active signature support condition |
+|---|---|
+| A | A driver-authored item-tag threshold; recommended. |
+| B | A threshold on a relevant resolved vehicle stat, regardless of which items produced it. |
+| C | Either the tag threshold or a matching pre-race setup bias can enable it. |
+| D | No build gate; every signature remains eligible from an empty build. |
+
+The support condition only establishes eligibility. It never guarantees that
+race context will create the activation window.
+
+The original questionnaire follows as the decision record.
 
 ## Race structure and authority
 
@@ -196,4 +259,3 @@ Q3 ...
 ...
 Q17 Accept
 ```
-

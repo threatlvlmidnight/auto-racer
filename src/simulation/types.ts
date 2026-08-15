@@ -746,3 +746,187 @@ export interface ExactTrackGhostRecord extends RecordedGhost {
 export interface EliteFinaleOpponent extends ExactTrackGhostRecord {
   provenance: "recorded" | "exhibition-fallback";
 }
+
+// --- Feature 032: demo feedback bug pass ----------------------------------
+//
+// Shared evidence/receipt vocabulary for the demo feedback pass (032
+// data-model.md). Every type here is an immutable projection: simulation,
+// settlement, and garage authorities produce them; presentation consumes
+// them; nothing ever mutates one in place.
+
+/** The audited vocabulary for shipped scaling-like rules (research Decision 2). */
+export type ScalingKind = "composition" | "fitted-value" | "lap-activation";
+
+/**
+ * One item's scaling classification for presentation (data-model.md
+ * "ScalingClassification"). Derived from the authored item plus the held
+ * build or retained lap evidence — never a cross-race persistence record.
+ */
+export interface ScalingClassification {
+  kind: ScalingKind;
+  sourceItemId: string;
+  targetStat: StatTarget;
+  /** The current magnitude input: held-match count, fitted value, or activation count. */
+  currentInput: number;
+  /** The resolved effect at `currentInput` (percent for composition/fitted-value). */
+  currentMagnitude: number;
+  /** Player-readable description of the next activation/match condition. */
+  nextTriggerLabel: string;
+}
+
+/** One amplifier's attribution inside a LiveStatChange (FR-003). */
+export interface AmplifierAttribution {
+  sourceItemId: string;
+  sourceItemName: string;
+  /** The percent this amplifier added to the affected contribution. */
+  magnitudePercent: number;
+  /** Label of the contribution being amplified (item name or effect line). */
+  affectedContributionLabel: string;
+}
+
+/**
+ * One immutable live-stat change recorded at an activation boundary
+ * (data-model.md "LiveStatChange"). Child evidence of a resolved contest
+ * result; playback publishes each exactly once (contract §1).
+ */
+export interface LiveStatChange {
+  boundaryId: string;
+  lap: number;
+  stat: StatTarget;
+  previousValue: number;
+  currentValue: number;
+  /** `currentValue - previousValue`, signed — never inferred by presentation. */
+  delta: number;
+  /** Numeric direction of the change; presentation adds signed text + arrow. */
+  direction: "up" | "down";
+  sourceItemId: string;
+  sourceItemName: string;
+  amplifierSources: readonly AmplifierAttribution[];
+}
+
+/** Where a held item lives — exact location evidence for economy/sale receipts. */
+export type HeldItemLocation =
+  | { area: "vehicle"; slotId: string }
+  | { area: "storage"; index: number };
+
+/** The transaction that activates a held economy item (research Decision 7). */
+export type EconomyTrigger = "scored-win" | "item-sale" | "sponsor-success";
+
+/**
+ * One held economy item's contribution to a transaction (data-model.md
+ * "EconomyContribution"). Included in the owning authoritative transaction
+ * receipt exactly once — no live randomness (contract §5).
+ */
+export interface EconomyContribution {
+  sourceItemId: string;
+  sourceItemName: string;
+  tier: 1 | 2 | 3;
+  heldLocation: HeldItemLocation;
+  trigger: EconomyTrigger;
+  amount: number;
+}
+
+export type AcquisitionStatus = "purchased" | "upgraded" | "unavailable";
+
+/** One changed effect value in a duplicate-tier upgrade receipt. */
+export interface AcquisitionEffectChange {
+  label: string;
+  oldValue: string;
+  newValue: string;
+}
+
+/**
+ * Receipt for one acquisition-surface offer slot (data-model.md
+ * "AcquisitionReceipt"). Retained only for the current acquisition surface;
+ * restock replaces all offer entries and clears prior receipts (contract §3).
+ */
+export interface AcquisitionReceipt {
+  offerId: string;
+  status: AcquisitionStatus;
+  itemId: string;
+  itemName: string;
+  /** Null for a first-time purchase. */
+  oldTier: 1 | 2 | 3 | null;
+  /** Null for an unavailable slot. */
+  newTier: 1 | 2 | 3 | null;
+  changedEffects: readonly AcquisitionEffectChange[];
+}
+
+/** Every active-run non-playback surface that can host inventory (spec US3). */
+export type InventoryHost =
+  | "destination"
+  | "reward"
+  | "supplier"
+  | "sponsor"
+  | "pre-race"
+  | "result"
+  | "run-hub";
+
+/** Chosen from measured safe bounds, never user agent (research Decision 6). */
+export type InventoryPresentationMode = "overlay" | "full-window";
+
+/**
+ * The typed context token captured before opening inventory (data-model.md
+ * "InventoryHostContext"). Closing restores host selection/focus/navigation
+ * exactly, except mutations explicitly committed inside inventory.
+ */
+export interface InventoryHostContext {
+  host: InventoryHost;
+  sceneKey: string;
+  focusKey: string | null;
+  /** Host-owned selection/navigation snapshot; opaque to the inventory session. */
+  hostState: Readonly<Record<string, unknown>>;
+  presentation: InventoryPresentationMode;
+  /** Non-null while another modal/transaction blocks inventory entry. */
+  blockedReason: string | null;
+}
+
+/**
+ * One immediate sale's immutable receipt (data-model.md "SaleReceipt /
+ * SaleUndoSnapshot"). Totals are exact: `totalPayout === baseValue + sum of
+ * contribution amounts` and `creditsAfter === creditsBefore + totalPayout`.
+ */
+export interface SaleReceipt {
+  itemId: string;
+  itemName: string;
+  tier: 1 | 2 | 3;
+  priorLocation: HeldItemLocation;
+  baseValue: number;
+  contributions: readonly EconomyContribution[];
+  totalPayout: number;
+  creditsBefore: number;
+  creditsAfter: number;
+}
+
+/**
+ * The single bounded compensating snapshot for a sale (research Decision 5).
+ * `valid` is false after any later inventory mutation or scene transition —
+ * Undo then fails without mutation. Never a general history stack.
+ */
+export interface SaleUndoSnapshot {
+  receipt: SaleReceipt;
+  valid: boolean;
+}
+
+/** Race kinds counted toward the final run record (spec Clarifications). */
+export type ScoredRecordRaceKind = "local" | "championship" | "elite-finale";
+
+/** One settled scored race retained for record projection (research Decision 8). */
+export interface ScoredRaceRecordEntry {
+  encounterId: string;
+  raceKind: ScoredRecordRaceKind;
+  /** Ordered 1-8 placement; 1-3 win, 4-8 loss. No tie bucket. */
+  position: number;
+}
+
+/**
+ * The final wins/losses projection derived solely from retained history
+ * (data-model.md "ScoredRaceRecordProjection"). No separately mutable
+ * counters; each entry counts exactly once.
+ */
+export interface ScoredRaceRecordProjection {
+  wins: number;
+  losses: number;
+  entries: readonly ScoredRaceRecordEntry[];
+}
+

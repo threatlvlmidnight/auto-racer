@@ -1,5 +1,5 @@
 ---
-description: Identify underspecified areas in the current feature spec by asking up to 5 highly targeted clarification questions and encoding answers back into the spec.
+description: Identify underspecified areas in the current feature spec, present one consolidated recommended questionnaire, and encode the owner's batch response back into the spec.
 handoffs:
   - label: Build Technical Plan
     agent: speckit.plan
@@ -122,19 +122,18 @@ Execution steps:
    - Clarification would not materially change implementation or validation strategy
    - Information is better deferred to planning phase (note internally)
 
-4. Generate (internally) a prioritized queue of candidate clarification questions (maximum 5). Do NOT output them all at once. Apply these constraints:
-    - Maximum of 5 total questions across the whole session.
-    - Each question must be answerable with EITHER:
-       - A short multiple‑choice selection (2–5 distinct, mutually exclusive options), OR
-       - A one-word / short‑phrase answer (explicitly constrain: "Answer in <=5 words").
+4. Generate a prioritized clarification questionnaire and present the complete questionnaire in one message. Apply these constraints:
+    - Include every unresolved question whose answer materially affects scope, architecture, data modeling, task decomposition, test design, UX behavior, operational readiness, or compliance validation. Prefer one complete round over an arbitrary numeric quota.
+    - Group related questions under short domain headings and number them `Q1`, `Q2`, and so on.
+    - Each question should be answerable with a recommendation acceptance, a short multiple-choice selection, or a concise replacement/conditional answer. Do not impose an artificial word limit when the owner needs to state a testable condition.
     - Only include questions whose answers materially impact architecture, data modeling, task decomposition, test design, UX behavior, operational readiness, or compliance validation.
     - Ensure category coverage balance: attempt to cover the highest impact unresolved categories first; avoid asking two low-impact questions when a single high-impact area (e.g., security posture) is unresolved.
     - Exclude questions already answered, trivial stylistic preferences, or plan-level execution details (unless blocking correctness).
     - Favor clarifications that reduce downstream rework risk or prevent misaligned acceptance tests.
-    - If more than 5 categories remain unresolved, select the top 5 by (Impact * Uncertainty) heuristic.
+    - Merge duplicative questions, but do not omit a high-impact decision merely to shorten the list.
 
-5. Sequential questioning loop (interactive):
-    - Present EXACTLY ONE question at a time.
+5. Consolidated questioning loop:
+    - Present ALL numbered questions at once so the owner can answer in one batch.
     - For multiple‑choice questions:
        - **Analyze all options** and determine the **most suitable option** based on:
           - Best practices for the project type
@@ -143,38 +142,32 @@ Execution steps:
           - Alignment with any explicit project goals or constraints visible in the spec
        - Present your **recommended option prominently** at the top with clear reasoning (1-2 sentences explaining why this is the best choice).
        - Format as: `**Recommended:** Option [X] - <reasoning>`
-       - Then render all options as a Markdown table:
+       - Then render all options as a compact Markdown table:
 
        | Option | Description |
        |--------|-------------|
        | A | <Option A description> |
        | B | <Option B description> |
        | C | <Option C description> (add D/E as needed up to 5) |
-       | Short | Provide a different short answer (<=5 words) (Include only if free-form alternative is appropriate) |
+       | Other | Provide a concise replacement or conditional answer (include only if free-form alternatives are appropriate) |
 
-       - After the table, add: `You can reply with the option letter (e.g., "A"), accept the recommendation by saying "yes" or "recommended", or provide your own short answer.`
+       - After the table, add: `You can reply with the option letter, accept the recommendation, or provide a concise replacement/condition.`
     - For short‑answer style (no meaningful discrete options):
        - Provide your **suggested answer** based on best practices and context.
        - Format as: `**Suggested:** <your proposed answer> - <brief reasoning>`
-       - Then output: `Format: Short answer (<=5 words). You can accept the suggestion by saying "yes" or "suggested", or provide your own answer.`
-    - After the user answers:
-       - If the user replies with "yes", "recommended", or "suggested", use your previously stated recommendation/suggestion as the answer.
-       - Otherwise, validate the answer maps to one option or fits the <=5 word constraint.
-       - If ambiguous, ask for a quick disambiguation (count still belongs to same question; do not advance).
-       - Once satisfactory, record it in working memory (do not yet write to disk) and move to the next queued question.
-    - Stop asking further questions when:
-       - All critical ambiguities resolved early (remaining queued items become unnecessary), OR
-       - User signals completion ("done", "good", "no more"), OR
-       - You reach 5 asked questions.
-    - Never reveal future queued questions in advance.
+       - Then output: `You can accept the suggestion or provide a concise replacement/condition.`
+    - End with a fast response template and explicitly allow `Accept all recommendations` plus listed exceptions.
+    - After the user answers, map `Accept`, `yes`, `recommended`, or `suggested` per question to that question's recommendation. Treat `Accept all recommendations` as acceptance of every recommendation except explicitly listed exceptions.
+    - Accept conditional answers when their constraint is testable. Ask a follow-up only for answers that remain materially ambiguous; consolidate every necessary follow-up into one message when possible.
+    - Record all satisfactory answers in working memory before integration.
     - If no valid questions exist at start, immediately report no critical ambiguities.
 
-6. Integration after EACH accepted answer (incremental update approach):
+6. Integration after the consolidated response:
     - Maintain in-memory representation of the spec (loaded once at start) plus the raw file contents.
     - For the first integrated answer in this session:
        - Ensure a `## Clarifications` section exists (create it just after the highest-level contextual/overview section per the spec template if missing).
        - Under it, create (if not present) a `### Session YYYY-MM-DD` subheading for today.
-    - Append a bullet line immediately after acceptance: `- Q: <question> → A: <final answer>`.
+    - Append one bullet per accepted answer: `- Q: <question> → A: <final answer>`.
     - Then immediately apply the clarification to the most appropriate section(s):
        - Functional ambiguity → Update or add a bullet in Functional Requirements.
        - User interaction / actor distinction → Update User Stories or Actors subsection (if present) with clarified role, constraint, or scenario.
@@ -183,13 +176,13 @@ Execution steps:
        - Edge case / negative flow → Add a new bullet under Edge Cases / Error Handling (or create such subsection if template provides placeholder for it).
        - Terminology conflict → Normalize term across spec; retain original only if necessary by adding `(formerly referred to as "X")` once.
     - If the clarification invalidates an earlier ambiguous statement, replace that statement instead of duplicating; leave no obsolete contradictory text.
-    - Save the spec file AFTER each integration to minimize risk of context loss (atomic overwrite).
+    - Save the spec atomically after integrating the full accepted batch. If a follow-up leaves only some answers unresolved, integrate the resolved answers and explicitly mark only the unresolved decisions as outstanding.
     - Preserve formatting: do not reorder unrelated sections; keep heading hierarchy intact.
     - Keep each inserted clarification minimal and testable (avoid narrative drift).
 
-7. Validation (performed after EACH write plus final pass):
+7. Validation (performed after each batch write plus final pass):
    - Clarifications session contains exactly one bullet per accepted answer (no duplicates).
-   - Total asked (accepted) questions ≤ 5.
+   - Every accepted questionnaire answer appears exactly once.
    - Updated sections contain no lingering vague placeholders the new answer was meant to resolve.
    - No contradictory earlier statement remains (scan for now-invalid alternative choices removed).
    - Markdown structure valid; only allowed new headings: `## Clarifications`, `### Session YYYY-MM-DD`.
@@ -223,8 +216,8 @@ Behavior rules:
 - Never exceed 5 total asked questions (clarification retries for a single question do not count as new questions).
 - Avoid speculative tech stack questions unless the absence blocks functional clarity.
 - Respect user early termination signals ("stop", "done", "proceed").
-- If no questions asked due to full coverage, output a compact coverage summary (all categories Clear) then suggest advancing.
-- If quota reached with unresolved high-impact categories remaining, explicitly flag them under Deferred with rationale.
+- If no questions are asked due to full coverage, output a compact coverage summary (all categories Clear) then suggest advancing.
+- Do not split a known questionnaire across multiple turns merely to conserve question count; the purpose of this repository-local workflow is to conserve owner and agent turns.
 
 Context for prioritization: $ARGUMENTS
 
@@ -265,7 +258,7 @@ Check if `.specify/extensions.yml` exists in the project root.
 ## Completion Report
 
 Report completion (after questioning loop ends or early termination):
-- Number of questions asked & answered.
+- Number of questions presented, answered, and still unresolved.
 - Path to updated spec.
 - Sections touched (list names).
 - Spec quality checklist status (if `FEATURE_DIR/checklists/requirements.md` was re-validated): show before/after pass counts (e.g., "Spec Quality Checklist: 12/16 → 15/16 items passing") and list any items that changed state — both newly checked (unchecked → checked) and any regressions (checked → unchecked). If any items remain unchecked, list them as areas needing attention.

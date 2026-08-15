@@ -36,6 +36,8 @@ import {
   type RunSetupMemory,
   type LocalRaceTier,
   type RaceKind,
+  type ScoredRaceRecordEntry,
+  type ScoredRaceRecordProjection,
   type SelectableRegionId,
   type TourLeg,
   type VehicleBuild,
@@ -177,6 +179,28 @@ const INTEREST_RATE = 0.1;
 /** Pure (contract §2): amount derived only from the current balance. */
 export function interestFor(bankedCredits: number): number {
   return Math.floor(bankedCredits * INTEREST_RATE);
+}
+
+/**
+ * Feature 032 (research Decision 8, data-model.md "ScoredRaceRecordProjection"):
+ * derive the final run record solely from retained scored-race entries —
+ * positions 1-3 are wins, 4-8 losses; Local, Championship, and Elite Finale
+ * entries each count exactly once. No tie bucket, no separately mutable
+ * counters. Pure: identical entry list always yields the identical projection.
+ */
+export function projectScoredRaceRecord(
+  entries: readonly ScoredRaceRecordEntry[],
+): ScoredRaceRecordProjection {
+  let wins = 0;
+  let losses = 0;
+  entries.forEach((entry) => {
+    if (!Number.isInteger(entry.position) || entry.position < 1 || entry.position > 8) {
+      throw new Error(`Scored race position must be an integer from 1 through 8: ${entry.position}`);
+    }
+    if (entry.position <= 3) wins += 1;
+    else losses += 1;
+  });
+  return { wins, losses, entries: [...entries] };
 }
 export type StageState = "unavailable" | "available" | "active" | "completed";
 export type EncounterType =

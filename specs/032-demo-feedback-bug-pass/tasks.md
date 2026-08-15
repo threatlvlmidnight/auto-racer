@@ -41,13 +41,13 @@ approved asset masters are reproducible.
 
 **⚠️ CRITICAL**: Complete this phase before integrating any story into Phaser.
 
-- [ ] T007 Add `ScalingClassification`, `LiveStatChange`, `EconomyContribution`, `AcquisitionReceipt`, `InventoryHostContext`, `SaleReceipt`, `SaleUndoSnapshot`, and record-projection types to `src/simulation/types.ts`
-- [ ] T008 [P] Add failing immutability/shape tests for the new evidence and receipt types in `tests/unit/demoFeedbackTypes.test.ts`
-- [ ] T009 [P] Add the pure `idle | preview | pinned` tag-inspection reducer and matching-location projection contract to `src/scenes/itemPresentation.ts`
-- [ ] T010 [P] Add the pure inventory host/layout/session presentation contract skeleton to `src/scenes/inventoryPresentation.ts`
-- [ ] T011 [P] Add the semantic UI crop-region/state types and empty region registry to `src/scenes/uiChrome.ts`
-- [ ] T012 Add shared catalog/build location helpers that enumerate installed and stored held items without mutation in `src/simulation/garage.ts`
-- [ ] T013 Run focused foundation tests for `tests/unit/demoFeedbackTypes.test.ts`, `tests/unit/itemPresentation.test.ts`, `tests/unit/inventoryPresentation.test.ts`, and `tests/unit/uiChrome.test.ts`, then resolve type/lint failures without changing gameplay behavior
+- [X] T007 Add `ScalingClassification`, `LiveStatChange`, `EconomyContribution`, `AcquisitionReceipt`, `InventoryHostContext`, `SaleReceipt`, `SaleUndoSnapshot`, and record-projection types to `src/simulation/types.ts`
+- [X] T008 [P] Add failing immutability/shape tests for the new evidence and receipt types in `tests/unit/demoFeedbackTypes.test.ts`
+- [X] T009 [P] Add the pure `idle | preview | pinned` tag-inspection reducer and matching-location projection contract to `src/scenes/itemPresentation.ts`
+- [X] T010 [P] Add the pure inventory host/layout/session presentation contract skeleton to `src/scenes/inventoryPresentation.ts`
+- [X] T011 [P] Add the semantic UI crop-region/state types and empty region registry to `src/scenes/uiChrome.ts`
+- [X] T012 Add shared catalog/build location helpers that enumerate installed and stored held items without mutation in `src/simulation/garage.ts`
+- [X] T013 Run focused foundation tests for `tests/unit/demoFeedbackTypes.test.ts`, `tests/unit/itemPresentation.test.ts`, `tests/unit/inventoryPresentation.test.ts`, and `tests/unit/uiChrome.test.ts`, then resolve type/lint failures without changing gameplay behavior
 
 **Checkpoint**: Story work can consume typed evidence, receipts, context tokens,
 and semantic chrome without inventing local scene state.
