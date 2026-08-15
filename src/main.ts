@@ -10,6 +10,7 @@ import { TestDayScene } from "./scenes/TestDayScene";
 import { PracticeContestScene } from "./scenes/PracticeContestScene";
 import { PracticeResultScene } from "./scenes/PracticeResultScene";
 import { PreRaceScene } from "./scenes/PreRaceScene";
+import { DestinationScene } from "./scenes/DestinationScene";
 import { LOGICAL_HEIGHT, LOGICAL_WIDTH, RENDER_SCALE } from "./scenes/layout";
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -34,6 +35,7 @@ const config: Phaser.Types.Core.GameConfig = {
     BootScene,
     TitleScene,
     EntrantSelectScene,
+    DestinationScene,
     RunScene,
     PrepareScene,
     PreRaceScene,

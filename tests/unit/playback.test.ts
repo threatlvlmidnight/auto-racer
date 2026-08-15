@@ -2,25 +2,45 @@ import { describe, expect, it } from "vitest";
 import {
   MIN_VISUAL_LAP_SECONDS,
   RACE_ANIMATION_SECONDS,
+  advancePresentationClock,
   buildNCarPlaybackSchedule,
   buildPlaybackSchedule,
   calloutEventsForLap,
   carProgressAt,
   checkpointProjection,
   CheckpointProjectionError,
+  createPresentationClock,
+  crossedPlaybackBoundaries,
   cumulativeSimulatedTimeAt,
   frameStateAt,
+  isPlaybackSpeed,
   latestCompletedPlayerLap,
   liveGapAt,
+  maxFinishScheduleTime,
+  nCarBoundaryView,
   nCarFrameStateAt,
+  PLAYBACK_SPEEDS,
+  playbackSpeedDescriptor,
+  selectPlaybackSpeed,
   standingsAt,
+  twoCarBoundaryView,
   updateLiveProjection,
+  createPlaybackController,
+  advancePlaybackController,
+  selectPlaybackControllerSpeed,
+  skipPlaybackController,
+  type CrossedPlaybackEvent,
   type LiveProjectionState,
+  type PlaybackSpeed,
   type TickerLine,
 } from "../../src/simulation/playback";
 import { LEGACY_ITEM_POOL } from "../fixtures/legacy-item-pool";
 import { RIVAL_PROFILES } from "../../src/content/rivals";
 import { resolveContest } from "../../src/simulation/contest";
+import {
+  EIGHT_CAR_BOUNDARY_VIEW,
+  TWO_CAR_BOUNDARY_VIEW,
+} from "../fixtures/playback-control-fixtures";
 import { generateTrack, pointAtProgress, type Track } from "../../src/simulation/tracks";
 import {
   changingCheckpointOrderFixture,
@@ -1035,5 +1055,417 @@ describe("Phase 7 (T053): track/tieBreakOrder are additive-only on NCarContestRe
     const player = withoutNewEvidence.cars.find((car) => car.role === "player")!;
     expect(player.position).toBe(8);
     expect(player.time).toBeCloseTo(306.4617161109661, 9);
+  });
+});
+
+// --- Feature 030: race playback controls ---------------------------------
+
+describe("PlaybackSpeed domain (T006)", () => {
+  it("exposes exactly two speeds in stable authored order", () => {
+    expect(PLAYBACK_SPEEDS).toHaveLength(2);
+    expect(PLAYBACK_SPEEDS.map((entry) => entry.value)).toEqual(["normal", "fast"]);
+  });
+
+  it("labels normal as 1x (shortcut 1, 0.5x multiplier) and fast as 2x (shortcut 2, 1.0x multiplier)", () => {
+    const normal = playbackSpeedDescriptor("normal");
+    const fast = playbackSpeedDescriptor("fast");
+    expect(normal.label).toBe("1×");
+    expect(normal.shortcut).toBe("1");
+    expect(normal.multiplier).toBe(0.5);
+    expect(fast.label).toBe("2×");
+    expect(fast.shortcut).toBe("2");
+    expect(fast.multiplier).toBe(1.0);
+  });
+
+  it("rejects any value outside the closed {normal, fast} domain", () => {
+    expect(isPlaybackSpeed("normal")).toBe(true);
+    expect(isPlaybackSpeed("fast")).toBe(true);
+    expect(isPlaybackSpeed("turbo")).toBe(false);
+    expect(isPlaybackSpeed(null)).toBe(false);
+    expect(isPlaybackSpeed(undefined)).toBe(false);
+    expect(isPlaybackSpeed(2)).toBe(false);
+    expect(() => playbackSpeedDescriptor("turbo" as PlaybackSpeed)).toThrow();
+  });
+});
+
+describe("PresentationClock (T007–T009)", () => {
+  it("initializes to the 2x default at schedule time zero, uninitialized", () => {
+    const clock = createPresentationClock();
+    expect(clock.speed).toBe("fast");
+    expect(clock.scheduleTimeSeconds).toBe(0);
+    expect(clock.initialized).toBe(false);
+  });
+
+  it("advances schedule time at 0.5x under 1x and 1.0x under 2x (legacy parity)", () => {
+    let clock = createPresentationClock("normal");
+    clock = advancePresentationClock(clock, 1).clock;
+    expect(clock.scheduleTimeSeconds).toBeCloseTo(0.5);
+    // Speed change never jumps time (contract §3).
+    clock = selectPlaybackSpeed(clock, "fast");
+    expect(clock.scheduleTimeSeconds).toBeCloseTo(0.5);
+    clock = advancePresentationClock(clock, 1).clock;
+    expect(clock.scheduleTimeSeconds).toBeCloseTo(1.5);
+  });
+
+  it("reports the first positive-time advance and initializes exactly once", () => {
+    const clock = createPresentationClock("normal");
+    const zeroAdvance = advancePresentationClock(clock, 0);
+    expect(zeroAdvance.advance.isFirstAdvance).toBe(false);
+    expect(zeroAdvance.clock.initialized).toBe(false);
+    const first = advancePresentationClock(clock, 0.016);
+    expect(first.advance.isFirstAdvance).toBe(true);
+    expect(first.advance.previousScheduleTimeSeconds).toBe(0);
+    expect(first.advance.scheduleTimeSeconds).toBeCloseTo(0.008);
+    expect(first.advance.speed).toBe("normal");
+    expect(first.clock.initialized).toBe(true);
+    const again = advancePresentationClock(first.clock, 0.016);
+    expect(again.advance.isFirstAdvance).toBe(false);
+    expect(again.clock.initialized).toBe(true);
+  });
+
+  it("is idempotent on zero deltas and monotonic on positive deltas", () => {
+    const clock = createPresentationClock("fast");
+    const before = clock.scheduleTimeSeconds;
+    const zero = advancePresentationClock(clock, 0);
+    expect(zero.clock.scheduleTimeSeconds).toBe(before);
+    expect(advancePresentationClock(zero.clock, 0).clock.scheduleTimeSeconds).toBe(before);
+    const a = advancePresentationClock(clock, 0.5).clock;
+    const b = advancePresentationClock(a, 0.5).clock;
+    const c = advancePresentationClock(b, 0.5).clock;
+    expect(b.scheduleTimeSeconds).toBeGreaterThan(a.scheduleTimeSeconds);
+    expect(c.scheduleTimeSeconds).toBeGreaterThan(b.scheduleTimeSeconds);
+  });
+
+  it("re-selecting the active speed is idempotent and never jumps time", () => {
+    const clock = createPresentationClock("normal");
+    const same = selectPlaybackSpeed(clock, "normal");
+    expect(same).toBe(clock);
+    const advanced = advancePresentationClock(clock, 2).clock;
+    const other = selectPlaybackSpeed(advanced, "fast");
+    expect(other).not.toBe(advanced);
+    expect(other.scheduleTimeSeconds).toBe(advanced.scheduleTimeSeconds);
+    expect(other.speed).toBe("fast");
+    // re-selecting the new active speed is again idempotent
+    expect(selectPlaybackSpeed(other, "fast")).toBe(other);
+  });
+
+  it("rejects negative, NaN, and Infinity deltas", () => {
+    const clock = createPresentationClock();
+    expect(() => advancePresentationClock(clock, -1)).toThrow();
+    expect(() => advancePresentationClock(clock, Number.NaN)).toThrow();
+    expect(() => advancePresentationClock(clock, Number.POSITIVE_INFINITY)).toThrow();
+  });
+
+  it("rejects speeds outside the closed {normal, fast} domain on construct and select", () => {
+    expect(() => createPresentationClock("turbo" as PlaybackSpeed)).toThrow();
+    expect(() => selectPlaybackSpeed(createPresentationClock(), "turbo" as PlaybackSpeed)).toThrow();
+  });
+});
+
+// A 2-car result whose every player lap fires the same direct item, so every
+// crossed lap (including the time-zero batch) carries an item-callout.
+function resultWithCallouts(): ContestResult {
+  const directItem = LEGACY_ITEM_POOL.find((item) => !item.buff)!;
+  const laps: LapBreakdown[] = Array.from({ length: LAP_COUNT }, (_, index) => ({
+    lap: index + 1,
+    playerLapTime: 4,
+    ghostLapTime: 5,
+    firedItems: [{ id: directItem.id, contribution: -3 }],
+  }));
+  const playerTime = 4 * LAP_COUNT;
+  const ghostTime = 5 * LAP_COUNT;
+  return {
+    lapCount: LAP_COUNT,
+    playerTime,
+    ghostTime,
+    gap: playerTime - ghostTime,
+    outcome: "loss",
+    board: [directItem],
+    storage: [],
+    laps,
+  };
+}
+
+function eventFingerprint(e: CrossedPlaybackEvent): string {
+  return [
+    e.kind,
+    e.scheduleTime.toFixed(6),
+    e.lap ?? "",
+    e.carId ?? "",
+    e.callout?.item.id ?? "",
+    e.projection?.completedLap ?? "",
+  ].join("|");
+}
+
+describe("crossed playback boundaries (T010–T013)", () => {
+  it("emits the one-time time-zero batch on the first positive-time advance only", () => {
+    const result = staggeredFinishFixture(8);
+    const schedule = buildNCarPlaybackSchedule(result, result.track);
+    const view = nCarBoundaryView(schedule, result);
+    const first = crossedPlaybackBoundaries(view, 0, 0.001, true);
+    const kinds = first.map((e) => e.kind);
+    expect(kinds[0]).toBe("time-zero");
+    expect(first.find((e) => e.kind === "player-lap")?.lap).toBe(1);
+    const later = crossedPlaybackBoundaries(view, 0.001, 0.002, false);
+    expect(later.some((e) => e.kind === "time-zero")).toBe(false);
+    expect(later.some((e) => e.kind === "player-lap" && e.lap === 1)).toBe(false);
+  });
+
+  it("emits a time-zero item-callout for lap 1 and per-crossed-lap callouts afterward", () => {
+    const result = resultWithCallouts();
+    const schedule = buildPlaybackSchedule(result);
+    const view = twoCarBoundaryView(schedule, result);
+    const directItem = result.board[0];
+    const finish = maxFinishScheduleTime(view);
+    const all = crossedPlaybackBoundaries(view, 0, finish, true);
+    const callouts = all.filter((e) => e.kind === "item-callout");
+    expect(callouts).toHaveLength(LAP_COUNT);
+    expect(callouts.every((e) => e.callout?.item.id === directItem.id)).toBe(true);
+    expect(callouts.map((e) => e.lap)).toEqual(Array.from({ length: LAP_COUNT }, (_, i) => i + 1));
+  });
+
+  it("identifies the same boundary set for one large frame and many small frames (dedup)", () => {
+    const result = staggeredFinishFixture(8);
+    const schedule = buildNCarPlaybackSchedule(result, result.track);
+    const view = nCarBoundaryView(schedule, result);
+    const finish = maxFinishScheduleTime(view);
+
+    const big = crossedPlaybackBoundaries(view, 0, finish, true);
+    const bigFingerprints = big.map(eventFingerprint);
+    expect(new Set(bigFingerprints).size).toBe(bigFingerprints.length);
+
+    const steps = 37;
+    let prev = 0;
+    const collected: CrossedPlaybackEvent[] = [];
+    for (let i = 1; i <= steps; i++) {
+      const next = (finish * i) / steps;
+      collected.push(...crossedPlaybackBoundaries(view, prev, next, i === 1));
+      prev = next;
+    }
+    expect(collected.map(eventFingerprint)).toEqual(bigFingerprints);
+  });
+
+  it("is speed-independent: the same schedule-time interval yields the same boundaries", () => {
+    const result = staggeredFinishFixture(8);
+    const schedule = buildNCarPlaybackSchedule(result, result.track);
+    const view = nCarBoundaryView(schedule, result);
+    const finish = maxFinishScheduleTime(view);
+    const once = crossedPlaybackBoundaries(view, 0, finish, true);
+    const twice = crossedPlaybackBoundaries(view, 0, finish, true);
+    expect(twice.map(eventFingerprint)).toEqual(once.map(eventFingerprint));
+  });
+
+  it("orders same-time finishes by the stable tie-break order and results-ready last", () => {
+    const result = equalTimeFixture(4);
+    const schedule = buildNCarPlaybackSchedule(result, result.track);
+    const view = nCarBoundaryView(schedule, result);
+    const finish = maxFinishScheduleTime(view);
+    const all = crossedPlaybackBoundaries(view, 0, finish, true);
+    const carFinishes = all.filter((e) => e.kind === "car-finished");
+    expect(carFinishes.map((e) => e.carId)).toEqual(result.tieBreakOrder);
+    expect(all[all.length - 1].kind).toBe("results-ready");
+    const playerFinish = all.find((e) => e.kind === "car-finished" && e.carId === "player")!;
+    const playerCheckpoint = all.find(
+      (e) => e.kind === "checkpoint" && e.projection?.completedLap === 4,
+    );
+    expect(playerCheckpoint).toBeDefined();
+    expect(all.indexOf(playerCheckpoint!)).toBeLessThan(all.indexOf(playerFinish));
+  });
+});
+
+describe("crossed boundaries — results-ready, checkpoints, open-left (T012–T013)", () => {
+  it("emits results-ready exactly once across the full race and never before the last finish", () => {
+    const result = staggeredFinishFixture(8);
+    const schedule = buildNCarPlaybackSchedule(result, result.track);
+    const view = nCarBoundaryView(schedule, result);
+    const finish = maxFinishScheduleTime(view);
+    const all = crossedPlaybackBoundaries(view, 0, finish, true);
+    const ready = all.filter((e) => e.kind === "results-ready");
+    expect(ready).toHaveLength(1);
+    expect(ready[0].scheduleTime).toBe(finish);
+    const before = crossedPlaybackBoundaries(view, 0, finish - 0.001, true);
+    expect(before.some((e) => e.kind === "results-ready")).toBe(false);
+  });
+
+  it("emits one checkpoint per completed lap (1..lapCount), the player-finish one last", () => {
+    const result = staggeredFinishFixture(8);
+    const schedule = buildNCarPlaybackSchedule(result, result.track);
+    const view = nCarBoundaryView(schedule, result);
+    const finish = maxFinishScheduleTime(view);
+    const all = crossedPlaybackBoundaries(view, 0, finish, true);
+    const checkpoints = all.filter((e) => e.kind === "checkpoint");
+    expect(
+      checkpoints.map((e) => e.projection?.completedLap).sort((a, b) => (a ?? 0) - (b ?? 0)),
+    ).toEqual(Array.from({ length: result.lapCount }, (_, i) => i + 1));
+  });
+
+  it("never re-emits a boundary at the previous schedule time (open-left interval)", () => {
+    const result = resultWithCallouts();
+    const schedule = buildPlaybackSchedule(result);
+    const view = twoCarBoundaryView(schedule, result);
+    const firstBoundary = schedule.player.visualLapBoundaries[0];
+    const includes = crossedPlaybackBoundaries(view, 0, firstBoundary, true);
+    expect(includes.some((e) => e.kind === "player-lap" && e.lap === 2)).toBe(true);
+    const excludes = crossedPlaybackBoundaries(view, firstBoundary, firstBoundary + 0.001, false);
+    expect(excludes.some((e) => e.kind === "player-lap" && e.lap === 2)).toBe(false);
+  });
+});
+
+describe("boundary view builders (T010)", () => {
+  it("nCarBoundaryView preserves lapCount, cars, player, items, and tie-break order", () => {
+    const result = staggeredFinishFixture(8);
+    const schedule = buildNCarPlaybackSchedule(result, result.track);
+    const view = nCarBoundaryView(schedule, result);
+    expect(view.lapCount).toBe(result.lapCount);
+    expect(view.cars.map((c) => c.id)).toEqual(schedule.cars.map((c) => c.id));
+    expect(view.player.id).toBe(result.cars.find((c) => c.role === "player")!.id);
+    expect(view.tieBreakOrder).toBe(result.tieBreakOrder);
+    expect(view.playerLaps).toHaveLength(result.lapCount);
+    expect(view.projectCheckpoint?.(1)).toEqual(checkpointProjection(result, 1));
+  });
+
+  it("twoCarBoundaryView maps the player and ghost with player-first tie-break and no checkpoint provider", () => {
+    const result = resultWithCallouts();
+    const schedule = buildPlaybackSchedule(result);
+    const view = twoCarBoundaryView(schedule, result);
+    expect(view.cars.map((c) => c.id)).toEqual(["player", "ghost"]);
+    expect(view.player.id).toBe("player");
+    expect(view.tieBreakOrder).toEqual(["player", "ghost"]);
+    expect(view.projectCheckpoint).toBeUndefined();
+    expect(view.playerLaps).toHaveLength(result.lapCount);
+  });
+});
+
+describe("PlaybackController lifecycle, timing, and idempotent selection (T017–T020, T026–T029)", () => {
+  // The controller is the pure embodiment of the data-model "State Lifecycle":
+  // fresh 2× init → time-zero batch on first positive advance → monotonic
+  // advances → idempotent speed selection → results-ready once → no
+  // post-finish mutation. These prove the loop logic both watched-race scenes
+  // delegate to, without a headless Phaser harness (Phase 1 baseline
+  // convention: no scene is ever instantiated in tests; the pure layers the
+  // scenes consume are tested directly).
+
+  it("initializes every new race to the 2× default with zero schedule time (contract §6)", () => {
+    const controller = createPlaybackController(EIGHT_CAR_BOUNDARY_VIEW);
+    expect(controller.clock.speed).toBe("fast");
+    expect(controller.clock.scheduleTimeSeconds).toBe(0);
+    expect(controller.clock.initialized).toBe(false);
+    expect(controller.lastEvents).toEqual([]);
+    expect(controller.resultsReady).toBe(false);
+  });
+
+  it("publishes the one-time time-zero initialization batch exactly once on the first positive advance", () => {
+    let controller = createPlaybackController(TWO_CAR_BOUNDARY_VIEW);
+    const zeroed = advancePlaybackController(controller, 0);
+    expect(zeroed.lastEvents).toEqual([]);
+    expect(zeroed.clock.initialized).toBe(false);
+    controller = advancePlaybackController(zeroed, 0.001);
+    expect(controller.clock.initialized).toBe(true);
+    expect(controller.lastEvents.some((event) => event.kind === "time-zero")).toBe(true);
+    expect(controller.lastEvents.some((event) => event.kind === "player-lap")).toBe(true);
+    const again = advancePlaybackController(controller, 0.001);
+    expect(again.lastEvents.some((event) => event.kind === "time-zero")).toBe(false);
+  });
+
+  it("advances schedule time at half the legacy rate at 1× and the legacy rate at 2× (contract §2)", () => {
+    let normal = createPlaybackController(EIGHT_CAR_BOUNDARY_VIEW);
+    normal = selectPlaybackControllerSpeed(normal, "normal");
+    normal = advancePlaybackController(normal, 1); // 1 s real → 0.5 schedule
+    expect(normal.clock.scheduleTimeSeconds).toBe(0.5);
+    let fast = selectPlaybackControllerSpeed(createPlaybackController(EIGHT_CAR_BOUNDARY_VIEW), "fast");
+    fast = advancePlaybackController(fast, 1); // 1 s real → 1.0 schedule
+    expect(fast.clock.scheduleTimeSeconds).toBe(1.0);
+  });
+
+  it("selects speed idempotently without altering schedule time (contract §3)", () => {
+    let controller = createPlaybackController(EIGHT_CAR_BOUNDARY_VIEW);
+    controller = selectPlaybackControllerSpeed(controller, "normal");
+    controller = advancePlaybackController(controller, 2); // schedule 1.0 at 1×
+    expect(controller.clock.scheduleTimeSeconds).toBe(1.0);
+    controller = selectPlaybackControllerSpeed(controller, "fast");
+    expect(controller.clock.scheduleTimeSeconds).toBe(1.0);
+    expect(selectPlaybackControllerSpeed(controller, "fast")).toBe(controller);
+    const back = selectPlaybackControllerSpeed(controller, "normal");
+    expect(back.clock.scheduleTimeSeconds).toBe(1.0);
+    expect(selectPlaybackControllerSpeed(back, "normal")).toBe(back);
+  });
+
+  it("never moves schedule time backward across speed changes (monotonic, contract §3)", () => {
+    let controller = createPlaybackController(EIGHT_CAR_BOUNDARY_VIEW);
+    const sequence: ReadonlyArray<readonly [number, PlaybackSpeed]> = [
+      [1, "normal"], [1, "fast"], [0, "fast"], [1, "normal"], [1, "fast"],
+    ];
+    const times: number[] = [];
+    for (const [delta, speed] of sequence) {
+      controller = selectPlaybackControllerSpeed(controller, speed);
+      controller = advancePlaybackController(controller, delta);
+      times.push(controller.clock.scheduleTimeSeconds);
+    }
+    expect(times).toEqual([0.5, 1.5, 1.5, 2.0, 3.0]);
+    for (let index = 1; index < times.length; index += 1) {
+      expect(times[index]).toBeGreaterThanOrEqual(times[index - 1]);
+    }
+  });
+
+  it("sets resultsReady exactly once when the finish boundary is crossed and never reverts (T023)", () => {
+    const finish = maxFinishScheduleTime(EIGHT_CAR_BOUNDARY_VIEW); // 20
+    let controller = createPlaybackController(EIGHT_CAR_BOUNDARY_VIEW);
+    controller = selectPlaybackControllerSpeed(controller, "normal");
+    controller = advancePlaybackController(controller, 39.999); // schedule 19.9995
+    expect(controller.clock.scheduleTimeSeconds).toBeCloseTo(finish - 0.0005, 6);
+    expect(controller.resultsReady).toBe(false);
+    controller = advancePlaybackController(controller, 0.002); // crosses 20
+    expect(controller.resultsReady).toBe(true);
+    expect(controller.lastEvents.some((event) => event.kind === "results-ready")).toBe(true);
+    const finished = controller;
+    expect(advancePlaybackController(finished, 10)).toBe(finished);
+    expect(selectPlaybackControllerSpeed(finished, "fast")).toBe(finished);
+  });
+});
+
+describe("PlaybackController boundary integrity and Test Day Skip (contract §4, §7)", () => {
+  it("identifies the same crossed boundaries for one large frame and equivalent small frames (contract §4)", () => {
+    const init1 = advancePlaybackController(createPlaybackController(TWO_CAR_BOUNDARY_VIEW), 0.001);
+    const init2 = advancePlaybackController(createPlaybackController(TWO_CAR_BOUNDARY_VIEW), 0.001);
+    expect(init1.lastEvents).toEqual(init2.lastEvents);
+    const large = advancePlaybackController(init1, 6); // schedule (0.0005, 3.0005]
+    let controller = init2;
+    const collected: CrossedPlaybackEvent[] = [];
+    for (let index = 0; index < 60; index += 1) {
+      controller = advancePlaybackController(controller, 0.1);
+      collected.push(...controller.lastEvents);
+    }
+    expect(collected).toEqual(large.lastEvents);
+  });
+
+  it("Test Day Skip targets the finite finish boundary, emits all newly crossed boundaries once, and never uses Infinity (contract §7)", () => {
+    let controller = createPlaybackController(TWO_CAR_BOUNDARY_VIEW);
+    controller = advancePlaybackController(controller, 0.001);
+    controller = skipPlaybackController(controller);
+    expect(Number.isFinite(controller.clock.scheduleTimeSeconds)).toBe(true);
+    expect(controller.clock.scheduleTimeSeconds).toBe(maxFinishScheduleTime(TWO_CAR_BOUNDARY_VIEW));
+    expect(controller.resultsReady).toBe(true);
+    expect(controller.lastEvents.filter((event) => event.kind === "car-finished")).toHaveLength(
+      TWO_CAR_BOUNDARY_VIEW.cars.length,
+    );
+    expect(controller.lastEvents.some((event) => event.kind === "results-ready")).toBe(true);
+    expect(skipPlaybackController(controller)).toBe(controller);
+  });
+
+  it("Skip as the very first action still publishes the time-zero batch then all interval boundaries", () => {
+    const controller = skipPlaybackController(createPlaybackController(TWO_CAR_BOUNDARY_VIEW));
+    expect(controller.clock.scheduleTimeSeconds).toBe(maxFinishScheduleTime(TWO_CAR_BOUNDARY_VIEW));
+    expect(controller.resultsReady).toBe(true);
+    expect(controller.lastEvents.some((event) => event.kind === "time-zero")).toBe(true);
+    expect(controller.lastEvents.some((event) => event.kind === "player-lap")).toBe(true);
+    expect(controller.lastEvents.some((event) => event.kind === "car-finished")).toBe(true);
+    expect(controller.lastEvents.some((event) => event.kind === "results-ready")).toBe(true);
+  });
+
+  it("rejects negative and non-finite deltas at the controller boundary (contract §3)", () => {
+    const controller = createPlaybackController(TWO_CAR_BOUNDARY_VIEW);
+    expect(() => advancePlaybackController(controller, -1)).toThrow();
+    expect(() => advancePlaybackController(controller, Number.NaN)).toThrow();
+    expect(() => advancePlaybackController(controller, Number.POSITIVE_INFINITY)).toThrow();
   });
 });

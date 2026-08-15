@@ -25,6 +25,7 @@ import { recordedLapVehicleStatModel } from "./vehicleStatPresentation";
 import { createVehicleStatPanel } from "./vehicleStatVisuals";
 import { buildTrackFitPresentation } from "./trackSummaryPresentation";
 import { createBuildTrackFitPanel } from "./trackFitVisuals";
+import { regionDefinition } from "../content/regions";
 
 const STANDINGS_ROW_HEIGHT = 13;
 
@@ -61,6 +62,12 @@ export class ResultScene extends Phaser.Scene {
     // Credits are not actionable on Results and the top-right space belongs to
     // the build–track comparison legend. Keep the useful stage stamp only.
     addRunStamp(this, this.run, { showCredits: false });
+    const stage = this.run.stages[this.run.stageIndex];
+    if (stage?.regionId) {
+      this.add.text(width / 2, 18, `${regionDefinition(stage.regionId).name} · ${stage.raceKind === "local" ? "LOCAL RACE" : "CHAMPIONSHIP RACE"}`, {
+        fontSize: "11px", fontFamily: UI_FONT, fontStyle: "bold", color: "#cddbd2",
+      }).setOrigin(0.5);
+    }
 
     this.add
       .text(width * 0.24, 42, outcomeLabel(this.result), {

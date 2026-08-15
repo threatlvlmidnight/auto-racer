@@ -4,6 +4,7 @@ import type {
   ItemPhysicsContribution,
   LapPhaseBreakdown,
   PhysicsCondition,
+  RegionId,
 } from "./types";
 
 // 018-track-generation: tracks are procedurally generated, not hand-authored
@@ -25,6 +26,8 @@ export interface Track {
   segments: readonly TrackSegment[];
   points: readonly { x: number; y: number }[];
   characteristics: TrackCharacteristics;
+  /** Feature 029 presentation-only environment key; never read by physics. */
+  regionTheme?: RegionId;
 }
 
 export interface TrackPoint {
@@ -472,7 +475,7 @@ export function simulateLapPhysics(
  * — so a future shared-lobby race can supply one seed for a group of players
  * with zero rework here (spec.md Assumptions).
  */
-export function generateTrack(seed: number, pvpOrdinal: number): Track {
+export function generateTrack(seed: number, pvpOrdinal: number, regionTheme?: RegionId): Track {
   const rng = seededRandom(seed * 1000003 + pvpOrdinal);
   const cornerCount = randomInt(rng, MIN_CORNER_COUNT, MAX_CORNER_COUNT);
   const direction: "left" | "right" = rng() < 0.5 ? "left" : "right";
@@ -498,6 +501,7 @@ export function generateTrack(seed: number, pvpOrdinal: number): Track {
     segments,
     points: deriveTrackPoints(segments),
     characteristics: trackCharacteristics(segments),
+    ...(regionTheme ? { regionTheme } : {}),
   };
 }
 

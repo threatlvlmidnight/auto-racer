@@ -293,8 +293,7 @@ export function practiceContestControlPlan(): PracticeControlModel[] {
   return [
     control("cancel", "CANCEL", 0, "Escape", true, null),
     control("pause", "PAUSE", 1, "Space", true, null),
-    control("speed", "SPEED", 2, "F", true, null),
-    control("skip", "SKIP", 3, "S", true, null),
+    control("skip", "SKIP", 2, "S", true, null),
   ];
 }
 

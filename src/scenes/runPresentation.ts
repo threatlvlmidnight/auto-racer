@@ -10,8 +10,9 @@ import {
   RunTransitionError,
   summarizeRunHistory,
 } from "../simulation/run";
-import { GHOST_POOL } from "../content/rivals";
+import { GHOST_POOL, RIVAL_PROFILES } from "../content/rivals";
 import { selectGhostRoster } from "../simulation/rivals";
+import { localRivalRoster } from "../simulation/localOpponents";
 import type { CarProgress } from "../simulation/playback";
 import type { ContestResult, NCarContestResult, RivalProfile } from "../simulation/types";
 import type { RandomSource } from "../simulation/encounters";
@@ -64,19 +65,21 @@ export interface ActiveEncounterPresentation {
 
 export function runPresentation(run: Run): RunPresentation {
   const progress = runProgress(run);
+  const tourActive = Boolean(run.worldTour && (run.worldTour.selectedRegions.length > 0 || run.worldTour.phase === "completed"));
+  const totalStages = tourActive ? 40 : run.stages.length;
   return {
     progressLabel: run.status === "completed"
       ? "Run complete"
       : run.status === "failed"
         ? "Run failed"
-        : `Stage ${run.stageIndex + 1} of ${run.stages.length}`,
+        : `Stage ${Math.min(totalStages, run.stageIndex + 1)} of ${totalStages}`,
     creditsLabel: `${run.credits} credits`,
     reputationLabel: `${run.reputation} reputation`,
     status: run.status,
     choices: run.availableChoices,
-    remainingStages: progress.remaining,
+    remainingStages: tourActive ? Math.max(0, 40 - run.stageIndex) : progress.remaining,
     pendingSponsorLabel: run.activeSponsorContract
-      ? `Pending sponsor: ${sponsorObjectiveLabel(run.activeSponsorContract.objective)} on the next race for 7 credits`
+      ? `Pending sponsor: ${sponsorObjectiveLabel(run.activeSponsorContract.objective)} ${run.activeSponsorContract.objective.kind === "trigger-tagged-items" ? "during either race type" : "in the next Championship Race"} for 7 credits`
       : null,
     statusLabel: run.status === "unavailable"
       ? "Unavailable"
@@ -158,13 +161,18 @@ export function activeEncounterPresentation(run: Run): ActiveEncounterPresentati
 export interface ContestSceneInput {
   run: Run;
   encounterId: string;
-  lapCount: 10 | 12 | 14 | 16;
+  lapCount: 8 | 10 | 12 | 14 | 16;
   build: Run["build"];
   /** Exactly 7 rival profiles; identical for every entrant (FR-010). */
   rivalRoster: readonly RivalProfile[];
   /** The current scheduled PvP stage's ordinal (data-model.md "in-run level"). */
   level: number;
   seed: number;
+  raceKind: "local" | "championship";
+  regionId?: import("../simulation/types").RegionId;
+  localRaceTier?: import("../simulation/types").LocalRaceTier;
+  legOrdinal?: 1 | 2 | 3 | 4 | 5;
+  eliteFinale: boolean;
 }
 
 export function contestSceneInput(run: Run, encounterId: string): ContestSceneInput {
@@ -180,6 +188,10 @@ export function contestSceneInput(run: Run, encounterId: string): ContestSceneIn
   }
   const stage = run.stages.find((candidate) => candidate.id === encounter.stageId);
   const level = stage?.pvpOrdinal ?? 1;
+  const activeTourLeg = run.worldTour?.legs[run.worldTour.legs.length - 1];
+  const worldTourRoster = stage?.raceKind === "local" && stage.regionId && stage.localRaceTier && activeTourLeg
+    ? localRivalRoster(stage.regionId, stage.localRaceTier, activeTourLeg.ordinal)
+    : RIVAL_PROFILES;
   return {
     run,
     encounterId,
@@ -187,9 +199,16 @@ export function contestSceneInput(run: Run, encounterId: string): ContestSceneIn
     build: encounter.payload.buildSnapshot,
     // 019-async-ghost-pool: a deterministic 7-car selection from the wider
     // GHOST_POOL, replacing the always-identical fixed RIVAL_PROFILES roster.
-    rivalRoster: selectGhostRoster(GHOST_POOL, run.seed, level),
+    rivalRoster: run.worldTour?.selectedRegions.length
+      ? worldTourRoster
+      : selectGhostRoster(GHOST_POOL, run.seed, level),
     level,
     seed: run.seed,
+    raceKind: stage?.raceKind ?? "championship",
+    regionId: stage?.regionId,
+    localRaceTier: stage?.localRaceTier,
+    legOrdinal: activeTourLeg?.ordinal,
+    eliteFinale: stage?.championshipRaceOrdinal === 10 && run.worldTour?.finaleMode === "elite",
   };
 }
 
@@ -228,6 +247,7 @@ export function toLegacyContestResult(result: NCarContestResult): ContestResult 
     })),
     contributions: player.laps.flatMap((lap) => lap.contributions),
     playerPosition: player.position,
+    finishingOrder: result.cars.map((car) => car.role === "player" ? "player" : car.id),
   };
 }
 

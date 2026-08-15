@@ -249,7 +249,7 @@ describe("run scene boundary", () => {
       payload.options[1].id,
     );
     expect(runPresentation(conditional).pendingSponsorLabel).toContain("7 credits");
-    expect(runPresentation(conditional).pendingSponsorLabel).toContain("next race");
+    expect(runPresentation(conditional).pendingSponsorLabel).toContain("next Championship Race");
   });
 
   it("presents available, active, completed, failed, and unavailable states without silent regeneration", () => {

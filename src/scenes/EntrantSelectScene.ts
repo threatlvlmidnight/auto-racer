@@ -266,7 +266,7 @@ export class EntrantSelectScene extends Phaser.Scene {
     }
 
     const run: Run = result.run;
-    this.scene.start("RunScene", { run });
+    this.scene.start("DestinationScene", { run });
   }
 
   private cancel(): void {

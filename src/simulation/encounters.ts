@@ -211,7 +211,8 @@ function createSponsorPayload(run: Run, rng: RandomSource): SponsorMeetingPayloa
 
 function objectiveForKind(run: Run, kind: SponsorObjective["kind"], rng: RandomSource): SponsorObjective {
   if (kind === "target-race-time") {
-    const nextPvp = run.stages.slice(run.stageIndex + 1).find((stage) => stage.kind === "pvp")!;
+    const nextPvp = run.stages.slice(run.stageIndex + 1).find((stage) =>
+      stage.kind === "pvp" && stage.raceKind !== "local")!;
     return {
       kind,
       targetSeconds: seededTargetSeconds({
@@ -234,9 +235,9 @@ function objectiveForKind(run: Run, kind: SponsorObjective["kind"], rng: RandomS
 
 export function seededTargetSeconds(input: {
   seed: number;
-  pvpOrdinal: 1 | 2 | 3 | 4;
+  pvpOrdinal: number;
   baseLapTime: number;
-  lapCount: 10 | 12 | 14 | 16;
+  lapCount: 8 | 10 | 12 | 14 | 16;
 }): number {
   const offset = 3 + Math.abs((input.seed * 31 + input.pvpOrdinal * 17) % 4);
   return Math.round(input.baseLapTime * input.lapCount) - offset;

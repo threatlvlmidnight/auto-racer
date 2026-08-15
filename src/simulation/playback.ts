@@ -459,6 +459,16 @@ export function updateLiveProjection(
   }
 
   const current = checkpointProjection(result, latestLap);
+  return updateLiveProjectionFromCheckpoint(previous, current);
+}
+
+/** Applies an already-recorded checkpoint boundary to the held projection. */
+export function updateLiveProjectionFromCheckpoint(
+  previous: LiveProjectionState,
+  current: CheckpointProjection,
+): LiveProjectionState {
+  const previousProjection = previous.kind === "projected" ? previous.current : null;
+  if (previousProjection?.completedLap === current.completedLap) return previous;
   if (!previousProjection) {
     return { kind: "projected", current, previous: null, change: "first-split", placesChanged: 0 };
   }
@@ -517,5 +527,458 @@ export function nCarFrameStateAt(
       previousStandings,
       previousFinishedCarIds,
     ),
+  };
+}
+
+// --- Feature 030: race playback controls ----------------------------------
+// A race-local, presentation-only clock (data-model.md "PresentationClock").
+// Its `1×` (normal) rate consumes the immutable playback schedule at half the
+// legacy rate and its `2×` (fast) rate at the legacy rate. Speed never carries
+// simulation authority (contract §1): it only scales how quickly presentation
+// consumes already-resolved evidence.
+
+export type PlaybackSpeed = "normal" | "fast";
+
+export interface PlaybackSpeedDescriptor {
+  value: PlaybackSpeed;
+  /** "1×" or "2×". */
+  label: string;
+  /** Keyboard shortcut glyph: "1" or "2". */
+  shortcut: string;
+  /** Schedule-time multiplier consumed by PresentationClock.advance. */
+  multiplier: number;
+}
+
+/** Exactly two speeds, in stable authored order (contract §2). */
+export const PLAYBACK_SPEEDS: readonly PlaybackSpeedDescriptor[] = [
+  { value: "normal", label: "1×", shortcut: "1", multiplier: 0.5 },
+  { value: "fast", label: "2×", shortcut: "2", multiplier: 1.0 },
+];
+
+/** Rejects any value outside the closed {normal, fast} domain (data-model.md). */
+export function isPlaybackSpeed(value: unknown): value is PlaybackSpeed {
+  return value === "normal" || value === "fast";
+}
+
+export function playbackSpeedDescriptor(speed: PlaybackSpeed): PlaybackSpeedDescriptor {
+  if (!isPlaybackSpeed(speed)) {
+    throw new Error(`Invalid playback speed: ${String(speed)}`);
+  }
+  return PLAYBACK_SPEEDS.find((entry) => entry.value === speed)!;
+}
+
+/** The closed interval evidence one rendered update needs to derive crossed boundaries. */
+export interface PlaybackAdvance {
+  previousScheduleTimeSeconds: number;
+  scheduleTimeSeconds: number;
+  speed: PlaybackSpeed;
+  /**
+   * True only for the very first positive-time advance, which carries the
+   * one-time time-zero initialization batch (data-model.md "CrossedPlaybackEvent").
+   */
+  isFirstAdvance: boolean;
+}
+
+/** Immutable, framework-free presentation clock (data-model.md "PresentationClock"). */
+export interface PresentationClock {
+  /** Finite monotonic schedule time already consumed; never moves backward. */
+  readonly scheduleTimeSeconds: number;
+  readonly speed: PlaybackSpeed;
+  /** True once the time-zero initialization batch has been emitted. */
+  readonly initialized: boolean;
+}
+
+/** Every new playback scene initializes to `2×`; `1×` remains selectable. */
+export function createPresentationClock(speed: PlaybackSpeed = "fast"): PresentationClock {
+  if (!isPlaybackSpeed(speed)) {
+    throw new Error(`Invalid playback speed: ${String(speed)}`);
+  }
+  return { scheduleTimeSeconds: 0, speed, initialized: false };
+}
+
+/**
+ * Replaces `speed` only; never alters `scheduleTimeSeconds`. Re-selecting the
+ * active speed returns the same (equivalent) clock (data-model.md "selectSpeed").
+ */
+export function selectPlaybackSpeed(
+  clock: PresentationClock,
+  speed: PlaybackSpeed,
+): PresentationClock {
+  if (!isPlaybackSpeed(speed)) {
+    throw new Error(`Invalid playback speed: ${String(speed)}`);
+  }
+  if (speed === clock.speed) return clock;
+  return { scheduleTimeSeconds: clock.scheduleTimeSeconds, speed, initialized: clock.initialized };
+}
+
+/**
+ * Advances schedule time by `realDeltaSeconds × speedMultiplier`.
+ * Rejects negative or non-finite deltas; zero is valid and idempotent. Only the
+ * first positive-time advance transitions `initialized` and reports the
+ * time-zero batch (contract §3, data-model.md).
+ */
+export function advancePresentationClock(
+  clock: PresentationClock,
+  realDeltaSeconds: number,
+): { clock: PresentationClock; advance: PlaybackAdvance } {
+  if (!Number.isFinite(realDeltaSeconds) || realDeltaSeconds < 0) {
+    throw new Error(`Invalid playback delta: ${realDeltaSeconds}`);
+  }
+  const multiplier = playbackSpeedDescriptor(clock.speed).multiplier;
+  const previousScheduleTimeSeconds = clock.scheduleTimeSeconds;
+  const scheduleTimeSeconds = previousScheduleTimeSeconds + realDeltaSeconds * multiplier;
+  const isFirstAdvance = realDeltaSeconds > 0 && !clock.initialized;
+  return {
+    clock: {
+      scheduleTimeSeconds,
+      speed: clock.speed,
+      initialized: clock.initialized || realDeltaSeconds > 0,
+    },
+    advance: { previousScheduleTimeSeconds, scheduleTimeSeconds, speed: clock.speed, isFirstAdvance },
+  };
+}
+
+// --- Feature 030: crossed-boundary derivation ------------------------------
+// Pure, framework-free enumeration of every recorded playback boundary in a
+// monotonic interval (contract §4, data-model.md "CrossedPlaybackEvent"). A
+// delayed frame and many small frames covering the same interval identify the
+// same boundary set exactly once, in deterministic order, regardless of speed.
+
+export interface PlaybackBoundaryCar {
+  id: string;
+  role: CarRole;
+  name: string;
+  schedule: CarSchedule;
+}
+
+export interface PlaybackBoundaryView {
+  lapCount: number;
+  cars: readonly PlaybackBoundaryCar[];
+  player: PlaybackBoundaryCar;
+  /** Player laps carrying `firedItems`, parallel to the schedule's lap order. */
+  playerLaps: readonly { firedItems: FiredItem[] }[];
+  /** Item lookup for callout resolution. */
+  itemsById: Map<string, OfferedItem>;
+  /** Stable tie-break priority of car ids, player first (contract §4 ordering rule 2). */
+  tieBreakOrder: readonly string[];
+  /** Optional N-car checkpoint provider; Test Day passes none. */
+  projectCheckpoint?: (completedLap: number) => CheckpointProjection;
+}
+
+export function nCarBoundaryView(
+  schedule: NCarPlaybackSchedule,
+  result: NCarContestResult,
+): PlaybackBoundaryView {
+  const playerCar = schedule.cars.find((car) => car.role === "player")!;
+  const playerResult = result.cars.find((car) => car.role === "player")!;
+  return {
+    lapCount: result.lapCount,
+    cars: schedule.cars.map((car) => ({
+      id: car.id,
+      role: car.role,
+      name: car.name,
+      schedule: car.schedule,
+    })),
+    player: {
+      id: playerCar.id,
+      role: playerCar.role,
+      name: playerCar.name,
+      schedule: playerCar.schedule,
+    },
+    playerLaps: playerResult.laps.map((lap) => ({ firedItems: lap.firedItems })),
+    itemsById: new Map([...result.board, ...result.storage].map((item) => [item.id, item])),
+    tieBreakOrder: result.tieBreakOrder,
+    projectCheckpoint: (completedLap: number) => checkpointProjection(result, completedLap),
+  };
+}
+
+export function twoCarBoundaryView(
+  schedule: PlaybackSchedule,
+  result: ContestResult,
+): PlaybackBoundaryView {
+  return {
+    lapCount: result.lapCount,
+    cars: [
+      { id: "player", role: "player", name: "You", schedule: schedule.player },
+      { id: "ghost", role: "rival", name: "Rival", schedule: schedule.ghost },
+    ],
+    player: { id: "player", role: "player", name: "You", schedule: schedule.player },
+    playerLaps: result.laps.map((lap) => ({ firedItems: lap.firedItems })),
+    itemsById: new Map([...result.board, ...result.storage].map((item) => [item.id, item])),
+    tieBreakOrder: ["player", "ghost"],
+  };
+}
+
+/** The finite schedule time at which the last car finishes (contract §7 Skip target). */
+export function maxFinishScheduleTime(view: PlaybackBoundaryView): number {
+  return view.cars.reduce((max, car) => {
+    const last = car.schedule.visualLapBoundaries[car.schedule.visualLapBoundaries.length - 1] ?? 0;
+    return Math.max(max, last);
+  }, 0);
+}
+
+export type CrossedPlaybackEventKind =
+  | "time-zero"
+  | "player-lap"
+  | "item-callout"
+  | "checkpoint"
+  | "car-finished"
+  | "results-ready";
+
+const CROSS_KIND_ORDER: Record<CrossedPlaybackEventKind, number> = {
+  "time-zero": 0,
+  "player-lap": 1,
+  "item-callout": 2,
+  checkpoint: 3,
+  "car-finished": 4,
+  "results-ready": 5,
+};
+
+export interface CrossedPlaybackEvent {
+  kind: CrossedPlaybackEventKind;
+  scheduleTime: number;
+  /** 1-indexed lap the player entered/completed (player-lap, item-callout, checkpoint). */
+  lap?: number;
+  /** Finishing car id (car-finished). */
+  carId?: string;
+  /** Resolved callout (item-callout). */
+  callout?: CalloutEvent;
+  /** Checkpoint projection (checkpoint). */
+  projection?: CheckpointProjection;
+  /** Internal stable group id for ordering facts from one boundary together. */
+  readonly boundaryKey: string;
+}
+
+function playerCallouts(view: PlaybackBoundaryView, lap: number): readonly CrossedPlaybackEvent[] {
+  const lapIndex = lap - 1;
+  const recorded = view.playerLaps[lapIndex];
+  if (!recorded) return [];
+  return calloutEventsForLap({ firedItems: recorded.firedItems }, view.itemsById).map((callout) => ({
+    kind: "item-callout" as const,
+    scheduleTime: 0,
+    lap,
+    callout,
+    boundaryKey: `player-start-${lap}`,
+  }));
+}
+
+function timeZeroEvents(view: PlaybackBoundaryView): CrossedPlaybackEvent[] {
+  const events: CrossedPlaybackEvent[] = [
+    { kind: "time-zero", scheduleTime: 0, boundaryKey: "init" },
+    { kind: "player-lap", scheduleTime: 0, lap: 1, boundaryKey: "player-start-1" },
+  ];
+  events.push(...playerCallouts(view, 1).map((event) => ({ ...event, scheduleTime: 0 })));
+  return events;
+}
+
+function inOpenInterval(value: number, previous: number, next: number): boolean {
+  return value > previous && value <= next;
+}
+
+function intervalEvents(
+  view: PlaybackBoundaryView,
+  previous: number,
+  next: number,
+): CrossedPlaybackEvent[] {
+  if (next <= previous) return [];
+  const events: CrossedPlaybackEvent[] = [];
+  const playerBoundaries = view.player.schedule.visualLapBoundaries;
+  const lapCount = view.lapCount;
+
+  // Player lap-start boundaries (entering lap m, m >= 2). Each also publishes the
+  // checkpoint for the lap just completed (m - 1) and that lap's item callouts.
+  for (let m = 2; m <= lapCount; m++) {
+    const startBoundary = playerBoundaries[m - 2];
+    if (startBoundary === undefined || !inOpenInterval(startBoundary, previous, next)) continue;
+    events.push({
+      kind: "player-lap",
+      scheduleTime: startBoundary,
+      lap: m,
+      boundaryKey: `player-start-${m}`,
+    });
+    events.push(...playerCallouts(view, m).map((event) => ({ ...event, scheduleTime: startBoundary })));
+    if (view.projectCheckpoint) {
+      events.push({
+        kind: "checkpoint",
+        scheduleTime: startBoundary,
+        lap: m - 1,
+        projection: view.projectCheckpoint(m - 1),
+        boundaryKey: `player-start-${m}`,
+      });
+    }
+  }
+
+  // Per-car finish boundaries. The player's finish also publishes the final
+  // checkpoint (completed lapCount).
+  const finish = maxFinishScheduleTime(view);
+  for (const car of view.cars) {
+    const lastBoundary = car.schedule.visualLapBoundaries[car.schedule.visualLapBoundaries.length - 1];
+    if (lastBoundary === undefined || !inOpenInterval(lastBoundary, previous, next)) continue;
+    if (car.role === "player" && view.projectCheckpoint) {
+      events.push({
+        kind: "checkpoint",
+        scheduleTime: lastBoundary,
+        lap: lapCount,
+        projection: view.projectCheckpoint(lapCount),
+        boundaryKey: "player-finish",
+      });
+    }
+    events.push({
+      kind: "car-finished",
+      scheduleTime: lastBoundary,
+      carId: car.id,
+      boundaryKey: `car-finish-${car.id}`,
+    });
+  }
+
+  // Results-ready once the last car finishes within this interval.
+  if (finish > previous && finish <= next) {
+    events.push({ kind: "results-ready", scheduleTime: finish, boundaryKey: "results-ready" });
+  }
+
+  return events;
+}
+
+function orderEvents(
+  events: CrossedPlaybackEvent[],
+  tieBreakOrder: readonly string[],
+): CrossedPlaybackEvent[] {
+  const rank = new Map(tieBreakOrder.map((id, index) => [id, index]));
+  const groupRank = (key: string): number => {
+    const match = key.match(/car-finish-(.+)$/);
+    if (match) return rank.get(match[1]) ?? Number.MAX_SAFE_INTEGER;
+    if (key === "player-finish" || key.startsWith("player-start") || key === "init") {
+      return rank.get("player") ?? 0;
+    }
+    return Number.MAX_SAFE_INTEGER;
+  };
+  return [...events].sort(
+    (a, b) =>
+      a.scheduleTime - b.scheduleTime
+      || groupRank(a.boundaryKey) - groupRank(b.boundaryKey)
+      || CROSS_KIND_ORDER[a.kind] - CROSS_KIND_ORDER[b.kind]
+      || (a.lap ?? 0) - (b.lap ?? 0),
+  );
+}
+
+/**
+ * Enumerates every recorded boundary in `(previousScheduleTime, nextScheduleTime]`
+ * exactly once, in deterministic order. When `includeInitialization` is true
+ * (the first positive-time advance), the one-time time-zero batch is prepended.
+ * Boundaries at `previousScheduleTime` are never re-emitted (contract §4).
+ */
+export function crossedPlaybackBoundaries(
+  view: PlaybackBoundaryView,
+  previousScheduleTime: number,
+  nextScheduleTime: number,
+  includeInitialization: boolean,
+): CrossedPlaybackEvent[] {
+  const events: CrossedPlaybackEvent[] = [];
+  if (includeInitialization) events.push(...timeZeroEvents(view));
+  events.push(...intervalEvents(view, previousScheduleTime, nextScheduleTime));
+  return orderEvents(events, view.tieBreakOrder);
+}
+
+// --- Feature 030: race-local playback controller ---------------------------
+// Composes the presentation clock, boundary view, and crossed-boundary
+// consumption into one immutable, framework-free controller that encodes the
+// data-model "State Lifecycle" both watched-race scenes delegate to. Keeping
+// the per-frame advance / event / results-ready logic here (not in the Phaser
+// scene) lets the Phase 3–4 integration tests prove timing, transitions, and
+// immutable-evidence parity without a headless Phaser harness — the same
+// convention the Phase 1 baselines establish (no scene is ever instantiated
+// in tests; the pure layers the scenes consume are tested directly).
+
+export interface PlaybackController {
+  /** Immutable schedule/result evidence the controller consumes for one race. */
+  readonly view: PlaybackBoundaryView;
+  readonly clock: PresentationClock;
+  /**
+   * Crossed boundaries emitted by the most recent advance or skip, in
+   * deterministic order. Replaced (never queued) each update, so there is no
+   * cross-frame message queue (contract §5).
+   */
+  readonly lastEvents: readonly CrossedPlaybackEvent[];
+  /** True once the results-ready boundary has been consumed; never reverts. */
+  readonly resultsReady: boolean;
+}
+
+/**
+ * Every new scored or Test Day playback initializes to the `2×` default
+ * with no events and `resultsReady` false (data-model "State
+ * Lifecycle"). The scene calls this in `create()` so each race gets a fresh
+ * clock — no selection persists into another playback (contract §6).
+ */
+export function createPlaybackController(view: PlaybackBoundaryView): PlaybackController {
+  return { view, clock: createPresentationClock("fast"), lastEvents: [], resultsReady: false };
+}
+
+/**
+ * Advances the controller one real-time frame: advances the clock, derives the
+ * crossed boundaries for the closed interval, and sets `resultsReady` once the
+ * results-ready boundary is consumed. After `resultsReady`, every further
+ * advance is a no-op returning the same controller — the scene navigates to
+ * Results exactly once and playback never mutates post-finish (contract §5/§8,
+ * Phase 4 T023). Zero deltas are valid and produce no events.
+ */
+export function advancePlaybackController(
+  controller: PlaybackController,
+  realDeltaSeconds: number,
+): PlaybackController {
+  if (controller.resultsReady) return controller;
+  const { clock, advance } = advancePresentationClock(controller.clock, realDeltaSeconds);
+  const events = crossedPlaybackBoundaries(
+    controller.view,
+    advance.previousScheduleTimeSeconds,
+    advance.scheduleTimeSeconds,
+    advance.isFirstAdvance,
+  );
+  const resultsReady = events.some((event) => event.kind === "results-ready");
+  if (events.length === 0 && !resultsReady && clock === controller.clock) {
+    return controller;
+  }
+  return {
+    view: controller.view,
+    clock,
+    lastEvents: events,
+    resultsReady: controller.resultsReady || resultsReady,
+  };
+}
+
+/**
+ * Replaces the controller's speed without altering schedule time or emitting
+ * events. Idempotent: re-selecting the active speed returns the same controller
+ * (contract §3, data-model "selectSpeed"). A no-op once results-ready so no
+ * selection mutates finished playback.
+ */
+export function selectPlaybackControllerSpeed(
+  controller: PlaybackController,
+  speed: PlaybackSpeed,
+): PlaybackController {
+  if (controller.resultsReady || controller.clock.speed === speed) return controller;
+  const clock = selectPlaybackSpeed(controller.clock, speed);
+  return { view: controller.view, clock, lastEvents: controller.lastEvents, resultsReady: controller.resultsReady };
+}
+
+/**
+ * Test Day Skip (contract §7): sets schedule time to the immutable schedule's
+ * finite maximum finish boundary and emits every newly crossed boundary exactly
+ * once, including the results-ready boundary. Never uses a non-finite clock
+ * value. A no-op once results-ready. If already at/over the finish boundary
+ * without results-ready (e.g. a prior advance landed exactly on finish), the
+ * results-ready batch is still emitted.
+ */
+export function skipPlaybackController(controller: PlaybackController): PlaybackController {
+  if (controller.resultsReady) return controller;
+  const finish = maxFinishScheduleTime(controller.view);
+  const previous = controller.clock.scheduleTimeSeconds;
+  const includeInitialization = !controller.clock.initialized;
+  const events = crossedPlaybackBoundaries(controller.view, previous, finish, includeInitialization);
+  const resultsReady = events.some((event) => event.kind === "results-ready");
+  return {
+    view: controller.view,
+    clock: { scheduleTimeSeconds: finish, speed: controller.clock.speed, initialized: true },
+    lastEvents: events,
+    resultsReady: controller.resultsReady || resultsReady,
   };
 }

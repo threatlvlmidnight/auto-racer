@@ -9,6 +9,7 @@ import {
   canEnterEntrantSelection,
   createUnavailableRun,
   runIdentityForEntrant,
+  validateRunScheduleCompatibility,
   type Run,
   type RunHistorySummary,
 } from "../simulation/run";
@@ -32,6 +33,7 @@ import {
   UI_FONT,
 } from "./demoTheme";
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
+import { worldTourItineraryModel } from "./worldTourPresentation";
 
 export class RunScene extends Phaser.Scene {
   private run!: Run;
@@ -74,7 +76,11 @@ export class RunScene extends Phaser.Scene {
   }
 
   private isUsableRun(run: Run): boolean {
-    return Array.isArray(run.stages) && run.stages.length === 12 && Array.isArray(run.history);
+    const schedule = validateRunScheduleCompatibility(run);
+    return schedule.kind === "compatible"
+      && Array.isArray(run.stages)
+      && (run.worldTour?.selectedRegions.length === 0 || (run.stages.length >= 8 && run.stages.length <= 40 && run.stages.length % 8 === 0))
+      && Array.isArray(run.history);
   }
 
   private render(): void {
@@ -89,7 +95,8 @@ export class RunScene extends Phaser.Scene {
       fontStyle: "bold",
       color: "#f4d58d",
     }).setOrigin(0.5);
-    this.add.text(width / 2, 78, `${model.progressLabel}  ·  ${model.creditsLabel}  ·  ${model.reputationLabel}`, {
+    const itineraryHeader = worldTourItineraryModel(this.run)?.header;
+    this.add.text(width / 2, 78, `${model.progressLabel}  ·  ${model.creditsLabel}  ·  ${model.reputationLabel}${itineraryHeader ? `  ·  ${itineraryHeader.championshipPoints}` : ""}`, {
       fontSize: "18px",
       fontFamily: UI_FONT,
       fontStyle: "bold",
@@ -101,6 +108,15 @@ export class RunScene extends Phaser.Scene {
       fontFamily: UI_FONT,
       color: model.status === "unavailable" || model.status === "failed" ? "#d9a7a7" : "#9eb5c9",
     }).setOrigin(1, 0);
+    if (this.run.worldTour?.lastChanceStatus === "active") {
+      this.add.text(width / 2, 101, "LAST CHANCE · THE NEXT RACE MUST RESTORE YOUR REPUTATION", {
+        fontSize: "12px", fontFamily: UI_FONT, fontStyle: "bold", color: "#ffd447",
+      }).setOrigin(0.5);
+    } else if (this.run.reputation <= 4 && this.run.status === "active") {
+      this.add.text(width / 2, 101, "LOW REPUTATION · ELIMINATION RISK", {
+        fontSize: "11px", fontFamily: UI_FONT, fontStyle: "bold", color: "#e6c1bd",
+      }).setOrigin(0.5);
+    }
 
     if (this.run.status === "unavailable") {
       this.add.text(width / 2, 190, "Run unavailable", {
@@ -116,11 +132,16 @@ export class RunScene extends Phaser.Scene {
     }
 
     if (this.run.status === "completed") {
-      this.add.text(width / 2, 115, "Run Summary", {
+      const classification = this.run.worldTour?.classification;
+      const classificationLabel = classification === "world-champion"
+        ? "WORLD CHAMPION"
+        : classification === "podium" ? "CHAMPIONSHIP PODIUM" : "CHAMPIONSHIP CLASSIFIED";
+      this.add.text(width / 2, 115, classification ? classificationLabel : "Run Summary", {
         fontSize: "21px",
         color: "#ffffff",
       }).setOrigin(0.5);
-      model.history.forEach((entry, index) => {
+      const recentHistory = model.history.slice(-7);
+      recentHistory.forEach((entry, index) => {
         this.add.text(70, 150 + index * 36, this.historyEntryLabel(entry), {
           fontSize: "11px",
           color: entry.type === "pvp" ? "#8fd8ff" : "#d7e1e6",
@@ -140,7 +161,7 @@ export class RunScene extends Phaser.Scene {
         fontSize: "12px",
         color: "#c8d2d8",
       }).setOrigin(0.5);
-      model.history.forEach((entry, index) => {
+      model.history.slice(-7).forEach((entry, index) => {
         this.add.text(70, 165 + index * 36, this.historyEntryLabel(entry), {
           fontSize: "11px",
           color: entry.type === "pvp" ? "#8fd8ff" : "#d7e1e6",
@@ -151,23 +172,56 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
-    this.run.stages.forEach((stage, index) => {
-      this.add.text(75 + index * 130, 120, `${stage.position}. ${stage.kind.toUpperCase()}\n${stage.state}`, {
-        fontSize: "11px",
-        fontFamily: UI_FONT,
-        fontStyle: "bold",
-        color: stage.state === "completed" ? "#82c9aa" : stage.state === "unavailable" ? "#68747c" : "#d9483f",
-        align: "center",
+    const itinerary = worldTourItineraryModel(this.run);
+    if (this.run.worldTour?.phase === "awaiting-destination" && itinerary) {
+      this.add.text(width / 2, 150, "WORLD CHAMPIONSHIP ITINERARY", {
+        fontSize: "22px", fontFamily: DISPLAY_FONT, fontStyle: "bold", color: "#f1eee5",
       }).setOrigin(0.5);
-    });
+      this.add.text(width / 2, 195, "Paris International Exhibition · FINALE LOCKED", {
+        fontSize: "14px", fontFamily: UI_FONT, color: "#9eb5c9",
+      }).setOrigin(0.5);
+      this.add.text(width / 2, 235, "Choose from two unvisited destinations to begin the next leg.", {
+        fontSize: "14px", fontFamily: UI_FONT, color: "#cddbd2",
+      }).setOrigin(0.5);
+      this.addControl(width / 2, 310, "CHOOSE DESTINATION", () => this.scene.start("DestinationScene", { run: this.run }));
+      return;
+    }
 
-    this.add.text(24, 145, `${model.remainingStages} stages remaining`, {
-      fontSize: "11px",
-      color: "#9eb5c9",
-    });
+    if (itinerary && this.run.worldTour?.selectedRegions.length) {
+      itinerary.legs.forEach((leg, index) => {
+        const x = 100 + index * 150;
+        this.add.circle(x, 126, 12, leg.state === "completed" ? 0x3f8468 : leg.state === "current" ? 0xd9483f : 0x49545a);
+        this.add.text(x, 145, `${leg.ordinal}. ${leg.name}`, {
+          fontSize: "10px", fontFamily: UI_FONT, color: leg.state === "current" ? "#ffd447" : "#cddbd2",
+          align: "center", wordWrap: { width: 132 },
+        }).setOrigin(0.5, 0);
+        if (index < itinerary.legs.length - 1) this.add.line(0, 0, x + 14, 126, x + 136, 126, 0x718087, 0.7).setOrigin(0, 0);
+      });
+      const currentLeg = this.run.worldTour.legs[this.run.worldTour.legs.length - 1];
+      currentLeg.stages.forEach((stage, index) => {
+        const x = 67 + index * 95;
+        const active = stage.globalOrdinal === this.run.stageIndex + 1;
+        const completed = stage.globalOrdinal <= this.run.stageIndex;
+        const label = stage.kind === "race"
+          ? stage.raceKind === "local" ? "LOCAL" : "CHAMP."
+          : stage.kind === "arrival" ? "ARRIVAL" : "PREP";
+        this.add.text(x, 190, `${index + 1}\n${label}`, {
+          fontSize: "10px", fontFamily: UI_FONT, fontStyle: "bold",
+          color: completed ? "#82c9aa" : active ? "#ffd447" : "#68747c", align: "center",
+        }).setOrigin(0.5);
+      });
+    } else {
+      this.run.stages.forEach((stage, index) => {
+        this.add.text(75 + index * 55, 120, `${stage.position}. ${stage.kind.toUpperCase()}\n${stage.state}`, {
+          fontSize: "10px", fontFamily: UI_FONT, fontStyle: "bold",
+          color: stage.state === "completed" ? "#82c9aa" : stage.state === "unavailable" ? "#68747c" : "#d9483f",
+          align: "center",
+        }).setOrigin(0.5);
+      });
+    }
 
     if (model.history.length > 0) {
-      const path = model.history.map((entry) => `${entry.stagePosition}. ${entry.type.replace(/-/g, " ")}`).join("  >  ");
+      const path = model.history.slice(-8).map((entry) => `${entry.stagePosition}. ${entry.type.replace(/-/g, " ")}`).join("  >  ");
       this.add.text(width / 2, 365, path, {
         fontSize: "10px",
         color: "#9eb5c9",
@@ -186,10 +240,12 @@ export class RunScene extends Phaser.Scene {
     }
 
     if (this.run.activeEncounter?.type === "pvp") {
-      this.addControl(width / 2, 220, `Enter ${this.run.activeEncounter.payload.kind === "pvp" ? this.run.activeEncounter.payload.lapCount : ""}-lap PvP`, () => {
+      const stage = this.run.stages[this.run.stageIndex];
+      const raceLabel = stage.raceKind === "local" ? "LOCAL RACE" : "CHAMPIONSHIP RACE";
+      this.addControl(width / 2, 245, `ENTER ${stage.lapCount}-LAP ${raceLabel}`, () => {
         this.scene.start("PreRaceScene", { run: this.run, encounterId: this.run.activeEncounter!.id });
       });
-      this.addControl(width / 2, 285, "TEST DAY · UNSCORED", () => this.openTestDay("pvp-briefing"));
+      this.addControl(width / 2, 305, "TEST DAY · UNSCORED", () => this.openTestDay("pvp-briefing"));
       return;
     }
 
@@ -257,15 +313,19 @@ export class RunScene extends Phaser.Scene {
 
   private sponsorOptionLabel(option: SponsorOption): string {
     if (option.kind === "immediate") return "Immediate purse\n2 credits";
-    if (option.objective.kind === "win-next-race") return "Win the next race\n7 credits";
+    if (option.objective.kind === "win-next-race") return "Win the next Championship Race\n7 credits";
     if (option.objective.kind === "target-race-time") {
-      return `Finish in ${option.objective.targetSeconds}s or less\n7 credits`;
+      return `Finish the next Championship Race in ${option.objective.targetSeconds}s or less\n7 credits`;
     }
     return `Trigger ${option.objective.tag} items ${option.objective.requiredEvents} times\n7 credits`;
   }
 
   private historyEntryLabel(entry: RunHistorySummary): string {
-    const parts = [`${entry.stagePosition}. ${entry.type.replace(/-/g, " ")}`];
+    const stage = this.run.stages.find((candidate) => candidate.position === entry.stagePosition);
+    const typeLabel = entry.type === "pvp"
+      ? stage?.raceKind === "local" ? "Local Race" : "Championship Race"
+      : entry.type.replace(/-/g, " ");
+    const parts = [`${entry.stagePosition}. ${typeLabel}`];
     if (entry.acquisition) {
       const items = entry.acquisition.itemIds?.length
         ? `: ${entry.acquisition.itemIds.join(", ")}`

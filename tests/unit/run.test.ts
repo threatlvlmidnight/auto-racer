@@ -25,6 +25,7 @@ import {
   createRunForEntrant,
   runIdentityForEntrant,
   validateRunBuildContext,
+  validateRunScheduleCompatibility,
 } from "../../src/simulation/run";
 
 const TEST_IDENTITY: RunIdentity = runIdentityForEntrant("evelyn-mercer")!;
@@ -89,6 +90,25 @@ describe("createRun", () => {
     ]);
     expect(run.availableChoices).toHaveLength(2);
     expect(new Set(run.availableChoices.map((choice) => choice.type)).size).toBe(2);
+    expect(run.worldTour).toMatchObject({
+      scheduleVersion: "world-tour-v1",
+      phase: "awaiting-destination",
+      selectedRegions: [],
+      legs: [],
+      currentGlobalStageIndex: 0,
+    });
+    expect(validateRunScheduleCompatibility(run)).toEqual({ kind: "compatible" });
+  });
+});
+
+describe("world-tour schedule compatibility", () => {
+  it("rejects an old active run without inferring a route and accepts a new run", () => {
+    const modern = newRun();
+    expect(validateRunScheduleCompatibility({})).toEqual({
+      kind: "unavailable",
+      code: "legacy-championship-schedule",
+    });
+    expect(validateRunScheduleCompatibility(modern)).toEqual({ kind: "compatible" });
   });
 });
 

@@ -14,6 +14,97 @@ export interface SpecCar {
 
 export type IdentityTag = "performance";
 
+// --- Feature 029: versioned world championship ---------------------------
+
+export type SelectableRegionId =
+  | "british-isles"
+  | "continental-europe"
+  | "north-america"
+  | "south-america"
+  | "northern-europe"
+  | "mediterranean-north-africa";
+
+export type RegionId = SelectableRegionId | "paris-exhibition";
+export type RaceKind = "local" | "championship";
+export type LocalRaceTier = "qualifier" | "challenge";
+export type FinaleMode = "normal" | "elite";
+export type ChampionshipClassification = "world-champion" | "podium" | "classified";
+export type LastChanceStatus = "available" | "active" | "consumed" | "failed";
+
+export interface DestinationOffer {
+  transitionOrdinal: 0 | 1 | 2 | 3;
+  options: readonly [SelectableRegionId, SelectableRegionId];
+}
+
+export interface TourStage {
+  id: string;
+  globalOrdinal: number;
+  legOrdinal: 1 | 2 | 3 | 4 | 5;
+  legStageOrdinal: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  regionId: RegionId;
+  kind: "arrival" | "preparation" | "race";
+  raceKind?: RaceKind;
+  localRaceTier?: LocalRaceTier;
+  raceOrdinalInLeg?: 1 | 2 | 3 | 4;
+  raceOrdinalGlobal?: number;
+  championshipRaceOrdinal?: number;
+  lapCount?: 8 | 10 | 12 | 14 | 16;
+}
+
+export interface TourLeg {
+  ordinal: 1 | 2 | 3 | 4 | 5;
+  regionId: RegionId;
+  stages: readonly TourStage[];
+}
+
+export interface StandingEntry {
+  entrantId: string;
+  points: number;
+  wins: number;
+  podiums: number;
+  championshipFinishes: readonly number[];
+  stableOrder: number;
+}
+
+export interface ChampionshipRivalState {
+  entrantId: string;
+  stableOrder: number;
+  championshipFinishes: readonly number[];
+}
+
+export interface WorldTourState {
+  scheduleVersion: "world-tour-v1";
+  phase: "awaiting-destination" | "racing" | "completed";
+  selectedRegions: readonly SelectableRegionId[];
+  destinationOffer: DestinationOffer | null;
+  legs: readonly TourLeg[];
+  currentGlobalStageIndex: number;
+  standings: readonly StandingEntry[];
+  championshipRivals: readonly ChampionshipRivalState[];
+  finaleMode: FinaleMode | null;
+  classification: ChampionshipClassification | null;
+  lastChanceStatus: LastChanceStatus;
+}
+
+export interface LocalTeamProfile {
+  id: string;
+  regionId: RegionId;
+  name: string;
+  teamName: string;
+  vehicleId: VehicleId;
+  engineeringTendency: string;
+}
+
+export interface LocalOpponentSnapshot {
+  profileId: string;
+  regionId: RegionId;
+  localRaceTier: LocalRaceTier;
+  legOrdinal: 1 | 2 | 3 | 4 | 5;
+  build: VehicleBuild;
+  setup: LockedRaceSetup;
+  provenance: "authored-local" | "deterministic-legal-fallback";
+}
+
 // --- Feature 010: entrant identity and vehicle topology -------------------
 
 export type EntrantId = "evelyn-mercer" | "lucien-soto" | "inez-rook" | "nell-voss";
@@ -480,6 +571,8 @@ export interface ContestResult {
    * has no equivalent position on an 8-car scale.
    */
   playerPosition?: number;
+  /** Stable entrant/profile IDs in final order when resolved from an N-car field. */
+  finishingOrder?: readonly string[];
 }
 
 // --- Feature 012: multi-ghost contest --------------------------------------
@@ -641,4 +734,15 @@ export interface RecordedGhost {
   setup: LockedRaceSetup;
   trackId: string;
   simulationRulesVersion: string;
+}
+
+export interface ExactTrackGhostRecord extends RecordedGhost {
+  id: string;
+  ownerId: string;
+  displayName: string;
+  recordedTime: number;
+}
+
+export interface EliteFinaleOpponent extends ExactTrackGhostRecord {
+  provenance: "recorded" | "exhibition-fallback";
 }

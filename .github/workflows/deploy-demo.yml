@@ -1,0 +1,215 @@
+# Feature 031-demo-deployment (T030/T031): manual tagged release to GitHub
+# Pages. Contracts: release-workflow-contract.md, smoke-check-contract.md.
+#
+# Trigger discipline: workflow_dispatch only — tag creation, pushes, pull
+# requests, schedules, and external events can never invoke deployment
+# automatically (FR-004). Tag grammar and exact remote-tag resolution happen
+# BEFORE any selected-tag repository code is checked out or executed. Every
+# external action is official and pinned to a reviewed immutable commit SHA.
+name: Deploy demo release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Semantic demo release tag to publish (demo-vMAJOR.MINOR.PATCH)"
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  # Overlapping release invocations serialize; an in-flight deployment is
+  # never cancelled mid-write (FR edge case: overlapping releases).
+  group: pages-deploy
+  cancel-in-progress: false
+
+jobs:
+  validate-and-build:
+    name: Validate tag, verify gates, build and audit artifact
+    runs-on: ubuntu-latest
+    # Repository read only — this job has no Pages deployment permission.
+    permissions:
+      contents: read
+    outputs:
+      release_tag: ${{ steps.inputs.outputs.release_tag }}
+      revision: ${{ steps.resolve.outputs.revision }}
+    steps:
+      - name: Validate demo tag grammar (workflow-owned, pre-checkout)
+        id: inputs
+        env:
+          RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          # Exact-equality match: `$` alone would admit a trailing newline.
+          MATCHED="$(printf '%s' "$RELEASE_TAG_INPUT" | grep -Eo '^demo-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' || true)"
+          if [ "$MATCHED" != "$RELEASE_TAG_INPUT" ]; then
+            echo "::error::release_tag is not a valid semantic demo tag (demo-vMAJOR.MINOR.PATCH); refusing to proceed."
+            exit 1
+          fi
+          echo "release_tag=$RELEASE_TAG_INPUT" >> "$GITHUB_OUTPUT"
+
+      - name: Verify exact remote tag ref and resolve revision (pre-checkout)
+        id: resolve
+        env:
+          RELEASE_TAG_INPUT: ${{ steps.inputs.outputs.release_tag }}
+          REMOTE_URL: ${{ github.server_url }}/${{ github.repository }}.git
+        run: |
+          set -euo pipefail
+          LS_OUTPUT="$(git ls-remote "$REMOTE_URL" "refs/tags/$RELEASE_TAG_INPUT" "refs/tags/$RELEASE_TAG_INPUT^{}")"
+          if [ -z "$LS_OUTPUT" ]; then
+            echo "::error::Tag '$RELEASE_TAG_INPUT' does not exist in the repository; create it at the approved revision first."
+            exit 1
+          fi
+          PEELED="$(printf '%s\n' "$LS_OUTPUT" | awk -v ref="refs/tags/$RELEASE_TAG_INPUT^{}" '$2 == ref {print $1}')"
+          DIRECT="$(printf '%s\n' "$LS_OUTPUT" | awk -v ref="refs/tags/$RELEASE_TAG_INPUT" '$2 == ref {print $1}')"
+          REVISION="${PEELED:-$DIRECT}"
+          if ! printf '%s' "$REVISION" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::Tag '$RELEASE_TAG_INPUT' did not resolve to exactly one commit."
+            exit 1
+          fi
+          echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout resolved revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ steps.resolve.outputs.revision }}
+
+      - name: Fetch release tag for cross-check
+        env:
+          RELEASE_TAG_INPUT: ${{ steps.inputs.outputs.release_tag }}
+        run: git fetch --depth 1 origin "refs/tags/$RELEASE_TAG_INPUT:refs/tags/$RELEASE_TAG_INPUT"
+
+      - name: Cross-check tag and revision (repository validator)
+        env:
+          RELEASE_TAG_INPUT: ${{ steps.inputs.outputs.release_tag }}
+          EXPECTED_REVISION: ${{ steps.resolve.outputs.revision }}
+        run: node scripts/validate-demo-tag.mjs "$RELEASE_TAG_INPUT" --expect-revision "$EXPECTED_REVISION"
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Locked install
+        run: npm ci
+
+      - name: Tests
+        run: npm test
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build with release identity
+        env:
+          RELEASE_TAG_INPUT: ${{ steps.inputs.outputs.release_tag }}
+          EXPECTED_REVISION: ${{ steps.resolve.outputs.revision }}
+        run: |
+          set -euo pipefail
+          export VITE_DEMO_BASE_URL="/auto-racer/"
+          export VITE_DEMO_RELEASE_TAG="$RELEASE_TAG_INPUT"
+          export VITE_DEMO_REVISION="$EXPECTED_REVISION"
+          export VITE_DEMO_BUILT_AT_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          npm run build
+
+      - name: Audit production artifact
+        env:
+          RELEASE_TAG_INPUT: ${{ steps.inputs.outputs.release_tag }}
+          EXPECTED_REVISION: ${{ steps.resolve.outputs.revision }}
+        run: node scripts/audit-production-artifact.mjs dist --expect-tag "$RELEASE_TAG_INPUT" --expect-revision "$EXPECTED_REVISION"
+
+      - name: Configure Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: validate-and-build
+    runs-on: ubuntu-latest
+    # Protected environment: the github-pages environment must permit this
+    # workflow; its URL is the canonical public demo (FR-009).
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
+
+      - name: Publish deployment summary (T039)
+        env:
+          RELEASE_TAG_INPUT: ${{ needs.validate-and-build.outputs.release_tag }}
+          EXPECTED_REVISION: ${{ needs.validate-and-build.outputs.revision }}
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          {
+            echo "## Demo deployment"
+            echo ""
+            echo "- **Release tag**: \`${RELEASE_TAG_INPUT}\`"
+            echo "- **Resolved revision**: \`${EXPECTED_REVISION}\`"
+            echo "- **Deployment URL**: ${PAGE_URL}"
+            echo "- **Status**: artifact deployed; public smoke check follows"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  smoke:
+    name: Post-deployment public smoke check
+    needs: [validate-and-build, deploy]
+    runs-on: ubuntu-latest
+    # Read-only: this job observes the live artifact. It receives only the
+    # returned public URL plus expected build identity/resource paths, and it
+    # never starts another deployment or any rollback (FR-018).
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout deployed revision (versioned checker source)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.validate-and-build.outputs.revision }}
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+
+      - name: Run public smoke check
+        id: smoke
+        env:
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+          RELEASE_TAG_INPUT: ${{ needs.validate-and-build.outputs.release_tag }}
+          EXPECTED_REVISION: ${{ needs.validate-and-build.outputs.revision }}
+        run: node scripts/smoke-demo.mjs --url "$PAGE_URL" --tag "$RELEASE_TAG_INPUT" --revision "$EXPECTED_REVISION"
+
+      - name: Record release health in the workflow summary (T039)
+        if: always()
+        env:
+          SMOKE_RESULT: ${{ steps.smoke.outcome }}
+          RELEASE_TAG_INPUT: ${{ needs.validate-and-build.outputs.release_tag }}
+          EXPECTED_REVISION: ${{ needs.validate-and-build.outputs.revision }}
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: |
+          if [ "$SMOKE_RESULT" = "success" ]; then
+            HEALTH="healthy"
+            ADVICE="No action required."
+          else
+            HEALTH="unhealthy"
+            ADVICE="Recovery: manually re-dispatch this workflow with the previous healthy demo tag (README: Manual rollback). No automatic rollback runs."
+          fi
+          {
+            echo "## Demo release health"
+            echo ""
+            echo "- **Result**: ${HEALTH}"
+            echo "- **Release tag**: \`${RELEASE_TAG_INPUT}\`"
+            echo "- **Resolved revision**: \`${EXPECTED_REVISION}\`"
+            echo "- **Deployment URL**: ${PAGE_URL}"
+            echo "- **Advice**: ${ADVICE}"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,4 +1,5 @@
 import { entrantById, vehicleById } from "../content/entrants";
+import { RIVAL_PROFILES } from "../content/rivals";
 import { BASELINE_CAR } from "../content/sample-data";
 import {
   generateEncounterChoices,
@@ -6,7 +7,22 @@ import {
   type RandomSource,
 } from "./encounters";
 import { createEmptyVehicleBuild } from "./build";
+import {
+  completeCurrentTourLeg,
+  confirmWorldTourDestination,
+  createWorldTourState,
+  validateWorldTourCompatibility,
+} from "./championship";
 import { installedItems, storedItems } from "./slots";
+import { settleWorldTourReputation, WORLD_TOUR_REPUTATION_START } from "./reputation";
+import { raceSettlementPolicy } from "./settlement";
+import {
+  applyChampionshipResult,
+  classificationForPosition,
+  createStandings,
+  normalFinaleClassification,
+  qualifiesForEliteFinale,
+} from "./standings";
 import {
   ACTIVE_IDENTITY_TAG,
   VEHICLE_STORAGE_CAPACITY,
@@ -18,7 +34,12 @@ import {
   type OfferedItem,
   type RunIdentity,
   type RunSetupMemory,
+  type LocalRaceTier,
+  type RaceKind,
+  type SelectableRegionId,
+  type TourLeg,
   type VehicleBuild,
+  type WorldTourState,
 } from "./types";
 
 /** The immutable entrant/vehicle association for a run, or undefined if unknown. */
@@ -171,8 +192,12 @@ export interface RunStage {
   position: number;
   kind: "choice" | "pvp";
   choiceOrdinal?: number;
-  pvpOrdinal?: 1 | 2 | 3 | 4;
-  lapCount?: 10 | 12 | 14 | 16;
+  pvpOrdinal?: number;
+  championshipRaceOrdinal?: number;
+  lapCount?: 8 | 10 | 12 | 14 | 16;
+  raceKind?: RaceKind;
+  localRaceTier?: LocalRaceTier;
+  regionId?: TourLeg["regionId"];
   state: StageState;
 }
 
@@ -185,7 +210,8 @@ export interface EncounterChoice {
 
 export interface PvpPayload {
   kind: "pvp";
-  lapCount: 10 | 12 | 14 | 16;
+  lapCount: 8 | 10 | 12 | 14 | 16;
+  raceKind?: RaceKind;
   buildSnapshot: Build;
   result?: ContestResult;
 }
@@ -296,6 +322,12 @@ export interface Run {
    * (contract §7, data-model.md "Draft and remembered state").
    */
   setupMemory?: RunSetupMemory;
+  /**
+   * Feature 029 authoritative schedule state. Absent means the active run uses
+   * an incompatible legacy championship schedule and must be restarted; it is
+   * never inferred from the old flat `stages` array.
+   */
+  worldTour?: WorldTourState;
 }
 
 export type RunTransitionErrorCode =
@@ -393,8 +425,76 @@ export function createRun(input: CreateRunInput): Run {
     activeSponsorContract: null,
     history: [],
     reputation: REPUTATION_START,
+    worldTour: createWorldTourState(input.seed),
   };
   return { ...run, availableChoices: generateEncounterChoices(run, input.rng) };
+}
+
+function runStagesForTourLeg(runId: string, leg: TourLeg, existingStageCount: number): RunStage[] {
+  let choiceOrdinal = existingStageCount - Math.floor(existingStageCount / 2) + 1;
+  return leg.stages.map((stage, index) => {
+    const kind = stage.kind === "race" ? "pvp" as const : "choice" as const;
+    const mapped: RunStage = {
+      id: `${runId}-stage-${existingStageCount + index + 1}`,
+      position: existingStageCount + index + 1,
+      kind,
+      state: index === 0 ? "available" : "unavailable",
+      regionId: stage.regionId,
+    };
+    if (kind === "choice") mapped.choiceOrdinal = choiceOrdinal++;
+    else {
+      mapped.pvpOrdinal = stage.raceOrdinalGlobal;
+      mapped.championshipRaceOrdinal = stage.championshipRaceOrdinal;
+      mapped.lapCount = stage.lapCount;
+      mapped.raceKind = stage.raceKind;
+      mapped.localRaceTier = stage.localRaceTier;
+    }
+    return mapped;
+  });
+}
+
+export function confirmRunDestination(
+  run: Run,
+  selected: SelectableRegionId,
+  rng: RandomSource,
+): Run {
+  assertActive(run);
+  if (!run.worldTour) throw new RunTransitionError("invalid-action", "The run has no world-tour state");
+  const worldTour = confirmWorldTourDestination(run.id, run.worldTour, selected);
+  const initializedWorldTour = worldTour.standings.length === 0
+    ? {
+        ...worldTour,
+        championshipRivals: RIVAL_PROFILES.map((profile, stableOrder) => ({
+          entrantId: profile.id,
+          stableOrder: stableOrder + 1,
+          championshipFinishes: [],
+        })),
+        standings: createStandings([
+          run.identity.entrantId,
+          ...RIVAL_PROFILES.map((profile) => profile.id),
+        ]),
+      }
+    : worldTour;
+  const existingStages = initializedWorldTour.legs.length === 1 ? [] : run.stages;
+  const leg = initializedWorldTour.legs[initializedWorldTour.legs.length - 1];
+  const appended = runStagesForTourLeg(run.id, leg, existingStages.length);
+  const stages = [...existingStages, ...appended];
+  const stageIndex = existingStages.length;
+  const next: Run = {
+    ...run,
+    worldTour: initializedWorldTour,
+    stages,
+    stageIndex,
+    availableChoices: [],
+    activeEncounter: null,
+  };
+  return { ...next, availableChoices: generateEncounterChoices(next, rng) };
+}
+
+export type RunScheduleCompatibility = ReturnType<typeof validateWorldTourCompatibility>;
+
+export function validateRunScheduleCompatibility(run: Pick<Run, "worldTour">): RunScheduleCompatibility {
+  return validateWorldTourCompatibility(run.worldTour);
 }
 
 export type EntrantSelectionGuardResult =
@@ -458,14 +558,17 @@ export function createRunForEntrant(input: ConfirmEntrantInput): CreateRunForEnt
 
   return {
     kind: "created",
-    run: createRun({
+    run: {
+      ...createRun({
       runId: input.runId,
       seed: input.seed,
       identityTag: ACTIVE_IDENTITY_TAG,
       identity,
       build,
       rng: input.rng,
-    }),
+      }),
+      reputation: WORLD_TOUR_REPUTATION_START,
+    },
   };
 }
 
@@ -656,16 +759,22 @@ export function completePvpEncounter(
     encounterTransactionIds.push(transaction.id);
   };
 
+  const worldTourActive = Boolean(run.worldTour && run.worldTour.selectedRegions.length > 0);
+  const raceKind = stage.raceKind ?? "championship";
+  const position = result.playerPosition ?? LEGACY_OUTCOME_POSITION[result.outcome];
+  const policy = raceSettlementPolicy(raceKind, position);
   // Computed from credits banked before this stage's own income (FR-007).
-  const interestAmount = interestFor(run.credits);
+  const interestAmount = policy.accruesInterest ? interestFor(run.credits) : 0;
 
-  appendTransaction("participation", 2);
-  if (result.outcome === "win") appendTransaction("win-bonus", 2);
+  appendTransaction("participation", worldTourActive ? policy.participationCredits : 2);
+  if (result.outcome === "win") appendTransaction("win-bonus", worldTourActive ? policy.winBonusCredits : 2);
   if (interestAmount > 0) appendTransaction("interest", interestAmount);
 
   let sponsorOutcome: SponsorContract | undefined;
   let sponsorFailed = false;
-  if (run.activeSponsorContract) {
+  const sponsorEligible = raceKind === "championship"
+    || run.activeSponsorContract?.objective.kind === "trigger-tagged-items";
+  if (run.activeSponsorContract && sponsorEligible) {
     const resolution = resolvePendingSponsor(run.activeSponsorContract, result);
     sponsorOutcome = {
       ...resolution.contract,
@@ -694,14 +803,58 @@ export function completePvpEncounter(
     ...run,
     credits,
     creditTransactions: transactions,
-    activeSponsorContract: null,
+    activeSponsorContract: sponsorEligible ? null : run.activeSponsorContract,
     history: [...run.history, historyEntry],
   };
   // Independent triggers (015-economy-depth FR-002, research.md Decision 2):
   // both may fire on the same stage transition, each its own delta.
-  const position = result.playerPosition ?? LEGACY_OUTCOME_POSITION[result.outcome];
-  next = applyRaceReputationChange(next, position);
-  if (sponsorFailed) next = applySponsorFailurePenalty(next);
+  if (worldTourActive && next.worldTour) {
+    const reputation = settleWorldTourReputation({
+      reputation: next.reputation,
+      lastChanceStatus: next.worldTour.lastChanceStatus,
+      delta: policy.reputationDelta + (sponsorFailed ? SPONSOR_FAILURE_REPUTATION_DELTA : 0),
+      hasNextRace: stage.position < 40,
+    });
+    next = {
+      ...next,
+      reputation: reputation.reputation,
+      status: reputation.failed ? "failed" : next.status,
+      worldTour: { ...next.worldTour, lastChanceStatus: reputation.lastChanceStatus },
+    };
+    const settledTour = next.worldTour!;
+    const eliteFinale = stage.championshipRaceOrdinal === 10 && settledTour.finaleMode === "elite";
+    if (eliteFinale) {
+      next = {
+        ...next,
+        worldTour: { ...settledTour, classification: classificationForPosition(position) },
+      };
+    } else if (raceKind === "championship" && result.finishingOrder) {
+      const finishingOrder = result.finishingOrder.map((entrantId) =>
+        entrantId === "player" ? run.identity.entrantId : entrantId);
+      if (finishingOrder.length === 8) {
+        const currentTour = settledTour;
+        const standings = applyChampionshipResult(currentTour.standings, finishingOrder);
+        const championshipRaceCount = standings[0]?.championshipFinishes.length ?? 0;
+        const finaleMode = championshipRaceCount === 9
+          ? (qualifiesForEliteFinale(standings, run.identity.entrantId) ? "elite" : "normal")
+          : currentTour.finaleMode;
+        next = {
+          ...next,
+          worldTour: {
+            ...currentTour,
+            standings,
+            finaleMode,
+            classification: championshipRaceCount === 10
+              ? normalFinaleClassification(standings, run.identity.entrantId)
+              : currentTour.classification,
+          },
+        };
+      }
+    }
+  } else {
+    next = applyRaceReputationChange(next, position);
+    if (sponsorFailed) next = applySponsorFailurePenalty(next);
+  }
 
   return advanceRun(next, rng);
 }
@@ -739,7 +892,7 @@ function advanceRun(run: Run, rng: RandomSource): Run {
 
   // Leading check (015-economy-depth FR-003, research.md Decision 1):
   // reputation loss takes priority over a simultaneous Stage 6 completion.
-  if (run.reputation <= 0) {
+  if (run.status === "failed" || (run.reputation <= 0 && !run.worldTour?.selectedRegions.length)) {
     return {
       ...run,
       status: "failed",
@@ -747,6 +900,41 @@ function advanceRun(run: Run, rng: RandomSource): Run {
       stages: run.stages.map((stage, index) =>
         index === run.stageIndex ? { ...stage, state: "completed" } : stage,
       ),
+      availableChoices: [],
+      activeEncounter: null,
+    };
+  }
+
+  if (nextIndex >= run.stages.length && run.worldTour?.phase === "racing") {
+    const worldTour = completeCurrentTourLeg(run.id, run.seed, {
+      ...run.worldTour,
+      currentGlobalStageIndex: nextIndex,
+    });
+    if (worldTour.phase === "awaiting-destination") {
+      return {
+        ...run,
+        worldTour,
+        stageIndex: nextIndex,
+        stages: run.stages.map((stage, index) => index === run.stageIndex ? { ...stage, state: "completed" } : stage),
+        availableChoices: [],
+        activeEncounter: null,
+      };
+    }
+    if (worldTour.phase === "racing") {
+      const paris = worldTour.legs[worldTour.legs.length - 1];
+      const stages = [
+        ...run.stages.map((stage, index) => index === run.stageIndex ? { ...stage, state: "completed" as const } : stage),
+        ...runStagesForTourLeg(run.id, paris, run.stages.length),
+      ];
+      const next: Run = { ...run, worldTour, stages, stageIndex: nextIndex, availableChoices: [], activeEncounter: null };
+      return { ...next, availableChoices: generateEncounterChoices(next, rng) };
+    }
+    return {
+      ...run,
+      worldTour,
+      status: "completed",
+      stageIndex: nextIndex,
+      stages: run.stages.map((stage, index) => index === run.stageIndex ? { ...stage, state: "completed" } : stage),
       availableChoices: [],
       activeEncounter: null,
     };
@@ -773,6 +961,7 @@ function advanceRun(run: Run, rng: RandomSource): Run {
   const nextStage = stages[nextIndex];
   const next: Run = {
     ...run,
+    worldTour: run.worldTour ? { ...run.worldTour, currentGlobalStageIndex: nextIndex } : undefined,
     stageIndex: nextIndex,
     stages,
     availableChoices: [],
@@ -785,6 +974,7 @@ function advanceRun(run: Run, rng: RandomSource): Run {
           payload: {
             kind: "pvp",
             lapCount: nextStage.lapCount!,
+            raceKind: nextStage.raceKind,
             buildSnapshot: run.build,
           },
         }

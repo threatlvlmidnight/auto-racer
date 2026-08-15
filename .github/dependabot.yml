@@ -1,0 +1,8 @@
+# Feature 031-demo-deployment (T032): monitor the immutably pinned GitHub
+# Actions used by the verification and release workflows.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

@@ -3,13 +3,20 @@ import { resolveContest } from "../simulation/contest";
 import { installedItems } from "../simulation/slots";
 import {
   buildNCarPlaybackSchedule,
+  createPlaybackController,
+  advancePlaybackController,
+  selectPlaybackControllerSpeed,
+  nCarBoundaryView,
   nCarFrameStateAt,
-  updateLiveProjection,
+  updateLiveProjectionFromCheckpoint,
   type CarProgress,
+  type CrossedPlaybackEvent,
   type LiveProjectionState,
   type NCarPlaybackSchedule,
+  type PlaybackController,
+  type PlaybackSpeed,
 } from "../simulation/playback";
-import { pointAtProgress } from "../simulation/tracks";
+import { generateTrack, pointAtProgress } from "../simulation/tracks";
 import {
   SLOT_CAPACITY,
   type NCarContestResult,
@@ -26,6 +33,16 @@ import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
 import { recordedLapVehicleStatModel, vehicleItemLookup } from "./vehicleStatPresentation";
 import { createVehicleStatPanel } from "./vehicleStatVisuals";
 import { projectionPresentation } from "./raceProjectionPresentation";
+import {
+  freshPlaybackControlPlan,
+  layoutPlaybackControls,
+  selectPlaybackControl,
+  type PlaybackControlPlan,
+} from "./playbackControlPresentation";
+import { regionalRaceBackdrop } from "./visualAssets";
+import { resolveLocalField } from "../simulation/localOpponents";
+import { selectEliteFinaleOpponents } from "../simulation/rivals";
+import type { RivalProfile } from "../simulation/types";
 
 const BOARD_SLOT_WIDTH = 190;
 const BOARD_SLOT_HEIGHT = 58;
@@ -50,7 +67,15 @@ function tintFromHex(color: string): number {
 export class ContestScene extends Phaser.Scene {
   private result?: NCarContestResult;
   private schedule?: NCarPlaybackSchedule;
-  private elapsedSeconds = 0;
+  // 030-race-playback-controls (T017/T020): scored playback now advances
+  // through a fresh race-local PresentationClock whose 1× rate consumes the
+  // immutable schedule at half the legacy rate (data-model
+  // "PresentationClock"). The controller owns schedule time, crossed-boundary
+  // evidence, and the single results-ready signal; `update()` is a thin
+  // adapter over it.
+  private playbackController?: PlaybackController;
+  private controlPlan: PlaybackControlPlan = freshPlaybackControlPlan();
+  private controlButtons = new Map<PlaybackSpeed, Phaser.GameObjects.Text>();
   private markers = new Map<string, Phaser.GameObjects.Image>();
   private trails = new Map<string, { x: number; y: number }[]>();
   private trailGraphics?: Phaser.GameObjects.Graphics;
@@ -93,27 +118,81 @@ export class ContestScene extends Phaser.Scene {
     this.run = input.run;
     this.encounterId = input.encounterId;
     this.playedBuild = input.build;
+    const authoritativeTrack = generateTrack(input.seed, input.level, input.regionId);
+    const localOpponents = input.raceKind === "local" && input.regionId && input.localRaceTier && input.legOrdinal
+      ? resolveLocalField(
+          input.regionId,
+          input.localRaceTier,
+          input.legOrdinal,
+          input.seed,
+          authoritativeTrack,
+          input.encounterId,
+        )
+      : undefined;
+    const eliteOpponents = input.eliteFinale
+      ? selectEliteFinaleOpponents([], authoritativeTrack, input.run.identity.entrantId, input.seed)
+      : undefined;
+    const eliteRoster: readonly RivalProfile[] | undefined = eliteOpponents?.map((opponent, index) => ({
+      id: opponent.id,
+      name: opponent.displayName,
+      color: ["#c0524a", "#4a90c0", "#c0a34a", "#7a4ac0", "#4ac077", "#c04a9e", "#c07a4a"][index],
+      vehicleId: opponent.build.vehicleId,
+      levelScaling: () => ({ slotsToFill: 4, priceBias: "high" as const }),
+    }));
     this.result = resolveContest(
-      input.build, input.rivalRoster, input.level, input.seed, input.lapCount, data.setup, input.encounterId,
+      input.build,
+      eliteRoster ?? input.rivalRoster,
+      input.level,
+      input.seed,
+      input.lapCount,
+      data.setup,
+      input.encounterId,
+      eliteOpponents?.map((opponent) => opponent.setup) ?? localOpponents?.map((opponent) => opponent.setup),
+      eliteOpponents?.map((opponent) => opponent.build) ?? localOpponents?.map((opponent) => opponent.build),
+      input.regionId,
     );
     // 027-race-legibility-integrity (contract §1): playback reads the
     // contest's own retained track — it never regenerates one independently,
     // even though generateTrack is pure and would agree given the same seed.
     this.schedule = buildNCarPlaybackSchedule(this.result, this.result.track);
-    this.elapsedSeconds = 0;
+    // 030-race-playback-controls (T017): every scored race initializes a
+    // fresh fast-speed (2×) PresentationClock that consumes the immutable
+    // schedule at the legacy rate. The controller owns schedule time,
+    // crossed-boundary evidence, and the single results-ready signal.
+    const boundaryView = nCarBoundaryView(this.schedule, this.result);
+    this.playbackController = createPlaybackController(boundaryView);
+    this.controlPlan = freshPlaybackControlPlan();
     this.lastRenderedPlayerLapIndex = -1;
     this.previousFinishedCarIds = [];
     this.projectionState = { kind: "awaiting-first-split", label: "Awaiting Lap 1 Split" };
     this.trails.clear();
     this.renderTrack(installedItems(input.build), input.lapCount);
+    this.renderPlaybackControls();
+    // 030-race-playback-controls (T038): keys 1/2 select normal/fast with
+    // pointer/touch parity; shutdown tears down control objects + listeners.
+    this.input.keyboard?.on("keydown-ONE", this.selectNormalSpeed, this);
+    this.input.keyboard?.on("keydown-TWO", this.selectFastSpeed, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.keyboard?.off("keydown-ONE", this.selectNormalSpeed, this);
+      this.input.keyboard?.off("keydown-TWO", this.selectFastSpeed, this);
+      this.controlButtons.forEach((button) => button.destroy());
+      this.controlButtons.clear();
+    });
   }
 
   update(_time: number, delta: number): void {
-    if (!this.result || !this.schedule || this.markers.size === 0) {
+    if (!this.result || !this.schedule || this.markers.size === 0 || !this.playbackController) {
       return;
     }
 
-    this.elapsedSeconds += delta / 1000;
+    // 030-race-playback-controls (T017/T020): advance the race-local
+    // PresentationClock, which owns schedule time, crossed-boundary evidence,
+    // and the single results-ready signal. The clock's 1× rate consumes the
+    // immutable schedule at half the legacy rate (data-model
+    // "PresentationClock"); `nCarFrameStateAt` reads the controller's schedule
+    // time for marker/lap/projection rendering.
+    this.playbackController = advancePlaybackController(this.playbackController, delta / 1000);
+    const scheduleTime = this.playbackController.clock.scheduleTimeSeconds;
     // 027-race-legibility-integrity Decision 9: previousStandings is always
     // null here — the retired live standings table was the only reason to
     // track it, and passing null permanently disables deriveTickerLines'
@@ -123,7 +202,7 @@ export class ContestScene extends Phaser.Scene {
     const frame = nCarFrameStateAt(
       this.schedule,
       this.result,
-      this.elapsedSeconds,
+      scheduleTime,
       this.lastRenderedPlayerLapIndex,
       null,
       this.previousFinishedCarIds,
@@ -141,27 +220,17 @@ export class ContestScene extends Phaser.Scene {
     // A checkpoint change is this frame's headline news for the ticker;
     // player-fired/finished lines (still valid, immutable-evidence facts)
     // only get the ticker when no checkpoint just changed.
-    const nextProjectionState = updateLiveProjection(this.projectionState, this.result, player.progress);
-    if (nextProjectionState !== this.projectionState) {
-      this.projectionState = nextProjectionState;
-      this.renderProjection();
-      const presentation = projectionPresentation(this.projectionState);
-      this.tickerText?.setText([presentation.headline, presentation.changeLabel].filter(Boolean).join(" · "));
-    } else if (frame.newTickerLines.length > 0) {
-      const latest = frame.newTickerLines[frame.newTickerLines.length - 1];
-      this.tickerText?.setText(latest.text);
-    }
+    this.consumePlaybackEvents(this.playbackController.lastEvents, frame);
     this.previousFinishedCarIds = frame.cars.filter((car) => car.progress.finished).map((car) => car.id);
-    if (player.progress.lapIndex !== this.lastRenderedPlayerLapIndex) {
-      this.lastRenderedPlayerLapIndex = player.progress.lapIndex;
-      frame.newCallouts.forEach((event) => this.flashBoardItem(event.item.id));
-      this.renderItemInspector();
-      this.renderVehicleStatPanel();
-    }
 
-    if (frame.allFinished) {
+    // 030-race-playback-controls (T020): the controller is the single
+    // results-ready authority (contract §5). Navigation fires exactly once
+    // when the results-ready boundary is consumed; the controller's no-op
+    // guard prevents any post-finish mutation.
+    if (this.playbackController.resultsReady) {
       const result = this.result;
       this.result = undefined;
+      this.playbackController = undefined;
       this.scene.start("ResultScene", {
         result,
         run: this.run,
@@ -170,10 +239,98 @@ export class ContestScene extends Phaser.Scene {
     }
   }
 
+  /** Consume crossed boundaries in order; later messages replace earlier ones. */
+  private consumePlaybackEvents(
+    events: readonly CrossedPlaybackEvent[],
+    frame: ReturnType<typeof nCarFrameStateAt>,
+  ): void {
+    for (const event of events) {
+      if (event.kind === "player-lap" && event.lap) {
+        this.lastRenderedPlayerLapIndex = event.lap - 1;
+        this.renderItemInspector();
+        this.renderVehicleStatPanel();
+      } else if (event.kind === "item-callout" && event.callout) {
+        this.flashBoardItem(event.callout.item.id);
+        this.tickerText?.setText(`You fire the ${event.callout.item.name}.`);
+      } else if (event.kind === "checkpoint" && event.projection) {
+        this.projectionState = updateLiveProjectionFromCheckpoint(this.projectionState, event.projection);
+        this.renderProjection();
+        const presentation = projectionPresentation(this.projectionState);
+        this.tickerText?.setText(
+          [presentation.headline, presentation.changeLabel].filter(Boolean).join(" · "),
+        );
+      } else if (event.kind === "car-finished" && event.carId) {
+        const car = this.schedule?.cars.find((entry) => entry.id === event.carId);
+        const position = frame.standings.find((entry) => entry.id === event.carId)?.position;
+        if (car) {
+          const name = car.role === "player" ? "You" : car.name;
+          const verb = car.role === "player" ? "cross" : "crosses";
+          this.tickerText?.setText(`${name} ${verb} the line${position ? ` — P${position}` : ""}.`);
+        }
+      }
+    }
+  }
+
+  /**
+   * 030-race-playback-controls (T037): renders the two repeatable `1×`/`2×`
+   * speed controls from the pure `PlaybackControlPlan` at fixed logical
+   * bounds that never overlap existing evidence at 800×450 (T035). The
+   * selected control carries a persistent non-color `▶` marker so the active
+   * speed is readable without color (FR-026, contract §6).
+   */
+  private renderPlaybackControls(): void {
+    const layout = layoutPlaybackControls();
+    this.controlPlan = freshPlaybackControlPlan();
+    this.controlPlan.controls.forEach((control) => {
+      const region = layout.regions.find((r) => r.id === control.speed)!;
+      const label = `${control.selectedMarker} ${control.label}`;
+      const button = this.add
+        .text(region.x + region.width / 2, region.y + region.height / 2, label, {
+          fontSize: "11px",
+          fontFamily: UI_FONT,
+          fontStyle: "bold",
+          color: control.selected ? "#ffd447" : "#9eb5c9",
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true })
+        .setDepth(90);
+      button.on("pointerdown", () => this.selectSpeed(control.speed));
+      this.controlButtons.set(control.speed, button);
+    });
+  }
+
+  /**
+   * 030-race-playback-controls (T026): direct idempotent normal/fast
+   * selection that changes the clock rate without changing elapsed schedule
+   * time (contract §3). Re-selecting the active speed is a no-op. Updates the
+   * control plan and visual markers in place — no re-render, no queue.
+   */
+  private selectSpeed(speed: PlaybackSpeed): void {
+    if (!this.playbackController) return;
+    this.playbackController = selectPlaybackControllerSpeed(this.playbackController, speed);
+    this.controlPlan = selectPlaybackControl(this.controlPlan, speed);
+    this.controlPlan.controls.forEach((control) => {
+      const button = this.controlButtons.get(control.speed);
+      if (button) {
+        button.setText(`${control.selectedMarker} ${control.label}`);
+        button.setColor(control.selected ? "#ffd447" : "#9eb5c9");
+      }
+    });
+  }
+
+  private selectNormalSpeed(): void {
+    this.selectSpeed("normal");
+  }
+
+  private selectFastSpeed(): void {
+    this.selectSpeed("fast");
+  }
+
   private renderTrack(board: (OfferedItem | null)[], lapCount: number): void {
     const width = LOGICAL_WIDTH;
     const track = this.schedule!.track;
-    addDemoBackdrop(this, "scene-road-circuit", 0.22);
+    const regionId = this.run?.stages[this.run.stageIndex]?.regionId;
+    addDemoBackdrop(this, regionalRaceBackdrop(regionId), 0.22);
     addRunStamp(this, this.run!);
     this.add
       .text(width / 2, 34, "CONTEST", {
