@@ -9,6 +9,7 @@ import {
   playerCar,
   standingsRow,
   timesLabel,
+  runRecordLabel,
 } from "./resultFormatting";
 import { createItemCard, createItemInspector } from "./itemVisuals";
 import { resolvedItemEvidence, type ItemPresentationContext } from "./itemPresentation";
@@ -26,6 +27,7 @@ import { createVehicleStatPanel } from "./vehicleStatVisuals";
 import { buildTrackFitPresentation } from "./trackSummaryPresentation";
 import { createBuildTrackFitPanel } from "./trackFitVisuals";
 import { regionDefinition } from "../content/regions";
+import { classifyScalingItem } from "../simulation/buffs";
 
 const STANDINGS_ROW_HEIGHT = 13;
 
@@ -79,12 +81,20 @@ export class ResultScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.renderDetails(width);
+    this.renderScalingEvidence(width);
+    this.add.text(width * 0.76, 228, runRecordLabel(this.run), {
+      fontSize: "11px", fontFamily: UI_FONT, fontStyle: "bold", color: "#ffd447",
+    }).setOrigin(0.5);
     this.renderSetupEvidence(width);
 
     createDemoButton(this, width / 2, 402, "CONTINUE CHAMPIONSHIP", () => {
       const run = continueRunFromResult(this.run, this.encounterId, this.result);
       this.scene.start("RunScene", { run });
     });
+    createDemoButton(this, width - 76, 402, "INVENTORY", () => this.scene.start("InventoryScene", {
+      run: this.run, host: "result", returnScene: "ResultScene",
+      returnData: { result: this.result, encounterId: this.encounterId },
+    }));
   }
 
   private renderDetails(width: number): void {
@@ -149,6 +159,17 @@ export class ResultScene extends Phaser.Scene {
     createVehicleStatPanel(this, width * 0.745, 292, model, {
       viewport: { width: width * 0.48, height: 60 },
     }).setDepth(20);
+  }
+
+  private renderScalingEvidence(width: number): void {
+    const installed = this.result.board;
+    const evidence = [...this.result.board, ...this.result.storage]
+      .map((item) => classifyScalingItem(item, { heldItems: [...this.result.board, ...this.result.storage], installedItems: installed }))
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+    if (evidence.length === 0) return;
+    this.add.text(width * 0.76, 286, evidence.map((entry) =>
+      `${entry.kind.toUpperCase()} · input ${entry.currentInput} · ${entry.currentMagnitude}%\n${entry.nextTriggerLabel}`,
+    ).join("\n"), { fontSize: "8px", fontFamily: UI_FONT, color: "#d7e4e7", wordWrap: { width: width * 0.42 } }).setOrigin(0.5, 0);
   }
 
   /**

@@ -6,7 +6,7 @@ silently expanding an active feature.
 
 ## DEMO-001 — Reward Draft Test Day return mismatch
 
-**Status**: Temporarily mitigated in the working tree; permanent fix not scoped.
+**Status**: Temporarily mitigated and verified; permanent exact-return fix remains deferred.
 
 **Reported behavior**: Opening Test Day from Reward Draft can return to an
 unavailable screen stating that the Test Day return point no longer matches the
@@ -25,10 +25,13 @@ selection, focus, and navigation state round-trips without changing the run.
 - Reward Draft contains no visible or focusable Test Day action.
 - Hiding the action does not resolve, decline, reroll, or otherwise mutate the draft.
 - Other valid Test Day entry points retain their existing behavior.
+- Feature 032 regression coverage continues to assert that Reward Draft has no
+  visible/focusable Test Day action and that the draft payload is unchanged.
 
 ## DEMO-002 — Reward Draft needs player-facing skip language
 
-**Status**: Documented; not implemented.
+**Status**: Implemented as part of Feature 032; the permanent DEMO-001 return
+guard remains in place.
 
 **Reported behavior**: Reward Draft currently presents `Decline all`. Players
 expect a clear way to skip the rewards and continue the run, and the existing

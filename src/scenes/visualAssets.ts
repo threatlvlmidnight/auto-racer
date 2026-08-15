@@ -1,4 +1,8 @@
 import type { EntrantId, Origin, RegionId } from "../simulation/types";
+import { UI_CHROME_MASTER_TEXTURE_KEY } from "./uiChrome";
+
+/** Stable runtime key for the optional transparent control master. */
+export const UI_CHROME_ASSET_KEY = UI_CHROME_MASTER_TEXTURE_KEY;
 
 export type ProductionBackdropKey =
   | "scene-race-start"

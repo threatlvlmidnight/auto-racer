@@ -6,7 +6,7 @@ import {
   type UnconditionalStatContribution,
 } from "../simulation/laps";
 import { STOCK_PHYSICAL_STATS, type PhysicalStats } from "../simulation/tracks";
-import type { ItemDefinition, ItemPhysicalContributionEvidence, VehicleBuild } from "../simulation/types";
+import type { ItemDefinition, ItemPhysicalContributionEvidence, LiveStatChange, VehicleBuild } from "../simulation/types";
 import { conditionLabel as physicsConditionLabel, formatStatDelta, statDefinition } from "./itemPresentation";
 
 /**
@@ -19,6 +19,58 @@ export type VehicleStatKey = PhysicalStatTarget;
 export const VEHICLE_STAT_ORDER: readonly VehicleStatKey[] = [
   "acceleration", "topSpeed", "brakingPower", "corneringSpeed",
 ];
+
+export interface LiveStatLineModel {
+  stat: VehicleStatKey;
+  label: string;
+  value: number;
+  valueLabel: string;
+  delta: number;
+  deltaLabel: string;
+  marker: "↑" | "↓" | "→";
+  sourceLabel: string | null;
+  amplifierLabel: string | null;
+  changed: boolean;
+}
+
+export interface LiveStatPanelState {
+  lines: readonly LiveStatLineModel[];
+  consumedBoundaryIds: readonly string[];
+}
+
+/** Pure, idempotent projection of retained stat boundaries for the watched-race panel. */
+export function reduceLiveStatPanel(
+  state: LiveStatPanelState,
+  changes: readonly LiveStatChange[],
+): LiveStatPanelState {
+  const consumed = new Set(state.consumedBoundaryIds);
+  const latest = new Map(state.lines.map((line) => [line.stat, { ...line, changed: false }]));
+  for (const change of changes) {
+    if (consumed.has(change.boundaryId) || change.stat === "time") continue;
+    consumed.add(change.boundaryId);
+    const definition = statDefinition(change.stat);
+    const decimals = Number.isInteger(change.currentValue) ? 0 : 1;
+    const deltaDecimals = Number.isInteger(change.delta) ? 0 : 1;
+    latest.set(change.stat, {
+      stat: change.stat,
+      label: definition.compactLabel,
+      value: change.currentValue,
+      valueLabel: `${change.currentValue.toFixed(decimals)} ${definition.unit}`,
+      delta: change.delta,
+      deltaLabel: `${change.delta >= 0 ? "+" : ""}${change.delta.toFixed(deltaDecimals)} ${definition.unit}`,
+      marker: change.delta > 0 ? "↑" : change.delta < 0 ? "↓" : "→",
+      sourceLabel: change.sourceItemName,
+      amplifierLabel: change.amplifierSources.length === 0
+        ? null
+        : change.amplifierSources.map((source) => `${source.sourceItemName} +${source.magnitudePercent}%`).join(", "),
+      changed: true,
+    });
+  }
+  return {
+    lines: VEHICLE_STAT_ORDER.flatMap((stat) => latest.has(stat) ? [latest.get(stat)!] : []),
+    consumedBoundaryIds: [...consumed],
+  };
+}
 
 export type VehicleStatContext =
   | { kind: "stock" }

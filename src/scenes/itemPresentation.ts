@@ -1,4 +1,5 @@
 import { isCountSynergyBuff, isValueScaledBuff, type PhysicalStatTarget } from "../simulation/buffs";
+import { matchesTarget, resolveConditionPercent } from "../simulation/synergy";
 import { applyTierBonus } from "../simulation/tiering";
 import { enumerateHeldItems } from "../simulation/garage";
 import type { GarageDisposition, PlacementPreview } from "../simulation/garage";
@@ -122,6 +123,55 @@ export interface RelationshipEvidence {
   matchCount?: number;
   state: "satisfied" | "unsatisfied" | "ineligible";
   explanation: string;
+}
+
+export interface EconomyReceiptLine {
+  sourceItemId: string;
+  sourceItemName: string;
+  tier: 1 | 2 | 3;
+  locationLabel: string;
+  baseValue: number;
+  modifier: number;
+  total: number;
+}
+
+export function economyReceiptLines(contributions: readonly import("../simulation/types").EconomyContribution[], baseValue = 0): readonly EconomyReceiptLine[] {
+  return contributions.map((contribution) => ({
+    sourceItemId: contribution.sourceItemId,
+    sourceItemName: contribution.sourceItemName,
+    tier: contribution.tier,
+    locationLabel: contribution.heldLocation.area === "vehicle" ? `Vehicle ${contribution.heldLocation.slotId}` : `Storage ${contribution.heldLocation.index + 1}`,
+    baseValue,
+    modifier: contribution.amount,
+    total: baseValue + contribution.amount,
+  }));
+}
+
+/** Complete, mechanic-backed explanation of an item's authored relationships. */
+export function synergyRelationshipProjection(
+  item: ItemDefinition,
+  installedItems: readonly ItemDefinition[],
+): readonly RelationshipEvidence[] {
+  return (item.synergyEffects ?? []).map((effect, index) => {
+    const matching = installedItems.filter((candidate) => candidate !== item && matchesTarget(candidate, effect.target));
+    const current = resolveConditionPercent(effect.condition, matching.length);
+    const targetLabel = effect.target.kind === "tag" ? `${effect.target.tag} items` : `${effect.target.category} items`;
+    const targetStatLabel = statDefinition(effect.targetStat ?? "time").label;
+    const authoredMagnitudeLabel = effect.condition.kind === "linear-per-count"
+      ? `+${effect.condition.percentPerMatch}% per match`
+      : `+${effect.condition.bonusPercent}% at exactly ${effect.condition.count}`;
+    return {
+      sourceItemId: `${item.id}-relationship-${index}`,
+      kind: "synergy",
+      targetLabel,
+      targetStatLabel,
+      authoredMagnitudeLabel,
+      currentMagnitudeLabel: current === null ? "Inactive" : `+${current}%`,
+      matchCount: matching.length,
+      state: current === null ? "unsatisfied" : "satisfied",
+      explanation: `${effect.appliesTo === "self" ? "This item" : "Matching items"} target ${targetStatLabel.toLowerCase()} through ${targetLabel}: ${current === null ? "condition not met" : `current result ${current}%`}.`,
+    } satisfies RelationshipEvidence;
+  });
 }
 
 export interface ResolvedContributionLine {
@@ -602,6 +652,7 @@ export type TagInspectionAction =
   | { kind: "hover"; tag: string }
   | { kind: "leave" }
   | { kind: "pin"; tag: string }
+  | { kind: "focus"; tag: string }
   | { kind: "unpin" };
 
 /**
@@ -620,6 +671,8 @@ export function reduceTagInspection(
     case "leave":
       return state.mode === "pinned" ? state : IDLE_TAG_INSPECTION;
     case "pin":
+      return { mode: "pinned", tag: action.tag };
+    case "focus":
       return { mode: "pinned", tag: action.tag };
     case "unpin":
       return IDLE_TAG_INSPECTION;

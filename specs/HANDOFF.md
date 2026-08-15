@@ -1,5 +1,31 @@
 # Handoff
 
+## Latest session — Feature 032 automated implementation complete (2026-08-15)
+
+Feature 032 has completed its automated implementation and release-gate work.
+The current task ledger is 107/110 complete. Completed scope includes retained
+live-stat feedback, tag/synergy and scaling inspection, supplier receipts and
+restock, inventory hosts with sale/Undo, settlement/economy/history, balance
+evidence, approved UI chrome runtime integration, replay invariants, and the
+catalog audit.
+
+Evidence is recorded in
+[`specs/032-demo-feedback-bug-pass/acceptance-evidence.md`](032-demo-feedback-bug-pass/acceptance-evidence.md),
+[`specs/032-demo-feedback-bug-pass/balance-evidence.md`](032-demo-feedback-bug-pass/balance-evidence.md),
+and [`specs/032-demo-feedback-bug-pass/ui-asset-manifest.md`](032-demo-feedback-bug-pass/ui-asset-manifest.md).
+The automated gate passed with 81 test files / 1,531 tests, lint, production
+build, and Pages build.
+
+Remaining Feature 032 work is explicitly manual: T100 visual-priority review,
+T101 in-game asset-sheet decision, and T108 pointer/touch/keyboard and
+viewport walkthrough. Feature 032 must not be marked fully complete until
+those reviews are recorded. DEMO-001 remains a documented temporary guard with
+the exact Reward Draft return fix deferred; DEMO-002 `SKIP REWARDS` is shipped.
+
+Feature 033 remains the next implementation owner after those reviews. Its
+scope and handoff remain under `specs/033-race-enrichment/`; no Feature 033
+mechanics were introduced by this pass.
+
 ## Features 034 and 035 recorded as TODO; Feature 033 clarification next
 
 Hosted-demo follow-up is now split into two protected future features:
@@ -9,11 +35,15 @@ reserved `Adjustable` vocabulary, whole-game overlap/readability QA, and
 rarity/upgrade card feedback. Both have intake files and deferred-backlog rows.
 
 Feature 033 remains the active design target while Feature 032 is implemented
-elsewhere. The consolidated owner clarification response is recorded in
-`specs/033-race-enrichment/clarification-questionnaire.md`; only Q7's exact
-active-signature build-support rule remains unresolved before the specification
-is finalized. The repository-local `speckit.clarify` agent now presents all
-material questions in one recommended questionnaire and accepts a batch answer.
+elsewhere. Specification, clarification, planning, contracts, validation guide,
+75 implementation tasks, and consistency analysis remediation are complete under
+`specs/033-race-enrichment/`.
+Active signatures use a resolved-stat threshold, so native, foreign, and mixed
+items count equally when they move a build toward the driver's preferred
+engineering outcome. Feature 033 is ready for `/speckit.implement` once Feature
+032 completes; implementation must begin with task T006 reconciliation. The repository-local
+`speckit.clarify` agent now presents all material questions in one recommended
+questionnaire and accepts a batch answer.
 
 ## Feature 032 tasks generated — analyze next
 

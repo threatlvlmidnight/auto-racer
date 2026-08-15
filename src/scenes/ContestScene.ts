@@ -17,10 +17,13 @@ import {
   type PlaybackSpeed,
 } from "../simulation/playback";
 import { generateTrack, pointAtProgress } from "../simulation/tracks";
+import { STOCK_PHYSICAL_STATS, type PhysicalStats } from "../simulation/tracks";
+import { deriveLiveStatChangesByLap } from "../simulation/laps";
 import {
   SLOT_CAPACITY,
   type NCarContestResult,
   type OfferedItem,
+  type ItemPhysicsContribution,
   type VehicleBuild,
   type LockedRaceSetup,
 } from "../simulation/types";
@@ -30,8 +33,8 @@ import { resolvedItemEvidence, type ItemPresentationContext } from "./itemPresen
 import { contestSceneInput, raceLapLabel } from "./runPresentation";
 import { addDemoBackdrop, addRunStamp, DISPLAY_FONT, UI_FONT } from "./demoTheme";
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
-import { recordedLapVehicleStatModel, vehicleItemLookup } from "./vehicleStatPresentation";
-import { createVehicleStatPanel } from "./vehicleStatVisuals";
+import { recordedLapVehicleStatModel, reduceLiveStatPanel, vehicleItemLookup, type LiveStatPanelState } from "./vehicleStatPresentation";
+import { createLiveStatPanel, createVehicleStatPanel } from "./vehicleStatVisuals";
 import { projectionPresentation } from "./raceProjectionPresentation";
 import {
   freshPlaybackControlPlan,
@@ -80,6 +83,8 @@ export class ContestScene extends Phaser.Scene {
   private trails = new Map<string, { x: number; y: number }[]>();
   private trailGraphics?: Phaser.GameObjects.Graphics;
   private playerLapLabel?: Phaser.GameObjects.Text;
+  private liveStatState: LiveStatPanelState = { lines: [], consumedBoundaryIds: [] };
+  private liveStatPanel?: Phaser.GameObjects.Container;
   private projectionState: LiveProjectionState = { kind: "awaiting-first-split", label: "Awaiting Lap 1 Split" };
   private projectionHeadlineText?: Phaser.GameObjects.Text;
   private projectionSplitText?: Phaser.GameObjects.Text;
@@ -159,10 +164,29 @@ export class ContestScene extends Phaser.Scene {
     // fresh fast-speed (2×) PresentationClock that consumes the immutable
     // schedule at the legacy rate. The controller owns schedule time,
     // crossed-boundary evidence, and the single results-ready signal.
-    const boundaryView = nCarBoundaryView(this.schedule, this.result);
+    const schedule = this.schedule;
+    const contestResult = this.result;
+    if (!schedule || !contestResult) return;
+    const playerResult = contestResult.cars.find((car) => car.role === "player");
+    if (!playerResult) return;
+    const setupDelta: Partial<ItemPhysicsContribution> = playerResult.setup?.totalDelta ?? {};
+    const baselineStats: PhysicalStats = {
+      acceleration: STOCK_PHYSICAL_STATS.acceleration + (setupDelta.accelerationDelta ?? 0),
+      topSpeed: STOCK_PHYSICAL_STATS.topSpeed + (setupDelta.topSpeedDelta ?? 0),
+      brakingPower: STOCK_PHYSICAL_STATS.brakingPower + (setupDelta.brakingPowerDelta ?? 0),
+      corneringSpeed: STOCK_PHYSICAL_STATS.corneringSpeed + (setupDelta.corneringSpeedDelta ?? 0),
+    };
+    const boundaryView = {
+      ...nCarBoundaryView(schedule, contestResult),
+      playerStatChanges: deriveLiveStatChangesByLap(
+        playerResult.laps, baselineStats,
+        new Map<string, OfferedItem>([...contestResult.board, ...contestResult.storage].map((item) => [item.id, item])),
+      ),
+    };
     this.playbackController = createPlaybackController(boundaryView);
     this.controlPlan = freshPlaybackControlPlan();
     this.lastRenderedPlayerLapIndex = -1;
+    this.liveStatState = { lines: [], consumedBoundaryIds: [] };
     this.previousFinishedCarIds = [];
     this.projectionState = { kind: "awaiting-first-split", label: "Awaiting Lap 1 Split" };
     this.trails.clear();
@@ -252,6 +276,12 @@ export class ContestScene extends Phaser.Scene {
       } else if (event.kind === "item-callout" && event.callout) {
         this.flashBoardItem(event.callout.item.id);
         this.tickerText?.setText(`You fire the ${event.callout.item.name}.`);
+      } else if (event.kind === "live-stat-change" && event.statChanges) {
+        this.liveStatState = reduceLiveStatPanel(this.liveStatState, event.statChanges);
+        this.vehicleStatPanel?.destroy();
+        this.vehicleStatPanel = undefined;
+        this.liveStatPanel?.destroy();
+        this.liveStatPanel = createLiveStatPanel(this, SIDEBAR_X - 72, 258, this.liveStatState).setDepth(72);
       } else if (event.kind === "checkpoint" && event.projection) {
         this.projectionState = updateLiveProjectionFromCheckpoint(this.projectionState, event.projection);
         this.renderProjection();
@@ -539,6 +569,8 @@ export class ContestScene extends Phaser.Scene {
    * (contract §5, research.md Decision 4).
    */
   private renderVehicleStatPanel(): void {
+    this.liveStatPanel?.destroy();
+    this.liveStatPanel = undefined;
     this.vehicleStatPanel?.destroy();
     this.vehicleStatPanel = undefined;
     if (!this.result || !this.playedBuild) return;

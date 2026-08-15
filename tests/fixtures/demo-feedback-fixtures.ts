@@ -21,7 +21,7 @@ function requireCatalogItem(id: string): ItemDefinition {
 }
 
 /** Direct physics item — flat authored stat delta, no buff/synergy engine. */
-export const directFixture = requireCatalogItem("neutral-forged-pistons");
+export const directFixture = requireCatalogItem("neutral-copper-core-radiator");
 
 /** Flat stat-targeted amplifier (always-on buff on a physical stat). */
 export const amplifierFixture = requireCatalogItem("rook-instrumented-cooling-jacket");
@@ -44,6 +44,9 @@ export const cooldownLapFixture = requireCatalogItem("voss-auxiliary-starting-ta
 
 /** Exact-count synergy (threshold relationship, not linear-per-count). */
 export const exactCountSynergyFixture = requireCatalogItem("rook-interchangeable-test-mounts");
+
+/** Linear-per-count self synergy on a physics item (composition-scaled direct). */
+export const synergyFixture = requireCatalogItem("neutral-forged-pistons");
 
 /** The three authored economy items (US4 completion targets). */
 export const economyFixtures = {

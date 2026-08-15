@@ -2,7 +2,7 @@
 
 **Created**: 2026-08-15
 
-**Status**: Clarification pending — consolidated owner questionnaire prepared.
+**Status**: Clarification complete — formal specification created.
 
 ## Problem
 

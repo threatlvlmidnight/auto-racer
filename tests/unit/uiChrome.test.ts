@@ -4,10 +4,14 @@ import { join } from "node:path";
 import { inflateSync } from "node:zlib";
 import {
   EMPTY_UI_CHROME_REGISTRY,
+  APPROVED_UI_CHROME_REGISTRY,
   UI_CHROME_MASTER_SIZE,
   UI_CHROME_STATES,
+  UI_CHROME_TEXT_COLORS,
+  UI_CHROME_STATE_REGION_KEYS,
   nineSliceMarginsValid,
   sourceRectInBounds,
+  uiChromeRegionForState,
   uiChromeRegionByKey,
   withUIChromeRegion,
   type UIChromeRegion,
@@ -160,6 +164,31 @@ describe("feature 032 approved control-sheet masters (T006)", () => {
   });
 });
 
+function channel(value: number): number {
+  const normalized = value / 255;
+  return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+}
+
+function luminance(hex: string): number {
+  const value = Number.parseInt(hex.slice(1), 16);
+  return 0.2126 * channel((value >> 16) & 0xff)
+    + 0.7152 * channel((value >> 8) & 0xff)
+    + 0.0722 * channel(value & 0xff);
+}
+
+function contrast(a: string, b: string): number {
+  const [lighter, darker] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+describe("chrome-backed button text contrast", () => {
+  it("keeps every semantic-state label above WCAG AA against the lightest crop interior", () => {
+    for (const state of UI_CHROME_STATES) {
+      expect(contrast(UI_CHROME_TEXT_COLORS[state], "#fffdf7"), state).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
 // --- Feature 032 T011: semantic crop-region registry contract ----------
 
 const sampleRegion: UIChromeRegion = {
@@ -211,3 +240,42 @@ describe("semantic crop-region registry (T011)", () => {
   });
 });
 
+describe("approved crop and nine-slice contract (T089/T090)", () => {
+  it("registers named crops in bounds without overlap", () => {
+    const regions = APPROVED_UI_CHROME_REGISTRY.regions;
+    expect(regions.length).toBeGreaterThanOrEqual(15);
+    regions.forEach((region) => {
+      expect(region.key).toMatch(/^[a-z0-9-]+$/);
+      expect(sourceRectInBounds(region.sourceRect)).toBe(true);
+      expect(nineSliceMarginsValid(region)).toBe(true);
+    });
+    for (let i = 0; i < regions.length; i += 1) {
+      for (let j = i + 1; j < regions.length; j += 1) {
+        const a = regions[i].sourceRect;
+        const b = regions[j].sourceRect;
+        const overlap = a.x < b.x + b.width && a.x + a.width > b.x
+          && a.y < b.y + b.height && a.y + a.height > b.y;
+        expect(overlap, `${regions[i].key} overlaps ${regions[j].key}`).toBe(false);
+      }
+    }
+  });
+
+  it("maps every interactive state to a stable semantic region or explicit fallback", () => {
+    (["primary", "secondary", "compact", "danger", "selector"] as const).forEach((family) => {
+      UI_CHROME_STATES.forEach((state) => {
+        const region = uiChromeRegionForState(family, state);
+        expect(region).not.toBeNull();
+        expect(UI_CHROME_STATE_REGION_KEYS[family][state]).toBe(region?.key);
+        expect(nineSliceMarginsValid(region!)).toBe(true);
+      });
+    });
+    expect(uiChromeRegionForState("divider", "normal")).toBeNull();
+  });
+
+  it("keeps nine-slice source minimums larger than the retained corner margins", () => {
+    APPROVED_UI_CHROME_REGISTRY.regions.forEach((region) => {
+      expect(region.sourceRect.width).toBeGreaterThanOrEqual(region.nineSliceMargins.left + region.nineSliceMargins.right);
+      expect(region.sourceRect.height).toBeGreaterThanOrEqual(region.nineSliceMargins.top + region.nineSliceMargins.bottom);
+    });
+  });
+});

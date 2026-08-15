@@ -2,6 +2,8 @@ import Phaser from "phaser";
 import type { Run } from "../simulation/run";
 import type { ProductionBackdropKey } from "./visualAssets";
 import { LOGICAL_WIDTH } from "./layout";
+import { createRuntimeTextControl } from "./uiChrome";
+export { practiceFocusVisible } from "./focusPresentation";
 
 export const DEMO_COLORS = {
   ink: 0x101817,
@@ -30,14 +32,10 @@ export function addDemoBackdrop(
   const scale = Math.max(800 / source.width, 450 / source.height);
   image.setDisplaySize(source.width * scale, source.height * scale);
   scene.add.rectangle(400, 225, 800, 450, DEMO_COLORS.ink, overlayAlpha).setDepth(-99);
-  const frame = scene.add.graphics().setDepth(90);
-  frame.lineStyle(2, DEMO_COLORS.silver, 0.62).strokeRect(10, 10, 780, 430);
-  frame.lineStyle(1, DEMO_COLORS.porcelain, 0.25).strokeRect(15, 15, 770, 420);
 }
 
 export function addHeaderBand(scene: Phaser.Scene): void {
   scene.add.rectangle(400, 50, 800, 100, DEMO_COLORS.ink, 0.86).setDepth(-20);
-  scene.add.rectangle(400, 99, 800, 2, DEMO_COLORS.italianRed, 0.9).setDepth(-19);
 }
 
 /**
@@ -87,6 +85,8 @@ export function addPaperPanel(
 
 export interface DemoButtonOptions {
   fontSize?: string;
+  width?: number;
+  height?: number;
   // Most buttons here navigate/commit once and get torn down with their scene's
   // next render(), so a single-fire listener is the safe default. Controls meant
   // to be pressed repeatedly without a re-render in between (pause, speed) opt in.
@@ -102,20 +102,29 @@ export function createDemoButton(
   enabled = true,
   options: DemoButtonOptions = {},
 ): Phaser.GameObjects.Text {
-  const button = scene.add.text(x, y, label, {
+  const button = createRuntimeTextControl(scene, {
+    family: "primary",
+    x,
+    y,
+    width: options.width ?? Math.max(150, label.length * 9 + 34),
+    height: options.height ?? 42,
+    label,
+    action,
+    enabled,
     fontFamily: UI_FONT,
     fontSize: options.fontSize ?? "14px",
-    fontStyle: "bold",
-    color: enabled ? "#f7f3e9" : "#77817f",
-    backgroundColor: enabled ? "#b83232" : "#303a39",
-    padding: { x: 15, y: 8 },
-  }).setOrigin(0.5);
-  if (enabled) {
-    button.setInteractive({ useHandCursor: true });
-    button.on("pointerover", () => button.setBackgroundColor("#d9483f"));
-    button.on("pointerout", () => button.setBackgroundColor("#b83232"));
-    if (options.repeatable) button.on("pointerdown", action);
-    else button.once("pointerdown", action);
+  });
+  if (enabled && options.repeatable) {
+    const targets = button.getData("uiChromeInputTargets") as Phaser.GameObjects.GameObject[] | undefined;
+    const activate = button.getData("uiChromeActivate") as (() => void) | undefined;
+    (targets ?? [button]).forEach((target) => {
+      target.removeAllListeners("pointerdown");
+      target.on("pointerdown", () => {
+        const setState = button.getData("setUIChromeState") as ((state: "pressed") => void) | undefined;
+        setState?.("pressed");
+        (activate ?? action)();
+      });
+    });
   }
   return button;
 }
@@ -137,19 +146,22 @@ export function applyPracticeFocusRing(
   buttons: readonly Phaser.GameObjects.Text[],
 ): PracticeFocusHandle {
   const ring = scene.add.graphics().setDepth(200);
-  let index = 0;
+  let index = -1;
 
   function draw(): void {
     ring.clear();
-    const button = buttons[index];
+    const button = index >= 0 ? buttons[index] : undefined;
     if (!button) return;
-    const bounds = button.getBounds();
+    const frame = button.getData("uiChromeFrame") as Phaser.GameObjects.NineSlice | Phaser.GameObjects.Rectangle | undefined;
+    const bounds = frame?.getBounds() ?? button.getBounds();
     ring.lineStyle(3, 0x7fd9ff, 1).strokeRect(bounds.x - 4, bounds.y - 4, bounds.width + 8, bounds.height + 8);
   }
 
   function move(delta: number): void {
     if (buttons.length === 0) return;
-    index = ((index + delta) % buttons.length + buttons.length) % buttons.length;
+    index = index < 0
+      ? delta > 0 ? 0 : buttons.length - 1
+      : ((index + delta) % buttons.length + buttons.length) % buttons.length;
     draw();
   }
 

@@ -124,8 +124,11 @@ export function createItemCard(
   // rendered title height rather than fixed offsets so the shared compact card
   // never prints its hierarchy on top of itself.
   const metadataY = -options.height / 2 + 4 + name.height + 2;
+  const tagLine = model.conditionTokens.length > 0
+    ? model.conditionTokens.slice(0, 2).map((token) => `◆ ${token}`).join(" ")
+    : `TAGS: ${model.stateBadges.length > 0 ? model.stateBadges.map((badge) => badge.label).join(" · ") : "none"}`;
   const metadata = scene.add.text(-options.width / 2 + 8, metadataY,
-    `${model.categoryLabel} · ${model.originLabel}${model.priceLabel ? ` · ${model.priceLabel}` : ""}`, {
+    `${model.categoryLabel} · ${model.originLabel}${model.priceLabel ? ` · ${model.priceLabel}` : ""}\n${tagLine}`, {
       fontSize: offerEmphasis ? "10px" : "8px", fontFamily: UI_FONT, color: "#b8c0c2",
       wordWrap: { width: options.width - 16 },
       maxLines: 1,
@@ -190,7 +193,7 @@ export function createItemInspectorFromModel(
       wordWrap: { width: options.width - 20 },
     });
   const identity = scene.add.text(-options.width / 2 + 10, -options.height / 2 + 28,
-    `${model.identity.categoryLabel} · ${model.identity.originLabel}${model.identity.priceLabel ? ` · ${model.identity.priceLabel}` : ""}${model.identity.affordabilityLabel ? ` · ${model.identity.affordabilityLabel}` : ""}`, {
+    `${model.identity.categoryLabel} · ${model.identity.originLabel}${model.identity.priceLabel ? ` · ${model.identity.priceLabel}` : ""}${model.identity.affordabilityLabel ? ` · ${model.identity.affordabilityLabel}` : ""}\nTAGS: ${model.identity.synergyTags.join(" · ") || "none"}`, {
       fontSize: "10px", fontFamily: UI_FONT, color: "#9eb5c9", wordWrap: { width: options.width - 20 },
     });
   const effectLines = model.effects.map((effect) => {

@@ -1,5 +1,5 @@
 import { drawItem } from "./draft";
-import { commitGarageCommand, sellItem, type GarageDestination, type GarageSource } from "./garage";
+import { commitGarageCommand, sellItem, undoSale, type GarageDestination, type GarageSource } from "./garage";
 import { poolForCrossPollination, poolForEntrant } from "./itemPools";
 import {
   activateChoice,
@@ -14,7 +14,7 @@ import {
   type SponsorObjective,
 } from "./run";
 import { resolveDuplicateAcquisition } from "./tiering";
-import { TAG_WEIGHT, type Build, type ContestResult, type OfferedItem, type VehicleBuild } from "./types";
+import { TAG_WEIGHT, type AcquisitionReceipt, type Build, type ContestResult, type OfferedItem, type VehicleBuild } from "./types";
 
 export type RandomSource = () => number;
 
@@ -58,6 +58,7 @@ export interface PartsSupplierPayload {
   unavailable: boolean;
   restockUsed: boolean;
   purchases: string[];
+  receipts?: AcquisitionReceipt[];
 }
 
 export type SponsorOption =
@@ -167,7 +168,7 @@ function createSupplierPayload(
   // identityTag-based narrowing on top (research.md Decision 3).
   const eligible = poolForEntrant(run.identity.entrantId);
   if (eligible.length === 0) {
-    return { kind: "parts-supplier", stock: [], unavailable: true, restockUsed: false, purchases: [] };
+    return { kind: "parts-supplier", stock: [], unavailable: true, restockUsed: false, purchases: [], receipts: [] };
   }
   return {
     kind: "parts-supplier",
@@ -180,6 +181,7 @@ function createSupplierPayload(
     unavailable: false,
     restockUsed: false,
     purchases: [],
+    receipts: [],
   };
 }
 
@@ -346,10 +348,11 @@ export function purchaseStock(
   if (stock.item.price > run.credits) {
     throw new RunTransitionError("insufficient-credits", `Cannot afford ${stock.item.name}`);
   }
-  const acquisition = applyAcquisition(run.build, stock.item, placement);
+  const acquisition = applyAcquisition(run.build, stock.item, placement, stockId);
   const purchaseTransaction = transactionFor(run, encounterId, "purchase", -stock.item.price);
   const afterPurchase: Run = {
     ...run,
+    saleUndo: run.saleUndo ? { ...run.saleUndo, valid: false } : undefined,
     credits: purchaseTransaction.balanceAfter,
     creditTransactions: [...run.creditTransactions, purchaseTransaction],
   };
@@ -363,6 +366,7 @@ export function purchaseStock(
         ...payload,
         stock: payload.stock.map((entry) => entry.id === stockId ? { ...entry, state: "purchased" } : entry),
         purchases: [...payload.purchases, stock.item.id],
+        receipts: [...(payload.receipts ?? []), acquisition.receipt],
       } as EncounterPayload,
     },
   };
@@ -393,10 +397,16 @@ export function restockSupplier(
       payload: {
         ...payload,
         restockUsed: true,
-        stock: payload.stock.map((entry) => entry.state === "purchased" || entry.locked ? entry : {
-          ...entry,
+        // Restock is an atomic replacement of the complete offer surface:
+        // old purchase/lock state cannot leak into the new three-slot offer.
+        stock: Array.from({ length: 3 }, (_, index) => ({
+          id: `${encounterId}-restock-${index + 1}`,
           item: eligible[Math.min(eligible.length - 1, Math.floor(rng() * eligible.length))],
-        }),
+          state: "available" as const,
+          locked: false,
+        })),
+        purchases: [],
+        receipts: [],
       } as EncounterPayload,
     },
   };
@@ -421,11 +431,46 @@ export function sellHeldItem(
     throw new RunTransitionError("invalid-action", "Cannot sell: no item at that position");
   }
   const transaction = transactionFor(run, encounterId, "sell-back", result.creditsGained);
+  const receipt = { ...result.receipt, creditsBefore: run.credits, creditsAfter: transaction.balanceAfter };
   return {
     ...run,
     build: result.build,
     credits: transaction.balanceAfter,
     creditTransactions: [...run.creditTransactions, transaction],
+    saleUndo: { receipt, valid: true },
+  };
+}
+
+/** Inventory-host sale path for surfaces that do not own an active encounter. */
+export function sellInventoryItem(
+  run: Run,
+  source: Extract<GarageSource, { area: "vehicle" | "storage" }>,
+): Run {
+  if (run.status !== "active") throw new RunTransitionError("invalid-action", "Inventory is unavailable outside an active run");
+  const result = sellItem(run.build, source);
+  if (result.kind === "failure") throw new RunTransitionError("invalid-action", "Cannot sell: no item at that position");
+  const contextId = run.activeEncounter?.id ?? `${run.id}-inventory-${run.stageIndex}`;
+  const transaction = transactionFor(run, contextId, "sell-back", result.creditsGained);
+  const receipt = { ...result.receipt, creditsBefore: run.credits, creditsAfter: transaction.balanceAfter };
+  return { ...run, build: result.build, credits: transaction.balanceAfter,
+    creditTransactions: [...run.creditTransactions, transaction], saleUndo: { receipt, valid: true } };
+}
+
+export function invalidateSaleUndo(run: Run): Run {
+  return run.saleUndo?.valid ? { ...run, saleUndo: { ...run.saleUndo, valid: false } } : run;
+}
+
+export function undoSoldItem(run: Run, encounterId: string): Run {
+  if (!run.saleUndo?.valid) throw new RunTransitionError("invalid-action", "Sale Undo is no longer available");
+  const undo = undoSale(run.build, run.saleUndo.receipt);
+  if (undo.kind === "invalid") throw new RunTransitionError("invalid-action", "The original inventory location is unavailable");
+  const sale = run.saleUndo.receipt;
+  return {
+    ...run,
+    build: undo.build,
+    credits: sale.creditsBefore,
+    creditTransactions: [...run.creditTransactions, transactionFor(run, encounterId, "sell-back", -sale.totalPayout)],
+    saleUndo: { ...run.saleUndo, valid: false },
   };
 }
 
@@ -534,6 +579,22 @@ interface AcquisitionApplication {
   build: VehicleBuild;
   /** >0 only for a max-tier-convert resolution (016-duplicate-item-tiering contract §5). */
   duplicateCreditsGained: number;
+  receipt: AcquisitionReceipt;
+}
+
+function acquisitionReceipt(item: OfferedItem, resolution: ReturnType<typeof resolveDuplicateAcquisition>, offerId = item.id): AcquisitionReceipt {
+  const upgraded = resolution.kind === "tier-upgrade";
+  const oldTier = upgraded ? resolution.fromTier : null;
+  const newTier = upgraded ? resolution.toTier : resolution.kind === "new" ? 1 : null;
+  return {
+    offerId,
+    status: upgraded ? "upgraded" : resolution.kind === "new" ? "purchased" : "unavailable",
+    itemId: item.id,
+    itemName: item.name,
+    oldTier,
+    newTier,
+    changedEffects: upgraded ? [{ label: "Authored effect", oldValue: `${oldTier}× tier strength`, newValue: `${newTier}× tier strength` }] : [],
+  };
 }
 
 /**
@@ -547,13 +608,14 @@ function applyAcquisition(
   build: VehicleBuild,
   item: OfferedItem,
   placement: PlacementCommand | undefined,
+  offerId?: string,
 ): AcquisitionApplication {
   const resolution = resolveDuplicateAcquisition(build, item);
   if (resolution.kind === "new") {
     if (!placement) {
       throw new RunTransitionError("invalid-action", `A placement is required to acquire ${item.name}`);
     }
-    return { build: applyPlacement(build, item, placement), duplicateCreditsGained: 0 };
+    return { build: applyPlacement(build, item, placement), duplicateCreditsGained: 0, receipt: acquisitionReceipt(item, resolution, offerId) };
   }
   if (resolution.kind === "tier-upgrade") {
     const updatedBuild = resolution.area === "vehicle"
@@ -565,9 +627,9 @@ function applyAcquisition(
         ...build,
         storage: build.storage.map((position) => position.index === resolution.index ? { ...position, tier: resolution.toTier } : position),
       };
-    return { build: updatedBuild, duplicateCreditsGained: 0 };
+    return { build: updatedBuild, duplicateCreditsGained: 0, receipt: acquisitionReceipt(item, resolution, offerId) };
   }
-  return { build, duplicateCreditsGained: resolution.creditsGained };
+  return { build, duplicateCreditsGained: resolution.creditsGained, receipt: acquisitionReceipt(item, resolution, offerId) };
 }
 
 /**

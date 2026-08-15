@@ -11,7 +11,6 @@ import {
   addPaperPanel,
   applyPracticeFocusRing,
   createDemoButton,
-  DEMO_COLORS,
   DISPLAY_FONT,
   PRACTICE_CONTROL_FONT_SIZE,
   UI_FONT,
@@ -19,6 +18,7 @@ import {
 } from "./demoTheme";
 import { GARAGE_BACKDROP_BY_ENTRANT } from "./visualAssets";
 import { configureHiDpiScene, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "./layout";
+import { createEntrantCardFrame } from "./entrantChrome";
 
 export interface EntrantSelectSceneData {
   /** Present only when the caller's guard already blocked selection. */
@@ -152,10 +152,17 @@ export class EntrantSelectScene extends Phaser.Scene {
     const x = startX + choice.order * (CARD_WIDTH + CARD_GAP);
     const centerY = CARD_TOP + CARD_HEIGHT / 2;
 
-    this.track(this.add.rectangle(x, centerY, CARD_WIDTH, CARD_HEIGHT,
-      choice.selected ? 0x2c4640 : 0x1b2427, 0.94)
-      .setStrokeStyle(choice.selected ? 3 : 2,
-        choice.selected ? DEMO_COLORS.italianRedBright : DEMO_COLORS.steel, choice.selected ? 1 : 0.5));
+    const card = createEntrantCardFrame(
+      this,
+      x,
+      centerY,
+      choice.selected ? "selected" : "default",
+      CARD_WIDTH,
+      CARD_HEIGHT,
+    );
+    if (card) this.track(card);
+    else this.track(this.add.rectangle(x, centerY, CARD_WIDTH, CARD_HEIGHT, 0x1b2427, 0.94)
+      .setStrokeStyle(2, 0x71858c, 0.8));
 
     // Text state token first, so selection never depends on border colour alone.
     this.track(this.add.text(x, CARD_TOP + 5, choice.selected ? `${choice.keyBinding} · SELECTED` : choice.keyBinding, {
@@ -178,7 +185,12 @@ export class EntrantSelectScene extends Phaser.Scene {
     }).setOrigin(0.5, 0));
 
     const button = createDemoButton(this, x + 20, SELECT_Y, choice.selected ? "CHOSEN" : "VIEW",
-      () => this.select(choice.entrantId), true, { fontSize: PRACTICE_CONTROL_FONT_SIZE, repeatable: true });
+      () => this.select(choice.entrantId), true, { fontSize: "12px", width: 120, height: 30, repeatable: true });
+    const inputTargets = button.getData("uiChromeInputTargets") as Phaser.GameObjects.GameObject[] | undefined;
+    (inputTargets ?? [button]).forEach((target) => {
+      target.on("pointerover", () => card?.setFrame(choice.selected ? "selected" : "focus"));
+      target.on("pointerout", () => card?.setFrame(choice.selected ? "selected" : "default"));
+    });
     this.track(button);
     return button;
   }

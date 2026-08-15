@@ -2,7 +2,7 @@
 
 **Created**: 2026-08-15
 
-**Status**: Owner response recorded; Q7 follow-up pending.
+**Status**: Complete — all owner decisions recorded.
 
 ## Owner response — 2026-08-15
 
@@ -16,9 +16,11 @@
 - **Q5 accepted**: Give each driver one signature and one passive tendency.
 - **Q6 accepted**: Signature effects are temporary and evidence-backed; stock
   physical stats remain equal.
-- **Q7 unresolved**: The owner favors an always-available passive with the named
-  active signature gated by item/build synergy, but the exact support rule still
-  needs selection below.
+- **Q7 resolved — stat threshold**: Every passive remains active with an empty
+  build. A named active signature becomes eligible when the committed build's
+  relevant resolved vehicle stat reaches the driver-authored, centrally tunable
+  threshold. Items from any origin count equally, preserving cross-pollination
+  and rival-intel exploration when foreign parts advance the preferred stat.
 - **Q8 accepted**: Passing uses proximity, pace advantage, and Composure-backed
   attack/defense rules.
 - **Q9 accepted with constraint**: Winner-change and time-swing acceptance bands
@@ -48,16 +50,15 @@
   target, measure it continuously against a representative deterministic corpus,
   and keep its balance thresholds tunable during development.
 
-## Q7 follow-up — active-signature build support
+## Q7 resolution — active-signature build support
 
 All options keep the passive tendency active even with an empty build.
 
-**Recommendation: Option A — tag threshold.** Each driver signature names one or
-more thematic item tags and requires at least a tunable number of matching held
-items (recommended initial threshold: one). Race context and Composure still
-decide whether and when it fires. This makes the synergy visible on existing
-cards, works with character-specific pools, and avoids a signature being
-secretly enabled by an opaque aggregate score.
+**Selected: Option B — resolved-stat threshold.** Each driver signature names a
+relevant physical stat and becomes eligible when the committed build reaches its
+centrally tunable threshold. Race context and Composure still decide whether and
+when it fires. The pre-race explanation shows the current value, threshold, and
+contributing item/setup sources so the gate is not opaque.
 
 | Option | Active signature support condition |
 |---|---|

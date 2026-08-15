@@ -26,14 +26,13 @@ import type { PracticeOriginInput } from "../simulation/practice";
 import { runPresentation, runRoute } from "./runPresentation";
 import {
   addDemoBackdrop,
-  addHeaderBand,
-  addPaperPanel,
   createDemoButton,
   DISPLAY_FONT,
   UI_FONT,
 } from "./demoTheme";
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
-import { worldTourItineraryModel } from "./worldTourPresentation";
+import { championshipProgressModel, worldTourItineraryModel } from "./worldTourPresentation";
+import { createRunEncounterCard, createRunLegPlaque, runLegVisualState } from "./runChrome";
 
 export class RunScene extends Phaser.Scene {
   private run!: Run;
@@ -88,7 +87,6 @@ export class RunScene extends Phaser.Scene {
     const width = LOGICAL_WIDTH;
     addDemoBackdrop(this, this.run.activeEncounter?.type === "sponsor-meeting"
       ? "scene-sponsor-negotiation" : "scene-route-headquarters", 0.58);
-    addHeaderBand(this);
     this.add.text(width / 2, 36, "1901 Auto Race Championship", {
       fontSize: "24px",
       fontFamily: DISPLAY_FONT,
@@ -96,7 +94,8 @@ export class RunScene extends Phaser.Scene {
       color: "#f4d58d",
     }).setOrigin(0.5);
     const itineraryHeader = worldTourItineraryModel(this.run)?.header;
-    this.add.text(width / 2, 78, `${model.progressLabel}  ·  ${model.creditsLabel}  ·  ${model.reputationLabel}${itineraryHeader ? `  ·  ${itineraryHeader.championshipPoints}` : ""}`, {
+    const progress = championshipProgressModel(this.run);
+    this.add.text(width / 2, 78, `${progress.label}  ·  ${model.creditsLabel}  ·  ${model.reputationLabel}${itineraryHeader ? `  ·  ${itineraryHeader.championshipPoints}` : ""}`, {
       fontSize: "18px",
       fontFamily: UI_FONT,
       fontStyle: "bold",
@@ -172,6 +171,10 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
+    this.addControl(width - 82, 402, "INVENTORY", () => {
+      this.scene.start("InventoryScene", { run: this.run, host: "run-hub", returnScene: "RunScene", returnData: {} });
+    });
+
     const itinerary = worldTourItineraryModel(this.run);
     if (this.run.worldTour?.phase === "awaiting-destination" && itinerary) {
       this.add.text(width / 2, 150, "WORLD CHAMPIONSHIP ITINERARY", {
@@ -188,32 +191,33 @@ export class RunScene extends Phaser.Scene {
     }
 
     if (itinerary && this.run.worldTour?.selectedRegions.length) {
-      itinerary.legs.forEach((leg, index) => {
-        const x = 100 + index * 150;
-        this.add.circle(x, 126, 12, leg.state === "completed" ? 0x3f8468 : leg.state === "current" ? 0xd9483f : 0x49545a);
-        this.add.text(x, 145, `${leg.ordinal}. ${leg.name}`, {
-          fontSize: "10px", fontFamily: UI_FONT, color: leg.state === "current" ? "#ffd447" : "#cddbd2",
-          align: "center", wordWrap: { width: 132 },
-        }).setOrigin(0.5, 0);
-        if (index < itinerary.legs.length - 1) this.add.line(0, 0, x + 14, 126, x + 136, 126, 0x718087, 0.7).setOrigin(0, 0);
-      });
       const currentLeg = this.run.worldTour.legs[this.run.worldTour.legs.length - 1];
+      const currentLegModel = itinerary.legs.find((leg) => leg.state === "current") ?? itinerary.legs[itinerary.legs.length - 1];
+      this.add.text(width / 2, 110, `CURRENT LEG · ${currentLegModel?.ordinal ?? currentLeg.ordinal}. ${currentLegModel?.name ?? currentLeg.regionId}`, {
+        fontSize: "10px", fontFamily: UI_FONT, fontStyle: "bold", color: "#cddbd2",
+      }).setOrigin(0.5);
       currentLeg.stages.forEach((stage, index) => {
-        const x = 67 + index * 95;
-        const active = stage.globalOrdinal === this.run.stageIndex + 1;
-        const completed = stage.globalOrdinal <= this.run.stageIndex;
+        const x = 48 + index * 100.5;
+        const visualState = runLegVisualState(stage.globalOrdinal, this.run.stageIndex);
         const label = stage.kind === "race"
           ? stage.raceKind === "local" ? "LOCAL" : "CHAMP."
           : stage.kind === "arrival" ? "ARRIVAL" : "PREP";
-        this.add.text(x, 190, `${index + 1}\n${label}`, {
-          fontSize: "10px", fontFamily: UI_FONT, fontStyle: "bold",
-          color: completed ? "#82c9aa" : active ? "#ffd447" : "#68747c", align: "center",
+        const plaque = createRunLegPlaque(this, x, 137, visualState);
+        if (!plaque) {
+          this.add.rectangle(x, 137, 82, 34, 0xf1eee5, 0.96).setStrokeStyle(2, 0x34444a, 0.9);
+        }
+        this.add.text(x, 137, `${index + 1} · ${label}`, {
+          fontSize: "8px", fontFamily: UI_FONT, fontStyle: "bold",
+          color: visualState === "active" ? "#5a421d"
+            : visualState === "completed" ? "#254838"
+              : visualState === "locked" ? "#586267" : "#243238",
+          align: "center",
         }).setOrigin(0.5);
       });
     } else {
       this.run.stages.forEach((stage, index) => {
-        this.add.text(75 + index * 55, 120, `${stage.position}. ${stage.kind.toUpperCase()}\n${stage.state}`, {
-          fontSize: "10px", fontFamily: UI_FONT, fontStyle: "bold",
+        this.add.text(75 + index * 55, 132, `${stage.position}. ${stage.kind.toUpperCase()}\n${stage.state}`, {
+          fontSize: "9px", fontFamily: UI_FONT, fontStyle: "bold",
           color: stage.state === "completed" ? "#82c9aa" : stage.state === "unavailable" ? "#68747c" : "#d9483f",
           align: "center",
         }).setOrigin(0.5);
@@ -270,7 +274,10 @@ export class RunScene extends Phaser.Scene {
 
     model.choices.forEach((choice, index) => {
       const x = width * (index === 0 ? 0.3 : 0.7);
-      addPaperPanel(this, x, 250, 292, 174, 0.88);
+      const card = createRunEncounterCard(this, x, 250);
+      if (!card) {
+        this.add.rectangle(x, 250, 308, 186, 0x101b1b, 0.92).setStrokeStyle(2, 0xaab7b8, 0.85);
+      }
       const choiceLabel = choice.type === "cross-pollination"
         ? "RIVAL INTEL"
         : choice.type.replace(/-/g, " ").toUpperCase();
@@ -287,7 +294,13 @@ export class RunScene extends Phaser.Scene {
         align: "center",
         wordWrap: { width: 260 },
       }).setOrigin(0.5);
-      this.addControl(x, 315, "Enter", () => this.selectChoice(choice.id));
+      const enter = this.addControl(x, 315, "Enter", () => this.selectChoice(choice.id));
+      const inputTargets = enter.getData("uiChromeInputTargets") as Phaser.GameObjects.GameObject[] | undefined;
+      (inputTargets ?? [enter]).forEach((target) => {
+        target.on("pointerover", () => card?.setFrame("focus"));
+        target.on("pointerout", () => card?.setFrame("default"));
+        target.on("pointerdown", () => card?.setFrame("selected"));
+      });
     });
     this.addControl(width / 2, 395, "TEST DAY · UNSCORED", () => this.openTestDay("run-hub"));
   }
@@ -351,7 +364,7 @@ export class RunScene extends Phaser.Scene {
     return parts.join(" · ");
   }
 
-  private addControl(x: number, y: number, label: string, action: () => void): void {
-    createDemoButton(this, x, y, label, action);
+  private addControl(x: number, y: number, label: string, action: () => void): Phaser.GameObjects.Text {
+    return createDemoButton(this, x, y, label, action);
   }
 }

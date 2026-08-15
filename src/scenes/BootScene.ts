@@ -2,6 +2,13 @@ import Phaser from "phaser";
 import { runtimeAssetUrl } from "../buildIdentity";
 import { DISPLAY_FONT } from "./demoTheme";
 import { configureHiDpiScene } from "./layout";
+import { registerUIChromeTextureFrames, UI_CHROME_MASTER_TEXTURE_KEY } from "./uiChrome";
+import {
+  registerRunChromeTextureFrames,
+  RUN_ENCOUNTER_CARD_TEXTURE_KEY,
+  RUN_LEG_STATUS_TEXTURE_KEY,
+} from "./runChrome";
+import { ENTRANT_CARD_TEXTURE_KEY, registerEntrantChromeTextureFrames } from "./entrantChrome";
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -28,6 +35,10 @@ export class BootScene extends Phaser.Scene {
     this.load.image("race-day", runtimeAssetUrl("assets/race-day.svg"));
     this.load.image("player-vehicle", runtimeAssetUrl("assets/player-vehicle.svg"));
     this.load.image("rival-vehicle", runtimeAssetUrl("assets/rival-vehicle.svg"));
+    this.load.image(UI_CHROME_MASTER_TEXTURE_KEY, runtimeAssetUrl("assets/ui/feature-032-controls-sheet.png"));
+    this.load.image(RUN_LEG_STATUS_TEXTURE_KEY, runtimeAssetUrl("assets/ui/feature-032-leg-status-sheet-v2.png"));
+    this.load.image(RUN_ENCOUNTER_CARD_TEXTURE_KEY, runtimeAssetUrl("assets/ui/feature-032-encounter-card-sheet-v2.png"));
+    this.load.image(ENTRANT_CARD_TEXTURE_KEY, runtimeAssetUrl("assets/ui/feature-032-entrant-card-sheet-v2.png"));
 
     // Feature 026 production-intent environment masters. They remain local so
     // the complete presentation works offline.
@@ -73,6 +84,9 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    registerUIChromeTextureFrames(this);
+    registerRunChromeTextureFrames(this);
+    registerEntrantChromeTextureFrames(this);
     this.scene.start("TitleScene");
   }
 }

@@ -2,8 +2,30 @@ import Phaser from "phaser";
 import { DEMO_COLORS, UI_FONT } from "./demoTheme";
 import {
   buildVehicleStatLayout,
+  type LiveStatPanelState,
   type VehicleStatPanelModel,
 } from "./vehicleStatPresentation";
+
+/** Compact watched-race projection over already-consumed immutable boundaries. */
+export function createLiveStatPanel(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  state: LiveStatPanelState,
+): Phaser.GameObjects.Container {
+  const children: Phaser.GameObjects.GameObject[] = [];
+  state.lines.forEach((line, index) => {
+    const source = [line.sourceLabel, line.amplifierLabel].filter(Boolean).join(" · ");
+    const text = scene.add.text(0, index * 28,
+      `${line.marker} ${line.label} ${line.valueLabel} (${line.deltaLabel})\n${source}`, {
+        fontSize: "8px", fontFamily: UI_FONT,
+        color: line.changed ? "#ffd447" : "#d7e4e7",
+        wordWrap: { width: 148 },
+      });
+    children.push(text);
+  });
+  return scene.add.container(x, y, children).setData("liveStatState", state);
+}
 
 /** Text/structural marker so state reads without relying on color alone (FR-015). */
 function stateMarker(state: "improved" | "reduced" | "unchanged" | "unavailable"): string {

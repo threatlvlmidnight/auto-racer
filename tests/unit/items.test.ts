@@ -5,6 +5,7 @@ import { simulatePlayerLaps } from "../../src/simulation/laps";
 import { applyTierBonus } from "../../src/simulation/tiering";
 import { generateTrack } from "../../src/simulation/tracks";
 import type { EntrantId, VehicleId } from "../../src/simulation/types";
+import { classifyScalingItem } from "../../src/simulation/buffs";
 import {
   amplifierFixture,
   compositionScaledFixture,
@@ -106,6 +107,28 @@ describe("complete 70-item catalog", () => {
     // Provenance remains specific to the build that supplied the item.
     expect(guestLaps[0]?.physics?.itemContributions?.[0]?.slotId).not
       .toBe(homeLaps[0]?.physics?.itemContributions?.[0]?.slotId);
+  });
+});
+
+describe("Feature 032 catalog audit (T104)", () => {
+  it("has no hidden tags, false scaling classifications, or malformed synergies", () => {
+    const catalog = [...Object.values(EXCLUSIVE_ITEMS).flat(), ...NEUTRAL_ITEMS];
+    const validStats = new Set(["acceleration", "topSpeed", "brakingPower", "corneringSpeed", "time"]);
+    catalog.forEach((item) => {
+      const tags = new Set(item.synergyTags);
+      (item.synergyEffects ?? []).forEach((effect) => {
+        if (effect.target.kind === "tag") expect(tags.has(effect.target.tag), item.id).toBe(true);
+        expect(validStats.has(effect.targetStat ?? "time"), item.id).toBe(true);
+        if (effect.condition.kind === "linear-per-count") expect(effect.condition.percentPerMatch, item.id).toBeGreaterThan(0);
+        if (effect.condition.kind === "exact-other-count") {
+          expect(effect.condition.count, item.id).toBeGreaterThan(0);
+          expect(effect.condition.bonusPercent, item.id).toBeGreaterThan(0);
+        }
+      });
+      if (!item.buff && !(item.synergyEffects ?? []).length) {
+        expect(classifyScalingItem(item, { heldItems: [item], installedItems: [item] }), item.id).toBeNull();
+      }
+    });
   });
 });
 

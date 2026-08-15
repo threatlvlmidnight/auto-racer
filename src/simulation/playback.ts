@@ -1,5 +1,5 @@
 import type { Track } from "./tracks";
-import type { CarRole, ContestResult, FiredItem, NCarContestResult, OfferedItem } from "./types";
+import type { CarRole, ContestResult, FiredItem, LiveStatChange, NCarContestResult, OfferedItem } from "./types";
 
 export const RACE_ANIMATION_SECONDS = 20;
 export const MIN_VISUAL_LAP_SECONDS = 0.5;
@@ -663,6 +663,8 @@ export interface PlaybackBoundaryView {
   tieBreakOrder: readonly string[];
   /** Optional N-car checkpoint provider; Test Day passes none. */
   projectCheckpoint?: (completedLap: number) => CheckpointProjection;
+  /** Retained stat evidence, parallel to playerLaps; playback only publishes it. */
+  playerStatChanges?: readonly (readonly LiveStatChange[])[];
 }
 
 export function nCarBoundaryView(
@@ -721,6 +723,7 @@ export type CrossedPlaybackEventKind =
   | "time-zero"
   | "player-lap"
   | "item-callout"
+  | "live-stat-change"
   | "checkpoint"
   | "car-finished"
   | "results-ready";
@@ -729,6 +732,7 @@ const CROSS_KIND_ORDER: Record<CrossedPlaybackEventKind, number> = {
   "time-zero": 0,
   "player-lap": 1,
   "item-callout": 2,
+  "live-stat-change": 2,
   checkpoint: 3,
   "car-finished": 4,
   "results-ready": 5,
@@ -743,6 +747,8 @@ export interface CrossedPlaybackEvent {
   carId?: string;
   /** Resolved callout (item-callout). */
   callout?: CalloutEvent;
+  /** Immutable stat changes crossed at this boundary; never recomputed here. */
+  statChanges?: readonly LiveStatChange[];
   /** Checkpoint projection (checkpoint). */
   projection?: CheckpointProjection;
   /** Internal stable group id for ordering facts from one boundary together. */
@@ -762,12 +768,25 @@ function playerCallouts(view: PlaybackBoundaryView, lap: number): readonly Cross
   }));
 }
 
+function playerStatChanges(view: PlaybackBoundaryView, lap: number): readonly CrossedPlaybackEvent[] {
+  const changes = view.playerStatChanges?.[lap - 1] ?? [];
+  if (changes.length === 0) return [];
+  return [{
+    kind: "live-stat-change",
+    scheduleTime: 0,
+    lap,
+    statChanges: changes,
+    boundaryKey: `player-start-${lap}`,
+  }];
+}
+
 function timeZeroEvents(view: PlaybackBoundaryView): CrossedPlaybackEvent[] {
   const events: CrossedPlaybackEvent[] = [
     { kind: "time-zero", scheduleTime: 0, boundaryKey: "init" },
     { kind: "player-lap", scheduleTime: 0, lap: 1, boundaryKey: "player-start-1" },
   ];
   events.push(...playerCallouts(view, 1).map((event) => ({ ...event, scheduleTime: 0 })));
+  events.push(...playerStatChanges(view, 1).map((event) => ({ ...event, scheduleTime: 0 })));
   return events;
 }
 
@@ -797,6 +816,7 @@ function intervalEvents(
       boundaryKey: `player-start-${m}`,
     });
     events.push(...playerCallouts(view, m).map((event) => ({ ...event, scheduleTime: startBoundary })));
+    events.push(...playerStatChanges(view, m).map((event) => ({ ...event, scheduleTime: startBoundary })));
     if (view.projectCheckpoint) {
       events.push({
         kind: "checkpoint",

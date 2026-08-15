@@ -4,6 +4,9 @@ import {
   type HeldItemLocation,
   type InstallationResolution,
   type ItemDefinition,
+  type EconomyContribution,
+  type EconomyTrigger,
+  type SaleReceipt,
   type VehicleBuild,
 } from "./types";
 
@@ -267,7 +270,7 @@ export function commitGarageCommand(context: GarageContext, command: GarageComma
 }
 
 export type SellItemResult =
-  | { kind: "sold"; build: VehicleBuild; item: ItemDefinition; creditsGained: number }
+  | { kind: "sold"; build: VehicleBuild; item: ItemDefinition; creditsGained: number; receipt: SaleReceipt }
   | { kind: "failure"; code: "missing-source" };
 /**
  * Sell any held item (active or stored) for half its authored price,
@@ -291,12 +294,41 @@ export function sellItem(
     ? build.storage.map((position, index) => (index === source.index ? { ...position, item: null } : position))
     : build.storage;
 
+  const contributions = economyContributions(build, "item-sale");
+  const baseValue = Math.floor(item.price / 2);
   return {
     kind: "sold",
     build: { ...build, slots, storage },
     item,
-    creditsGained: Math.floor(item.price / 2),
+    creditsGained: baseValue + contributions.reduce((sum, contribution) => sum + contribution.amount, 0),
+    receipt: {
+      item,
+      itemId: item.id,
+      itemName: item.name,
+      tier: source.area === "vehicle" ? build.slots.find((slot) => slot.slotId === source.slotId)!.tier : build.storage[source.index].tier,
+      priorLocation: source.area === "vehicle" ? { area: "vehicle", slotId: source.slotId } : { area: "storage", index: source.index },
+      baseValue,
+      contributions,
+      totalPayout: baseValue + contributions.reduce((sum, contribution) => sum + contribution.amount, 0),
+      creditsBefore: 0,
+      creditsAfter: 0,
+    },
   };
+}
+
+/** Restore a sold item only to its exact prior location when it is still empty. */
+export function undoSale(build: VehicleBuild, receipt: SaleReceipt): { kind: "undone"; build: VehicleBuild } | { kind: "invalid" } {
+  if (!receipt.item) return { kind: "invalid" };
+  const item = receipt.item;
+  const location = receipt.priorLocation;
+  if (location.area === "vehicle") {
+    const slot = build.slots.find((candidate) => candidate.slotId === location.slotId);
+    if (!slot || slot.item) return { kind: "invalid" };
+    return { kind: "undone", build: { ...build, slots: build.slots.map((candidate) => candidate.slotId === slot.slotId ? { ...candidate, item, tier: receipt.tier } : candidate) } };
+  }
+  const position = build.storage[location.index];
+  if (!position || position.item) return { kind: "invalid" };
+  return { kind: "undone", build: { ...build, storage: build.storage.map((candidate) => candidate.index === position.index ? { ...candidate, item, tier: receipt.tier } : candidate) } };
 }
 
 /** One held item with its exact location and tier evidence (feature 032 T012). */
@@ -340,4 +372,21 @@ export function enumerateHeldItems(build: VehicleBuild): readonly HeldItemEntry[
     }
   });
   return entries;
+}
+
+/** Resolve authored economy effects for each matching held item exactly once. */
+export function economyContributions(build: VehicleBuild, trigger: EconomyTrigger): readonly EconomyContribution[] {
+  const amounts: Record<string, readonly number[]> = {
+    "neutral-bookmakers-chit": [1, 2, 3],
+    "neutral-engine-builders-nameplate": [1, 2, 3],
+    "neutral-patrons-brass-plaque": [2, 4, 6],
+  };
+  return enumerateHeldItems(build).flatMap((entry) => {
+    const values = amounts[entry.item.id];
+    const expectedTrigger: EconomyTrigger = entry.item.id === "neutral-bookmakers-chit"
+      ? "scored-win" : entry.item.id === "neutral-engine-builders-nameplate" ? "item-sale" : "sponsor-success";
+    if (!values || trigger !== expectedTrigger) return [];
+    return [{ sourceItemId: entry.item.id, sourceItemName: entry.item.name, tier: entry.tier,
+      heldLocation: entry.location, trigger, amount: values[entry.tier - 1] } satisfies EconomyContribution];
+  });
 }

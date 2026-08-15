@@ -14,6 +14,7 @@ import {
   validateWorldTourCompatibility,
 } from "./championship";
 import { installedItems, storedItems } from "./slots";
+import { economyContributions } from "./garage";
 import { settleWorldTourReputation, WORLD_TOUR_REPUTATION_START } from "./reputation";
 import { raceSettlementPolicy } from "./settlement";
 import {
@@ -33,6 +34,7 @@ import {
   type IdentityTag,
   type OfferedItem,
   type RunIdentity,
+  type SaleUndoSnapshot,
   type RunSetupMemory,
   type LocalRaceTier,
   type RaceKind,
@@ -202,6 +204,18 @@ export function projectScoredRaceRecord(
   });
   return { wins, losses, entries: [...entries] };
 }
+
+/** Project scored W/L directly from retained Run history; legacy entries without
+ * placement evidence are excluded rather than guessed from the banner outcome. */
+export function projectRunRecord(run: Run): ScoredRaceRecordProjection {
+  return projectScoredRaceRecord(run.history.flatMap((entry) => {
+    const position = entry.pvpOutcome?.playerPosition;
+    const raceKind = run.stages.find((stage) => stage.position === entry.stagePosition)?.raceKind;
+    return position !== undefined && (raceKind === "local" || raceKind === "championship" || raceKind === "elite-finale")
+      ? [{ encounterId: entry.encounterId, raceKind, position }]
+      : [];
+  }));
+}
 export type StageState = "unavailable" | "available" | "active" | "completed";
 export type EncounterType =
   | "parts-supplier"
@@ -313,6 +327,8 @@ export interface RunHistoryEntry {
   creditTransactionIds: string[];
   pvpOutcome?: {
     outcome: ContestResult["outcome"];
+    /** Retained full-field placement for deterministic final W/L projection. */
+    playerPosition?: number;
     lapCount: number;
     playerTime: number;
     ghostTime: number;
@@ -337,6 +353,8 @@ export interface Run {
   creditTransactions: CreditTransaction[];
   activeSponsorContract: SponsorContract | null;
   history: RunHistoryEntry[];
+  /** One bounded, invalidated-on-next-mutation sale Undo snapshot. */
+  saleUndo?: SaleUndoSnapshot;
   /** New (015-economy-depth FR-001). Floored at 0 — never negative (FR-004). */
   reputation: number;
   /**
@@ -791,7 +809,11 @@ export function completePvpEncounter(
   const interestAmount = policy.accruesInterest ? interestFor(run.credits) : 0;
 
   appendTransaction("participation", worldTourActive ? policy.participationCredits : 2);
-  if (result.outcome === "win") appendTransaction("win-bonus", worldTourActive ? policy.winBonusCredits : 2);
+  if (result.outcome === "win") {
+    const chitBonus = economyContributions(payload.buildSnapshot, "scored-win")
+      .reduce((sum, contribution) => sum + contribution.amount, 0);
+    appendTransaction("win-bonus", (worldTourActive ? policy.winBonusCredits : 2) + chitBonus);
+  }
   if (interestAmount > 0) appendTransaction("interest", interestAmount);
 
   let sponsorOutcome: SponsorContract | undefined;
@@ -804,7 +826,11 @@ export function completePvpEncounter(
       ...resolution.contract,
       resolvedEncounterId: active.id,
     };
-    if (resolution.succeeded) appendTransaction("sponsor-conditional", sponsorOutcome.payout);
+    if (resolution.succeeded) {
+      const plaqueBonus = economyContributions(payload.buildSnapshot, "sponsor-success")
+        .reduce((sum, contribution) => sum + contribution.amount, 0);
+      appendTransaction("sponsor-conditional", sponsorOutcome.payout + plaqueBonus);
+    }
     sponsorFailed = !resolution.succeeded;
   }
 
@@ -815,6 +841,7 @@ export function completePvpEncounter(
     creditTransactionIds: encounterTransactionIds,
     pvpOutcome: {
       outcome: result.outcome,
+      playerPosition: position,
       lapCount: result.lapCount,
       playerTime: result.playerTime,
       ghostTime: result.ghostTime,
@@ -912,6 +939,7 @@ function sameIds(actual: string[], expected: string[]): boolean {
 }
 
 function advanceRun(run: Run, rng: RandomSource): Run {
+  if (run.saleUndo?.valid) run = { ...run, saleUndo: { ...run.saleUndo, valid: false } };
   const nextIndex = run.stageIndex + 1;
 
   // Leading check (015-economy-depth FR-003, research.md Decision 1):

@@ -7,6 +7,7 @@ import {
   purchaseStock,
   restockSupplier,
   sellHeldItem,
+  invalidateSaleUndo,
   toggleLock,
   type PartsSupplierPayload,
   type RewardDraftPayload,
@@ -76,6 +77,7 @@ export class PrepareScene extends Phaser.Scene {
   private selectedContext: ItemPresentationContext | null = null;
   private selectedSource: GarageSource | null = null;
   private statusMessage: string | null = null;
+  private receiptDismissed = false;
   private keyboardItems: { card: Phaser.GameObjects.Container; activate: () => void }[] = [];
   private keyboardDestinations: { destination: GarageDestination; slotType: SlotType | null }[] = [];
   private keyboardItemIndex = -1;
@@ -225,7 +227,7 @@ export class PrepareScene extends Phaser.Scene {
       const resolution = previewAcquisitionResolution(this.run!.build, offer.item);
       this.createDraggableOffer(150 + index * 250, 124, offer.id, offer.item, true, false, resolution);
     });
-    this.createControl(400, 204, "Decline all", () => {
+    this.createControl(400, 204, "SKIP REWARDS", () => {
       const next = declineReward(this.run!, this.run!.activeEncounter!.id, Math.random);
       this.scene.start("RunScene", { run: next });
     });
@@ -245,6 +247,27 @@ export class PrepareScene extends Phaser.Scene {
       this.createDraggableOffer(x, 124, entry.id, entry.item, entry.state === "available" && affordable, entry.state === "purchased", resolution);
       if (entry.state === "available") this.createLockToggle(x, entry);
     });
+    const latestReceipt = payload.receipts?.[Math.max(0, payload.receipts.length - 1)];
+    if (latestReceipt && !this.receiptDismissed) {
+      const detail = latestReceipt.status === "upgraded"
+        ? `${latestReceipt.itemName}: Tier ${latestReceipt.oldTier} → Tier ${latestReceipt.newTier}`
+        : `${latestReceipt.itemName}: purchased`;
+      this.track(this.add.rectangle(LOGICAL_WIDTH / 2, INSPECTOR_Y, LOGICAL_WIDTH - 48, 60, 0x101817, 0.97)
+        .setStrokeStyle(2, 0x82c9aa, 0.85));
+      this.track(this.add.text(40, INSPECTOR_Y - 21, `CONFIRMED · ${detail}`, {
+        fontSize: "11px", fontFamily: UI_FONT, fontStyle: "bold", color: "#82c9aa",
+      }));
+      if (latestReceipt.changedEffects.length > 0) {
+        this.track(this.add.text(40, INSPECTOR_Y, latestReceipt.changedEffects.map((effect: { label: string; oldValue: string; newValue: string }) => `${effect.label}: ${effect.oldValue} → ${effect.newValue}`).join(" · "), {
+          fontSize: "9px", fontFamily: UI_FONT, color: "#d7e4e7",
+        }));
+      }
+      const dismiss = this.add.text(LOGICAL_WIDTH - 42, INSPECTOR_Y - 21, "DISMISS ×", {
+        fontSize: "10px", fontFamily: UI_FONT, fontStyle: "bold", color: "#f1eee5",
+      }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
+      dismiss.on("pointerdown", () => { this.receiptDismissed = true; this.render(); });
+      this.track(dismiss);
+    }
     this.createControl(300, 204, payload.restockUsed ? "Restock used" : "Restock · 1 credit", () => {
       this.run = restockSupplier(this.run!, this.run!.activeEncounter!.id, Math.random);
       this.render();
@@ -289,7 +312,18 @@ export class PrepareScene extends Phaser.Scene {
     }).setOrigin(0.5);
     const card = this.add.container(x, y, [background, itemCard, label]).setSize(OFFER_WIDTH, OFFER_HEIGHT);
     this.track(card);
-    if (!enabled) return;
+    if (!enabled) {
+      if (!purchased) {
+        card.setInteractive({ useHandCursor: true });
+        card.on("pointerdown", () => {
+          this.statusMessage = item.price > this.run!.credits
+            ? `${item.name} costs ${item.price} credits; you have ${this.run!.credits}.`
+            : `${item.name} is unavailable.`;
+          this.render();
+        });
+      }
+      return;
+    }
     card.setInteractive({ useHandCursor: true });
     card.on("pointerdown", () => {
       if (this.selectedOfferId === offerId) {
@@ -365,6 +399,7 @@ export class PrepareScene extends Phaser.Scene {
         return;
       }
       this.run = purchaseStock(this.run!, encounter.id, offerId, destination);
+      this.receiptDismissed = false;
       this.selectedOfferId = null;
       this.selectedItemId = null;
       this.selectedSource = null;
@@ -595,7 +630,7 @@ export class PrepareScene extends Phaser.Scene {
     const replacement: GarageReplacement = preview.occupant ? "swap" : "none";
     const result = commitGarageCommand({ build }, { source, destination, replacement });
     if (result.kind !== "committed") return;
-    this.run = { ...this.run!, build: result.build };
+    this.run = invalidateSaleUndo({ ...this.run!, build: result.build });
     this.selectedSource = destination.area === "vehicle"
       ? { area: "vehicle", slotId: destination.slotId }
       : { area: "storage", index: destination.index };

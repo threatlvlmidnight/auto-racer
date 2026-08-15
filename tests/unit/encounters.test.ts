@@ -206,6 +206,10 @@ describe("Parts Supplier and ledger", () => {
       amount: -affordable.item.price,
       balanceAfter: purchased.credits,
     });
+    expect((purchased.activeEncounter!.payload as PartsSupplierPayload).receipts?.[0]).toMatchObject({
+      offerId: affordable.id,
+      itemId: affordable.item.id,
+    });
     if (purchased.credits > 0) {
       const restocked = restockSupplier(purchased, purchased.activeEncounter!.id, () => 0);
       expect(restocked.credits).toBe(purchased.credits - 1);
@@ -214,7 +218,7 @@ describe("Parts Supplier and ledger", () => {
     }
   });
 
-  it("allows multiple affordable purchases and preserves purchased slots during restock", () => {
+  it("allows multiple affordable purchases and atomically replaces the supplier surface", () => {
     // Every stock slot draws the same cheap item (see rngSelecting above), so
     // the second purchase resolves as a tier-upgrade in place
     // (016-duplicate-item-tiering), not a second physical copy in storage.
@@ -234,11 +238,8 @@ describe("Parts Supplier and ledger", () => {
     expect(second.build.slots[0].tier).toBe(2);
     expect(second.build.storage.every((position) => position.item === null)).toBe(true);
     expect(restocked.credits).toBe(second.credits - 1);
-    expect(restockedPayload.stock.map(({ state }) => state)).toEqual([
-      "purchased",
-      "purchased",
-      "available",
-    ]);
+    expect(restockedPayload.stock.map(({ state }) => state)).toEqual(["available", "available", "available"]);
+    expect(restockedPayload.purchases).toEqual([]);
   });
 
   it("rejects unaffordable and invalid placements without mutating run or ledger", () => {
@@ -816,7 +817,7 @@ describe("card locking (015-economy-depth US4)", () => {
     );
   });
 
-  it("skips a locked entry on reroll while still replacing every other eligible entry (SC-006)", () => {
+  it("clears lock state when the supplier surface is atomically replaced", () => {
     const active = activate(0);
     const payload = active.activeEncounter!.payload as PartsSupplierPayload;
     const target = payload.stock[0];
@@ -825,14 +826,8 @@ describe("card locking (015-economy-depth US4)", () => {
     const rerolled = restockSupplier(locked, locked.activeEncounter!.id, () => 0.99);
     const rerolledPayload = rerolled.activeEncounter!.payload as PartsSupplierPayload;
 
-    expect(rerolledPayload.stock[0].item.id).toBe(target.item.id);
-    expect(rerolledPayload.stock[0].locked).toBe(true);
-    // Every other entry still rerolls exactly as it did before locking existed.
-    const unlockedRestock = restockSupplier(active, active.activeEncounter!.id, () => 0.99);
-    const unlockedPayload = unlockedRestock.activeEncounter!.payload as PartsSupplierPayload;
-    expect(rerolledPayload.stock.slice(1).map((entry) => entry.item.id)).toEqual(
-      unlockedPayload.stock.slice(1).map((entry) => entry.item.id),
-    );
+    expect(rerolledPayload.stock.every((entry) => !entry.locked && entry.state === "available")).toBe(true);
+    expect(rerolledPayload.stock[0].id).not.toBe(target.id);
   });
 
   it("never carries a lock into a freshly-generated encounter", () => {

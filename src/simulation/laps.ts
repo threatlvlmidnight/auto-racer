@@ -23,6 +23,7 @@ import {
 import {
   LAP_COUNT,
   MIN_LAP_TIME,
+  type AmplifierAttribution,
   type BuffApplication,
   type Build,
   type ConditionalPhysicsContribution,
@@ -33,6 +34,7 @@ import {
   type ItemPhysicsContribution,
   type ItemPhysicalContributionEvidence,
   type LapPhysicsEvidence,
+  type LiveStatChange,
   type OfferedItem,
   type PhysicsCondition,
   type StatTarget,
@@ -631,4 +633,137 @@ function totalDeltaForStat(item: OfferedItem, stat: PhysicalStatTarget): number 
     0,
   );
   return flat + conditional;
+}
+
+// --- Feature 032 T020: live-stat change evidence --------------------------
+
+const LIVE_STAT_ORDER: readonly PhysicalStatTarget[] = [
+  "acceleration", "topSpeed", "brakingPower", "corneringSpeed",
+];
+
+const LIVE_STAT_EPSILON = 1e-9;
+
+/** The effective stacking percent one stacking-buff source applies on a lap. */
+function stackingPercentOnLap(lap: PlayerLap, sourceItemId: string): number {
+  const evidence = lap.contributions.find(
+    (entry) => entry.sourceItemId === sourceItemId && entry.effectKind === "stacking-buff",
+  );
+  if (!evidence || evidence.buffApplications.length === 0) return 0;
+  return evidence.buffApplications[0].appliedPercent;
+}
+
+/**
+ * Derives immutable live-stat change evidence from retained lap physics
+ * (032 FR-001/FR-002, data-model.md "LiveStatChange", contract §1). Pure
+ * projection over already-recorded evidence — never reruns buffs, synergy,
+ * track physics, or contest ordering:
+ *
+ * - Lap 1: one change per contributing item per stat, attributed from the
+ *   lap's resolved flat deltas, with amplifier attribution from the lap's
+ *   buff applications. Cumulative previous/current reconcile exactly to the
+ *   lap's effective stats minus `baselineStats` (stock + setup, caller-owned).
+ * - Later laps: one change per stacking-buff source whose applied percent
+ *   grew at that lap boundary; per-source deltas split proportionally to the
+ *   percent increments so every boundary still reconciles exactly.
+ * - Zero deltas produce no change; laps without physics evidence are skipped.
+ */
+export function deriveLiveStatChanges(
+  laps: readonly PlayerLap[],
+  baselineStats: PhysicalStats,
+  itemsById: ReadonlyMap<string, OfferedItem>,
+): readonly LiveStatChange[] {
+  const nameOf = (itemId: string) => itemsById.get(itemId)?.name ?? itemId;
+  const changes: LiveStatChange[] = [];
+  const running: Record<PhysicalStatTarget, number> = {
+    acceleration: baselineStats.acceleration,
+    topSpeed: baselineStats.topSpeed,
+    brakingPower: baselineStats.brakingPower,
+    corneringSpeed: baselineStats.corneringSpeed,
+  };
+  let previousStats: PhysicalStats | null = null;
+
+  laps.forEach((lap, lapIndex) => {
+    const lapNumber = lapIndex + 1;
+    const physics = lap.physics;
+    if (!physics) return;
+
+    LIVE_STAT_ORDER.forEach((stat) => {
+      const deltaKey = DELTA_KEY_FOR_STAT[stat];
+      const current = physics.stats[stat];
+      const totalDelta = current - running[stat];
+      if (Math.abs(totalDelta) < LIVE_STAT_EPSILON) return;
+
+      let boundarySeq = 0;
+      const emit = (sourceItemId: string, delta: number, amplifierSources: readonly AmplifierAttribution[]) => {
+        const previousValue = running[stat];
+        running[stat] += delta;
+        boundarySeq += 1;
+        changes.push({
+          boundaryId: `stat-lap${lapNumber}-${stat}-${boundarySeq}`,
+          lap: lapNumber,
+          stat,
+          previousValue,
+          currentValue: previousValue + delta,
+          delta,
+          direction: delta >= 0 ? "up" : "down",
+          sourceItemId,
+          sourceItemName: nameOf(sourceItemId),
+          amplifierSources,
+        });
+      };
+
+      if (previousStats === null) {
+        // Race-start boundary: attribute each resolved flat delta to its own
+        // item in canonical evidence order; amplifier applications arriving
+        // at this item explain the applied magnitude (FR-003).
+        (physics.itemContributions ?? []).forEach((evidence) => {
+          const resolved = evidence.flatResolvedDelta?.[deltaKey];
+          if (!resolved) return;
+          const amplifiers: AmplifierAttribution[] = evidence.buffApplications
+            .filter((application) => application.targetStat === stat)
+            .map((application) => ({
+              sourceItemId: application.sourceItemId,
+              sourceItemName: nameOf(application.sourceItemId),
+              magnitudePercent: application.appliedPercent,
+              affectedContributionLabel: `${nameOf(evidence.sourceItemId)} ${stat} effect`,
+            }));
+          emit(evidence.sourceItemId, resolved, amplifiers);
+        });
+      } else {
+        // Mid-race boundary: the only lap-varying stat input is stacking
+        // percent growth. Split the observed delta proportionally to each
+        // source's percent increment so the boundary still reconciles.
+        const increments = lap.contributions
+          .filter((entry) => entry.effectKind === "stacking-buff"
+            && entry.buffApplications.some((application) => application.targetStat === stat))
+          .map((entry) => {
+            const previousPercent = lapIndex > 0
+              ? stackingPercentOnLap(laps[lapIndex - 1], entry.sourceItemId)
+              : 0;
+            const currentPercent = stackingPercentOnLap(lap, entry.sourceItemId);
+            return { sourceItemId: entry.sourceItemId, increment: currentPercent - previousPercent };
+          })
+          .filter((entry) => Math.abs(entry.increment) >= LIVE_STAT_EPSILON);
+        const totalIncrement = increments.reduce((sum, entry) => sum + entry.increment, 0);
+        if (Math.abs(totalIncrement) < LIVE_STAT_EPSILON) return;
+        increments.forEach((entry) => {
+          emit(entry.sourceItemId, totalDelta * (entry.increment / totalIncrement), []);
+        });
+      }
+    });
+
+    previousStats = physics.stats;
+  });
+
+  return changes;
+}
+
+/** Derive once across the complete race, then group evidence by its retained lap. */
+export function deriveLiveStatChangesByLap(
+  laps: readonly PlayerLap[],
+  baselineStats: PhysicalStats,
+  itemsById: ReadonlyMap<string, OfferedItem>,
+): readonly (readonly LiveStatChange[])[] {
+  const changes = deriveLiveStatChanges(laps, baselineStats, itemsById);
+  return laps.map((_, index) => changes.filter((change) => change.lap === index + 1));
 }

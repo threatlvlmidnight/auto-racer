@@ -887,6 +887,8 @@ export interface InventoryHostContext {
  * contribution amounts` and `creditsAfter === creditsBefore + totalPayout`.
  */
 export interface SaleReceipt {
+  /** Immutable item snapshot used by the compensating Undo command. */
+  item?: ItemDefinition;
   itemId: string;
   itemName: string;
   tier: 1 | 2 | 3;
@@ -929,4 +931,3 @@ export interface ScoredRaceRecordProjection {
   losses: number;
   entries: readonly ScoredRaceRecordEntry[];
 }
-

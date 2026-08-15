@@ -150,3 +150,10 @@ export const NEUTRAL_ITEMS: readonly ItemDefinition[] = [
     improvisedBehavior: NONE_IMPROVISED,
   },
 ];
+
+/** Feature 032 deterministic economy rules shared by settlement/projections. */
+export const NEUTRAL_ECONOMY_RULES = {
+  "neutral-bookmakers-chit": { trigger: "scored-win", amountsByTier: [1, 2, 3] },
+  "neutral-engine-builders-nameplate": { trigger: "item-sale", amountsByTier: [1, 2, 3] },
+  "neutral-patrons-brass-plaque": { trigger: "sponsor-success", amountsByTier: [2, 4, 6] },
+} as const;

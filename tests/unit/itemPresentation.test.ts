@@ -17,6 +17,7 @@ import {
   tagInspectionProjection,
 } from "../../src/scenes/itemPresentation";
 import { testItem, vehicleBuild } from "../fixtures/vehicle-build-fixtures";
+import { itemTagVisualMetadata } from "../../src/scenes/itemVisualDescriptor";
 
 const ALL_ITEMS = [NEUTRAL_ITEMS, ...Object.values(EXCLUSIVE_ITEMS)].flat();
 
@@ -33,6 +34,15 @@ describe("item stat vocabulary", () => {
     expect(formatStatDelta("topSpeed", 1)).toMatchObject({ direction: "gain", directionLabel: "Gain" });
     expect(formatStatDelta("topSpeed", -1)).toMatchObject({ direction: "loss", directionLabel: "Loss" });
     expect(formatStatDelta("topSpeed", 0)).toMatchObject({ direction: "neutral", directionLabel: "No change" });
+  });
+});
+
+describe("catalog authored tags", () => {
+  it("has a unique accessible token and readable label for every catalog tag", () => {
+    const tags = [...new Set([...NEUTRAL_ITEMS, ...Object.values(EXCLUSIVE_ITEMS).flat()].flatMap((item) => item.synergyTags))];
+    const metadata = tags.map(itemTagVisualMetadata);
+    expect(metadata.every((entry) => entry.label.length > 0)).toBe(true);
+    expect(new Set(metadata.map((entry) => entry.iconToken)).size).toBe(tags.length);
   });
 });
 
@@ -194,4 +204,3 @@ describe("tag inspection matching projection (032 FR-004B)", () => {
     expect(build).toEqual(snapshot);
   });
 });
-

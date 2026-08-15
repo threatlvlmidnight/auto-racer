@@ -13,6 +13,7 @@ import { contestSceneInput, continueRunFromResult } from "../../src/scenes/runPr
 import { vehicleBuild } from "../fixtures/vehicle-build-fixtures";
 import { setupFixtureItem } from "../fixtures/race-setup-fixtures";
 import type { LockedRaceSetup } from "../../src/simulation/types";
+import { practiceFocusVisible } from "../../src/scenes/focusPresentation";
 
 function runAtFirstPvp(build = vehicleBuild([])): Run {
   let run = createRun({
@@ -62,6 +63,16 @@ describe("pre-race setup: static presentation boundary (T016)", () => {
     const input = raceSetupInput(run, run.activeEncounter!.id);
 
     expect(input.run.identity.vehicleId).toBe("the-highwheel");
+  });
+});
+
+describe("pre-race setup: semantic focus styling (T091)", () => {
+  it("does not claim keyboard focus before a navigation key is received", () => {
+    expect(practiceFocusVisible(false)).toBe(false);
+  });
+
+  it("keeps the focus affordance available when keyboard focus is real", () => {
+    expect(practiceFocusVisible(true)).toBe(true);
   });
 });
 

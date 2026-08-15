@@ -1,6 +1,8 @@
 import { setupControlDefinition } from "../simulation/raceSetup";
-import type { CarResult, LockedSetupControl, NCarContestResult, OfferedItem } from "../simulation/types";
-import { compactItemModel, itemInspectorModel } from "./itemPresentation";
+import type { CarResult, LockedSetupControl, NCarContestResult, OfferedItem, ScoredRaceRecordProjection } from "../simulation/types";
+import { projectRunRecord, type Run } from "../simulation/run";
+import { compactItemModel, economyReceiptLines, itemInspectorModel } from "./itemPresentation";
+import type { EconomyContribution } from "../simulation/types";
 
 // Pure formatting helpers for ResultScene (User Story 1's outcome banner,
 // User Story 2's legibility data — FR-006/FR-007; extended by
@@ -26,6 +28,10 @@ export function playerCar(result: NCarContestResult): CarResult {
 }
 
 export function outcomeLabel(result: NCarContestResult): string {
+  // A podium is a successful scored result in the full eight-car field. The
+  // resolver's outcome remains authoritative for race mechanics; this is
+  // presentation wording only and uses retained placement evidence.
+  if (playerCar(result).position <= 3 && result.outcome !== "tie") return "You Win!";
   switch (result.outcome) {
     case "win":
       return "You Win!";
@@ -50,6 +56,21 @@ export function outcomeColor(result: NCarContestResult): string {
 export function positionLabel(result: NCarContestResult): string {
   const player = playerCar(result);
   return `${ordinal(player.position)} of ${result.cars.length}`;
+}
+
+export function runRecordProjection(run: Run): ScoredRaceRecordProjection {
+  return projectRunRecord(run);
+}
+
+export function runRecordLabel(run: Run): string {
+  const record = runRecordProjection(run);
+  return `RECORD  W ${record.wins}  ·  L ${record.losses}`;
+}
+
+export function economyReceiptLabel(contributions: readonly EconomyContribution[], baseValue: number): string {
+  return economyReceiptLines(contributions, baseValue).map((line) =>
+    `${line.sourceItemName} · T${line.tier} · ${line.locationLabel} · base ${line.baseValue} +${line.modifier} = ${line.total}`,
+  ).join("\n");
 }
 
 export function timesLabel(result: NCarContestResult): string {

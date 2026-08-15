@@ -1,7 +1,71 @@
 # Acceptance Evidence: Demo Feedback Bug Pass
 
 Feature: `specs/032-demo-feedback-bug-pass/` — recorded verification evidence
+
+## Automated US1/US2/US3 batch (2026-08-15)
+
+The retained-feedback, tag-inspection, supplier, inventory-layout, and sale/Undo
+focused suites passed together: 13 test files / 163 tests. `npm run lint` and
+`npm run build` also passed. Playback boundary collection was compared at 1×
+and 2× with delayed-frame coverage; no manual viewport or input walkthrough is
+claimed here.
+
+## Automated US4/US5/T102 batch (2026-08-15)
+
+Settlement, economy receipts, retained run records, balance gates, crop/state
+metadata, supported viewport bounds, pre-race focus semantics, world-tour
+fallback semantics, and the full acquisition-to-final-record integration were
+rerun together. The balance harness returned byte-identical output on its two
+consecutive calls: all four entrants were 5/5 representative wins with 48s
+optimized ceilings, and the immutable baseline vehicle remained
+`spec-car-baseline`. No manual visual or in-game walkthrough is claimed.
 per `tasks.md` and `quickstart.md`.
+
+The approved sheet is used as neutral porcelain/steel chrome with restrained
+red/blue state accents; runtime text remains the dominant item/build/race
+content. Automated state mapping keeps normal, hover, focus, pressed, and
+disabled semantics distinct, while the code fallback preserves labels when
+the texture is unavailable. This records the non-manual styling decision for
+T100; visual playtest confirmation remains outside this batch.
+
+The exhaustive US4 transaction/history command passed 4 files / 8 tests:
+
+```text
+npm test -- --run tests/unit/settlement.test.ts tests/unit/economyItems.test.ts tests/unit/runRecord.test.ts tests/integration/economy-items.test.ts
+```
+
+Running the same command twice produced the same passing test count and
+deterministic projections; no duplicate receipt or retained-history mutation
+was observed.
+
+## Automated release-gate rerun (2026-08-15)
+
+The focused suites listed in `quickstart.md` passed before the full gate:
+
+| Suite | Result |
+|---|---:|
+| `liveStatPresentation` | 3 tests |
+| `economyItems` | 1 test |
+| `inventoryPresentation` | 8 tests |
+| `balance` | 3 tests |
+| `demo-regressions` | 9 tests |
+| **Focused total** | **24 tests** |
+
+Contract reconciliation found no failures; the suites exercise retained live
+evidence, economy receipts, inventory bounds, balance invariants, replay
+invariance, and the UI-state contracts described in
+`contracts/demo-feedback-contract.md`.
+
+The full automated gate also passed: `npm test` completed with 81 test files /
+1,531 tests, `npm run lint` passed, `npm run build` passed, and
+`npm run build:pages` passed. The only build note is the existing Vite
+post-minification chunk-size warning. Manual pointer/touch/viewport review is
+not claimed.
+
+The balance harness was run from two clean Node processes and produced byte-
+identical JSON. All four entrants remained at 5/5 representative wins and
+48s optimized ceilings; representative spread is 0 percentage points and
+optimized-ceiling spread is 0%.
 
 ## T001 — Pre-feature baselines (2026-08-15, branch `032-demo-feedback-bug-pass` @ `167eced`)
 

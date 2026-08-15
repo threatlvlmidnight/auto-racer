@@ -1,6 +1,7 @@
 import type { RaceKind } from "./types";
 
-const LOCAL_REPUTATION = [1, 1, 0, 0, 0, -1, -1, -2] as const;
+// Local podiums are all positive; purse and championship-point policies are unchanged.
+const LOCAL_REPUTATION = [1, 1, 1, 0, 0, -1, -1, -2] as const;
 const CHAMPIONSHIP_REPUTATION = [3, 2, 1, 0, -1, -2, -3, -4] as const;
 const CHAMPIONSHIP_POINTS = [10, 8, 6, 5, 4, 3, 2, 1] as const;
 

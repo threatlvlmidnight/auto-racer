@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveSynergyEffects } from "../../src/simulation/synergy";
+import { ROOK_ITEMS } from "../../src/content/items/rook";
 import type { StatTarget, SynergyEffect } from "../../src/simulation/types";
 import { testItem, vehicleBuild } from "../fixtures/vehicle-build-fixtures";
 
@@ -400,5 +401,16 @@ describe("SynergyEffect.targetStat shape (T002)", () => {
       const effect: SynergyEffect = { ...boostOthersByTag("gearing", 5), targetStat: target };
       expect(effect.targetStat).toBe(target);
     });
+  });
+});
+
+describe("Feature 032 Interchangeable Test Mounts rule", () => {
+  it("applies exactly +50% cornering to itself with exactly two Power items", () => {
+    const mounts = ROOK_ITEMS.find((item) => item.id === "rook-interchangeable-test-mounts")!;
+    const powerA = testItem({ id: "power-a", name: "Power A", price: 1, timeModifier: 0, installationCategory: "power" });
+    const powerB = testItem({ id: "power-b", name: "Power B", price: 1, timeModifier: 0, installationCategory: "power" });
+    const build = vehicleBuild([mounts, powerA, powerB]);
+    const mountSlot = build.slots[0].slotId;
+    expect(resolveSynergyEffects(build).get(mountSlot)?.appliedDeltaPercent.corneringSpeed).toBe(50);
   });
 });

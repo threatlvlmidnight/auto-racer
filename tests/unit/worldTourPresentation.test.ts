@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createRunForEntrant } from "../../src/simulation/run";
 import { confirmWorldTourDestination } from "../../src/simulation/championship";
-import { destinationChoiceModel, worldTourItineraryModel } from "../../src/scenes/worldTourPresentation";
+import { championshipProgressModel, destinationChoiceModel, worldTourItineraryModel } from "../../src/scenes/worldTourPresentation";
 
 function run() {
   const result = createRunForEntrant({ entrantId: "evelyn-mercer", runId: "tour-ui", seed: 1901, rng: () => 0 });
@@ -33,5 +33,19 @@ describe("world tour presentation", () => {
       expect.objectContaining({ regionId: "paris-exhibition", state: "locked" }),
     ]);
     expect(worldTourItineraryModel(next)!.currentStages).toHaveLength(8);
+  });
+
+  it("exposes semantic progress state and a text fallback without a tour texture", () => {
+    const initial = run();
+    const progress = championshipProgressModel(initial);
+    expect(progress.mode).toBe("tour");
+    expect(progress.label).toBe("Stage 1 of 40");
+    expect(progress.accessibleLabel).toContain("upcoming");
+
+    const legacy = { ...initial, worldTour: undefined };
+    const fallback = championshipProgressModel(legacy);
+    expect(fallback.mode).toBe("fallback");
+    expect(fallback.label).toMatch(/^Stage 1 of/);
+    expect(fallback.accessibleLabel).toContain("stage count");
   });
 });

@@ -88,7 +88,7 @@ describe("layout skeleton", () => {
   it("provides board and storage regions inside the measured bounds", () => {
     const model = inventoryLayoutModel("overlay", wideBounds);
     expect(model.presentation).toBe("overlay");
-    expect(model.regions.map((region) => region.id)).toEqual(["board", "storage"]);
+    expect(model.regions.map((region) => region.id)).toEqual(["board", "storage", "inspector", "sell-target", "undo"]);
     model.regions.forEach((region) => {
       expect(region.x).toBeGreaterThanOrEqual(wideBounds.x);
       expect(region.y).toBeGreaterThanOrEqual(wideBounds.y);

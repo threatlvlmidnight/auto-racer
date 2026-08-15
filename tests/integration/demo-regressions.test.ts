@@ -3,6 +3,13 @@ import { declineReward, chooseEncounter, type RewardDraftPayload } from "../../s
 import { createRun, RunTransitionError, runIdentityForEntrant } from "../../src/simulation/run";
 import { prepareTestDayControlVisible } from "../../src/scenes/practicePresentation";
 import { vehicleBuild } from "../fixtures/vehicle-build-fixtures";
+import { ROOK_ITEMS } from "../../src/content/items/rook";
+import { resolveSynergyEffects } from "../../src/simulation/synergy";
+import { resolveContest } from "../../src/simulation/contest";
+import { buildPlaybackSchedule, frameStateAt } from "../../src/simulation/playback";
+import { tagInspectionProjection } from "../../src/scenes/itemPresentation";
+import { inventoryBoardModel } from "../../src/scenes/inventoryVisuals";
+import { APPROVED_UI_CHROME_REGISTRY } from "../../src/scenes/uiChrome";
 
 /**
  * Feature 032 T003: pinned regressions for the hosted-demo defect log
@@ -86,5 +93,37 @@ describe("DEMO-002 — Reward Draft skip semantics", () => {
     expect(skipped.status).toBe("active");
     expect(skipped.stageIndex).toBeGreaterThan(active.stageIndex);
     expect(skipped.history).toHaveLength(active.history.length + 1);
+  });
+});
+
+describe("Feature 032 authored item regressions", () => {
+  it("keeps Variable-Pitch Propeller at +15% per other airflow item", () => {
+    const item = ROOK_ITEMS.find((entry) => entry.id === "rook-variable-pitch-propeller")!;
+    expect(item.synergyEffects?.[0].condition).toEqual({ kind: "linear-per-count", percentPerMatch: 15 });
+  });
+
+  it("keeps Test Mounts at exactly two Power and +50% self cornering", () => {
+    const mounts = ROOK_ITEMS.find((entry) => entry.id === "rook-interchangeable-test-mounts")!;
+    const powerA = { ...mounts, id: "power-a", installationCategory: "power" as const };
+    const powerB = { ...mounts, id: "power-b", installationCategory: "power" as const };
+    const build = vehicleBuild([mounts, powerA, powerB]);
+    expect(resolveSynergyEffects(build).get(build.slots[0].slotId)?.appliedDeltaPercent.corneringSpeed).toBe(50);
+  });
+});
+
+describe("Feature 032 presentation-only replay invariants (T103)", () => {
+  it("keeps contest/result bytes unchanged across speed, inspection, inventory, and chrome projections", () => {
+    const run = create();
+    const result = resolveContest(run.build, { id: "replay-ghost", lapTime: 6 }, 8);
+    const before = JSON.stringify(result);
+    const schedule = buildPlaybackSchedule(result);
+    frameStateAt(schedule, result, 0, -1);
+    frameStateAt(schedule, result, Number.POSITIVE_INFINITY, -1);
+    tagInspectionProjection("gearing", "Gearing", run.build);
+    inventoryBoardModel(run.build);
+    APPROVED_UI_CHROME_REGISTRY.regions.forEach((region) => {
+      expect(region.sourceRect.width).toBeGreaterThan(0);
+    });
+    expect(JSON.stringify(result)).toBe(before);
   });
 });

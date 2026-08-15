@@ -20,6 +20,17 @@ const POWER_ITEM = testItem({
   fittedBehavior: { kind: "time-modifier", timeModifier: -0.5, description: "Fitted: extra 0.50s." },
   improvisedBehavior: { kind: "time-modifier", timeModifier: 0.4, description: "Improvised: 0.40s lost." },
 });
+
+describe("Feature 032 sale receipt", () => {
+  it("retains base payout, location, tier, and exact credit modifier inputs", () => {
+    const item = testItem({ id: "sale-receipt-item", name: "Sale Receipt Item", price: 5, timeModifier: 0 });
+    const build = vehicleBuild([item]);
+    build.slots[0].tier = 2;
+    const result = sellItem(build, { area: "vehicle", slotId: build.slots[0].slotId });
+    if (result.kind !== "sold") throw new Error("expected sale");
+    expect(result.receipt).toMatchObject({ itemId: item.id, tier: 2, baseValue: 2, totalPayout: 2, priorLocation: { area: "vehicle", slotId: build.slots[0].slotId } });
+  });
+});
 const CHASSIS_ITEM = testItem({
   id: "chassis-item", name: "Chassis Item", price: 3, timeModifier: -2,
   installationCategory: "chassis",

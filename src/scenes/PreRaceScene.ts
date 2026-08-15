@@ -1,7 +1,6 @@
 import Phaser from "phaser";
 import type { Run } from "../simulation/run";
 import {
-  commitSetupMemory,
   lockRaceSetup,
   raceSetupInput,
   type RaceSetupInput,
@@ -27,11 +26,12 @@ import {
 } from "./demoTheme";
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
 import { regionDefinition } from "../content/regions";
+import { createRuntimeTextControl } from "./uiChrome";
 
 const CONTROL_TOP_Y = 216;
 // Tight enough that Driver Aggression plus the natural maximum of four
 // distinct installed equipment families (FR-009B) still clears the
-// Remember-setup/Back/Test-Day/Start-Race row at the bottom of the fixed
+// Back/Test-Day/Start-Race row at the bottom of the fixed
 // 800×450 viewport without clipping (research.md Decision 8).
 const CONTROL_ROW_HEIGHT = 34;
 
@@ -47,7 +47,6 @@ export class PreRaceScene extends Phaser.Scene {
   private setupInput!: RaceSetupInput;
   private selections: SetupSelections = {};
   private focusedFamily: SetupControlFamily = "driver-aggression";
-  private rememberChecked = false;
   private objects: Phaser.GameObjects.GameObject[] = [];
   private focusRing?: PracticeFocusHandle;
 
@@ -74,16 +73,15 @@ export class PreRaceScene extends Phaser.Scene {
     }
 
     // 028-pre-race-setup FR-012D: returning from setup-origin Test Day
-    // restores the exact uncommitted draft/checkbox/focus instead of
-    // re-defaulting to Balanced/remembered state.
+    // restores the exact uncommitted draft/focus instead of re-defaulting.
     const restored = data.originState?.setupSnapshot;
     if (restored) {
       this.selections = { ...restored.draftSelections };
-      this.rememberChecked = restored.rememberChecked;
       this.focusedFamily = restored.focusFamily ?? "driver-aggression";
     } else {
-      this.selections = { ...this.setupInput.initialSelections };
-      this.rememberChecked = data.run.setupMemory?.enabled === true;
+      // Setup is intentionally chosen fresh for every race. Championship-wide
+      // setup memory remains dormant in legacy run data but is not read here.
+      this.selections = {};
       this.focusedFamily = "driver-aggression";
     }
 
@@ -148,8 +146,7 @@ export class PreRaceScene extends Phaser.Scene {
       this.scene.start("RunScene", { unavailable: true });
       return;
     }
-    const run = commitSetupMemory(this.setupInput.run, this.selections, this.rememberChecked);
-    this.scene.start("ContestScene", { run, encounterId: this.setupInput.encounterId, setup });
+    this.scene.start("ContestScene", { run: this.setupInput.run, encounterId: this.setupInput.encounterId, setup });
   }
 
   /**
@@ -168,7 +165,7 @@ export class PreRaceScene extends Phaser.Scene {
       track: this.setupInput.track,
       setup: locked,
       draftSelections: this.selections,
-      rememberChecked: this.rememberChecked,
+      rememberChecked: false,
       focusFamily: this.focusedFamily,
     };
     const origin: PracticeOriginInput = {
@@ -208,15 +205,17 @@ export class PreRaceScene extends Phaser.Scene {
     this.track(testDayButton);
     const startButton = createDemoButton(this, LOGICAL_WIDTH - 125, 422, "START RACE", () => this.startRace(), true, { fontSize: PRACTICE_CONTROL_FONT_SIZE });
     this.track(startButton);
+    const inventoryButton = createDemoButton(this, LOGICAL_WIDTH - 70, 394, "INVENTORY", () => this.scene.start("InventoryScene", {
+      run: this.setupInput.run,
+      host: "pre-race",
+      returnScene: "PreRaceScene",
+      returnData: { encounterId: this.setupInput.encounterId, originState: { setupSnapshot: {
+        draftSelections: { ...this.selections }, rememberChecked: false, focusFamily: this.focusedFamily,
+      } } },
+    }), true, { fontSize: "9px" });
+    this.track(inventoryButton);
 
-    const rememberLabel = `${this.rememberChecked ? "[X]" : "[ ]"} Remember setup this championship`;
-    const rememberButton = createDemoButton(this, LOGICAL_WIDTH / 2, 394, rememberLabel, () => {
-      this.rememberChecked = !this.rememberChecked;
-      this.render();
-    }, true, { fontSize: "11px" });
-    this.track(rememberButton);
-
-    this.focusRing = applyPracticeFocusRing(this, [...positionButtons, rememberButton, backButton, testDayButton, startButton]);
+    this.focusRing = applyPracticeFocusRing(this, [...positionButtons, inventoryButton, backButton, testDayButton, startButton]);
   }
 
   private renderVehicle(model: RaceSetupSceneModel): void {
@@ -290,9 +289,18 @@ export class PreRaceScene extends Phaser.Scene {
     }));
     const buttons = control.positions.map((position, positionIndex) => {
       const label = position.selected ? `> ${position.label} <` : position.label;
-      const button = createDemoButton(this, 380 + positionIndex * 110, y + 1, label, () => {
-        this.selectPosition(control.family, position.id);
-      }, true, { fontSize: "11px" });
+      const button = createRuntimeTextControl(this, {
+        family: "selector",
+        x: 380 + positionIndex * 110,
+        y: y + 1,
+        width: 102,
+        height: 28,
+        label,
+        focused,
+        action: () => this.selectPosition(control.family, position.id),
+        fontFamily: UI_FONT,
+        fontSize: "11px",
+      });
       this.track(button);
       return button;
     });

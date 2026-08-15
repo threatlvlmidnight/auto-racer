@@ -14,6 +14,21 @@ import {
 } from "../../src/scenes/resultFormatting";
 import { LEGACY_ITEM_POOL } from "../fixtures/legacy-item-pool";
 import type { CarResult, NCarContestResult } from "../../src/simulation/types";
+import { classifyScalingItem } from "../../src/simulation/buffs";
+
+describe("Feature 032 scaling evidence reconciliation", () => {
+  it("uses authored fitted-value inputs without inventing persistence", () => {
+    const scaling = classifyScalingItem({
+      id: "scaled", name: "Scaled", price: 4, timeModifier: 0, origin: "coachworks",
+      installationCategory: "power", synergyTags: [],
+      buff: { boostPercent: 1, scalesWithFittedValue: true },
+      fittedBehavior: { kind: "none", description: "none" },
+      improvisedBehavior: { kind: "none", description: "none" },
+    }, { heldItems: [], installedItems: [] });
+    expect(scaling).toMatchObject({ kind: "fitted-value", currentInput: 0, currentMagnitude: 0 });
+    expect(scaling?.nextTriggerLabel).toContain("installed parts");
+  });
+});
 import { recordedLapVehicleStatModel, VEHICLE_STAT_ORDER } from "../../src/scenes/vehicleStatPresentation";
 import { SIX_CORNER_TRACK, TEN_CORNER_TRACK } from "../fixtures/race-legibility-fixtures";
 import { buildTrackFitPresentation, trackSummaryPresentation } from "../../src/scenes/trackSummaryPresentation";

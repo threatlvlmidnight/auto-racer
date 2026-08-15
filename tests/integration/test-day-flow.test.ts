@@ -29,6 +29,15 @@ import {
   directRecurringPracticeBuild,
   flatBuffPracticeBuild,
 } from "../fixtures/practice-fixtures";
+import { classifyScalingItem } from "../../src/simulation/buffs";
+
+describe("Feature 032 Test Day scaling reconciliation", () => {
+  it("uses the same classification vocabulary as scored results", () => {
+    const item = flatBuffPracticeBuild().slots[0].item!;
+    const classification = classifyScalingItem(item, { heldItems: [item], installedItems: [item] });
+    expect(classification?.kind ?? null).toBeNull();
+  });
+});
 
 function begin(fixture: ReturnType<(typeof allPracticeRunFixtures)[number]>) {
   const context = createPracticeReturnContext(fixture.run, {

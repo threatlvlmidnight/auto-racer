@@ -3,6 +3,7 @@ import { NEUTRAL_ITEMS } from "../../src/content/items";
 import { poolForEntrant } from "../../src/simulation/itemPools";
 import {
   chooseEncounter,
+  declineReward,
   purchaseStock,
   restockSupplier,
   type PartsSupplierPayload,
@@ -88,7 +89,7 @@ describe("Supplier purchased-slot semantics", () => {
 });
 
 describe("Supplier restock semantics", () => {
-  it("BASELINE-GAP: restock currently keeps purchased entries in place (partial restock)", () => {
+  it("atomically replaces all three slots with fresh available offers", () => {
     const active = activateSupplier(rngSelecting(CHEAP_ITEM.id));
     const payload = active.activeEncounter!.payload as PartsSupplierPayload;
     const target = payload.stock[0];
@@ -97,21 +98,31 @@ describe("Supplier restock semantics", () => {
       area: "vehicle",
       slotId: active.build.slots[0].slotId,
     });
-    const purchasedStock = (purchased.activeEncounter!.payload as PartsSupplierPayload).stock[0];
     const restocked = restockSupplier(purchased, purchased.activeEncounter!.id, () => 0.99);
     const after = restocked.activeEncounter!.payload as PartsSupplierPayload;
 
-    // Current behavior: the purchased entry is exempt from replacement.
-    // T051 changes this: restock must atomically replace all three slots
-    // with fresh purchasable offers. Replace this assertion then.
-    expect(after.stock[0]).toEqual(purchasedStock);
-    expect(after.stock[0].state).toBe("purchased");
+    expect(after.stock).toHaveLength(3);
+    expect(after.stock.every((entry) => entry.state === "available" && !entry.locked)).toBe(true);
+    expect(after.purchases).toEqual([]);
     expect(after.restockUsed).toBe(true);
   });
 });
 
+describe("Reward Draft skip", () => {
+  it("records no acquisition or credit mutation", () => {
+    const active = createRun({ runId: "skip-test", seed: 4, identityTag: "performance", identity: runIdentityForEntrant("evelyn-mercer")!, build: vehicleBuild(), rng: () => 0.34 });
+    const choice = active.availableChoices[0];
+    const draft = chooseEncounter(active, choice.id, () => 0);
+    if (draft.activeEncounter?.type !== "reward-draft") throw new Error("expected reward draft");
+    const skipped = declineReward(draft, draft.activeEncounter.id);
+    expect(skipped.build).toEqual(draft.build);
+    expect(skipped.credits).toBe(draft.credits);
+    expect(skipped.creditTransactions).toEqual(draft.creditTransactions);
+  });
+});
+
 describe("Duplicate-tier feedback gap", () => {
-  it("BASELINE-GAP: duplicate purchase tiers up but exposes no old/new receipt", () => {
+  it("returns one acquisition receipt per purchase with tier transition evidence", () => {
     // Constant rng fills all three stock slots with the same cheap item, so
     // the second purchase is a genuine duplicate tier-up.
     const active = activateSupplier(rngSelecting(CHEAP_ITEM.id));
@@ -130,13 +141,11 @@ describe("Duplicate-tier feedback gap", () => {
     // The authoritative tier mutation happened exactly once...
     const tieredSlot = second.build.slots.find((slot) => slot.item?.id === CHEAP_ITEM.id)!;
     expect(tieredSlot.tier).toBe(2);
-    // ...but the retained surface carries no receipt naming old tier, new
-    // tier, or changed effect values — the payload only records purchased
-    // item ids. That receipt is what T052/T054 add; pin the absence so the
-    // gap cannot be silently half-fixed.
     const after = second.activeEncounter!.payload as PartsSupplierPayload;
     expect(after.purchases).toEqual([CHEAP_ITEM.id, CHEAP_ITEM.id]);
-    expect(after).not.toHaveProperty("receipts");
-    expect(after).not.toHaveProperty("tierReceipts");
+    expect(after.receipts!.map((receipt) => [receipt.oldTier, receipt.newTier])).toEqual([[null, 1], [1, 2]]);
+    expect(after.receipts![1].changedEffects[0]).toEqual({
+      label: "Authored effect", oldValue: "1× tier strength", newValue: "2× tier strength",
+    });
   });
 });

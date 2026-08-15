@@ -56,6 +56,35 @@ export interface WorldTourItineraryModel {
   };
 }
 
+export type ChampionshipProgressState = "completed" | "current" | "upcoming" | "locked";
+
+export interface ChampionshipProgressModel {
+  mode: "tour" | "fallback";
+  label: string;
+  state: ChampionshipProgressState;
+  accessibleLabel: string;
+}
+
+/** Text/state contract used by the RunScene progress renderer. */
+export function championshipProgressModel(run: Run): ChampionshipProgressModel {
+  const itinerary = worldTourItineraryModel(run);
+  if (!itinerary) {
+    return {
+      mode: "fallback",
+      label: `Stage ${Math.min(run.stages.length, run.stageIndex + 1)} of ${run.stages.length}`,
+      state: run.status === "completed" ? "completed" : run.status === "failed" ? "locked" : "current",
+      accessibleLabel: "Championship progress is shown as a stage count.",
+    };
+  }
+  const activeLeg = itinerary.legs.find((leg) => leg.state === "current");
+  return {
+    mode: "tour",
+    label: itinerary.header.progress,
+    state: activeLeg?.state ?? "upcoming",
+    accessibleLabel: `${itinerary.header.progress}; ${activeLeg?.name ?? "next leg"} is ${activeLeg?.state ?? "upcoming"}.`,
+  };
+}
+
 export function worldTourItineraryModel(run: Run): WorldTourItineraryModel | null {
   const tour = run.worldTour;
   if (!tour) return null;

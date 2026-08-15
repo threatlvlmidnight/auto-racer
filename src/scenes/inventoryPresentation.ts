@@ -120,11 +120,18 @@ export function inventoryLayoutModel(
   const margin = 12;
   const innerWidth = Math.max(0, bounds.width - margin * 2);
   const innerHeight = Math.max(0, bounds.height - margin * 2);
-  const boardHeight = Math.floor(innerHeight * 0.6);
-  const storageHeight = innerHeight - boardHeight - margin;
+  const boardHeight = Math.floor(innerHeight * 0.58);
+  const storageHeight = Math.max(48, innerHeight - boardHeight - margin);
+  const inspectorWidth = Math.min(260, Math.floor(innerWidth * 0.34));
+  const contentWidth = innerWidth - inspectorWidth - margin;
+  const boardWidth = presentation === "full-window" ? innerWidth : Math.max(0, contentWidth);
+  const inspectorX = bounds.x + margin + boardWidth + margin;
   const regions = [
-    { id: "board" as const, x: bounds.x + margin, y: bounds.y + margin, width: innerWidth, height: boardHeight },
-    { id: "storage" as const, x: bounds.x + margin, y: bounds.y + margin + boardHeight + margin, width: innerWidth, height: storageHeight },
+    { id: "board" as const, x: bounds.x + margin, y: bounds.y + margin, width: boardWidth, height: boardHeight },
+    { id: "storage" as const, x: bounds.x + margin, y: bounds.y + margin + boardHeight + margin, width: boardWidth, height: storageHeight },
+    { id: "inspector" as const, x: presentation === "full-window" ? bounds.x + margin : inspectorX, y: bounds.y + margin, width: presentation === "full-window" ? innerWidth : inspectorWidth, height: boardHeight },
+    { id: "sell-target" as const, x: presentation === "full-window" ? bounds.x + margin : inspectorX, y: bounds.y + margin + boardHeight + margin, width: presentation === "full-window" ? Math.floor(innerWidth / 2) : inspectorWidth, height: 40 },
+    { id: "undo" as const, x: presentation === "full-window" ? bounds.x + margin + Math.floor(innerWidth / 2) + margin : inspectorX, y: bounds.y + margin + boardHeight + margin, width: presentation === "full-window" ? Math.floor(innerWidth / 2) - margin : inspectorWidth, height: 40 },
   ];
   return { presentation, regions };
 }

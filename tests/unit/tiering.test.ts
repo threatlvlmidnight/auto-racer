@@ -55,6 +55,14 @@ describe("resolveDuplicateAcquisition (016-duplicate-item-tiering foundational, 
   });
 });
 
+describe("Feature 032 tier receipt values", () => {
+  it("changes the effective authored value at each tier without mutating the catalog item", () => {
+    expect(applyTierBonus(DIRECT_ITEM, 1).timeModifier).toBe(-2);
+    expect(applyTierBonus(DIRECT_ITEM, 2).timeModifier).toBe(-2.3);
+    expect(applyTierBonus(DIRECT_ITEM, 3).timeModifier).toBe(-2.6);
+  });
+});
+
 describe("applyTierBonus (016-duplicate-item-tiering foundational, FR-004)", () => {
   it("is a no-op at tier 1", () => {
     expect(applyTierBonus(DIRECT_ITEM, 1)).toEqual(DIRECT_ITEM);

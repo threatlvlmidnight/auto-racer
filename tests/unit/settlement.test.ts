@@ -7,13 +7,19 @@ describe("race-kind settlement policy", () => {
       .toEqual([
         { raceKind: "local", position: 1, reputationDelta: 1, participationCredits: 1, winBonusCredits: 1, championshipPoints: 0, accruesInterest: false },
         { raceKind: "local", position: 2, reputationDelta: 1, participationCredits: 1, winBonusCredits: 0, championshipPoints: 0, accruesInterest: false },
-        { raceKind: "local", position: 3, reputationDelta: 0, participationCredits: 1, winBonusCredits: 0, championshipPoints: 0, accruesInterest: false },
+        { raceKind: "local", position: 3, reputationDelta: 1, participationCredits: 1, winBonusCredits: 0, championshipPoints: 0, accruesInterest: false },
         { raceKind: "local", position: 4, reputationDelta: 0, participationCredits: 1, winBonusCredits: 0, championshipPoints: 0, accruesInterest: false },
         { raceKind: "local", position: 5, reputationDelta: 0, participationCredits: 1, winBonusCredits: 0, championshipPoints: 0, accruesInterest: false },
         { raceKind: "local", position: 6, reputationDelta: -1, participationCredits: 1, winBonusCredits: 0, championshipPoints: 0, accruesInterest: false },
         { raceKind: "local", position: 7, reputationDelta: -1, participationCredits: 1, winBonusCredits: 0, championshipPoints: 0, accruesInterest: false },
         { raceKind: "local", position: 8, reputationDelta: -2, participationCredits: 1, winBonusCredits: 0, championshipPoints: 0, accruesInterest: false },
       ]);
+  });
+
+  it("keeps the clarified third-place policy across all scored race kinds", () => {
+    expect(raceSettlementPolicy("local", 3)).toMatchObject({ reputationDelta: 1, participationCredits: 1, winBonusCredits: 0, championshipPoints: 0 });
+    expect(raceSettlementPolicy("championship", 3)).toMatchObject({ reputationDelta: 1, participationCredits: 2, winBonusCredits: 0, championshipPoints: 6 });
+    expect(raceSettlementPolicy("championship", 3)).toMatchObject({ reputationDelta: 1, participationCredits: 2, winBonusCredits: 0, championshipPoints: 6 });
   });
 
   it("uses the exact Championship Race reputation, purse, interest, and points tables", () => {

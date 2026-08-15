@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LEGACY_ITEM_POOL } from "../fixtures/legacy-item-pool";
-import { itemVisualDescriptor } from "../../src/scenes/itemVisualDescriptor";
+import { itemTagVisualMetadata, itemVisualDescriptor } from "../../src/scenes/itemVisualDescriptor";
+import { EXCLUSIVE_ITEMS, NEUTRAL_ITEMS } from "../../src/content/items";
 
 describe("itemVisualDescriptor", () => {
   it("distinguishes direct, flat, stacking, and count-synergy behavior", () => {
@@ -24,5 +25,14 @@ describe("itemVisualDescriptor", () => {
       cooldown: 1,
     });
     expect(itemVisualDescriptor(stored).activeWhileStored).toBe(true);
+  });
+
+  it("gives every authored catalog tag a stable label and unique icon token", () => {
+    const catalog = [...NEUTRAL_ITEMS, ...Object.values(EXCLUSIVE_ITEMS).flat()];
+    const tags = [...new Set(catalog.flatMap((item) => item.synergyTags))];
+    const metadata = tags.map(itemTagVisualMetadata);
+    expect(metadata.every((entry) => entry.label.length > 0)).toBe(true);
+    expect(new Set(metadata.map((entry) => entry.iconToken)).size).toBe(tags.length);
+    catalog.forEach((item) => expect(itemVisualDescriptor(item).tags.length).toBe(item.synergyTags.length));
   });
 });

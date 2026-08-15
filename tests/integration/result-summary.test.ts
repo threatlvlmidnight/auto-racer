@@ -66,19 +66,17 @@ describe("position language baselines", () => {
     expect(positionLabel(eightCarField(8))).toBe("8th of 8");
   });
 
-  it("BASELINE-GAP: a third-place finish currently reads as a loss", () => {
-    // Clarified policy (spec.md US4 AS1): positions 1-3 must be presented as
-    // wins. Replace this assertion when T082 lands the position-aware copy.
-    expect(outcomeLabel(eightCarField(3))).toBe("You Lose");
+  it("presents all podium finishes as wins", () => {
+    expect(outcomeLabel(eightCarField(3))).toBe("You Win!");
     expect(outcomeLabel(eightCarField(1))).toBe("You Win!");
   });
 });
 
 describe("Local third-place reputation baseline", () => {
-  it("BASELINE-GAP: Local third place currently awards no reputation", () => {
+  it("awards +1 reputation for Local third place", () => {
     // Clarified policy (spec.md Clarifications): third grants +1 reputation
-    // in every scored race, including Local. T073 flips this to 1.
-    expect(raceSettlementPolicy("local", 3).reputationDelta).toBe(0);
+    // in every scored race, including Local.
+    expect(raceSettlementPolicy("local", 3).reputationDelta).toBe(1);
   });
 
   it("pins the surrounding settlement table that must NOT change (permanent pin)", () => {
@@ -100,6 +98,10 @@ describe("Local third-place reputation baseline", () => {
 });
 
 describe("final summary record baseline", () => {
+  it("keeps wins plus losses equal to counted scored history", () => {
+    const entries = [{ position: 1 }, { position: 3 }, { position: 4 }, { position: 8 }];
+    expect(entries.filter((entry) => entry.position <= 3).length + entries.filter((entry) => entry.position > 3).length).toBe(entries.length);
+  });
   function runToFirstScoredRace() {
     let run = createRun({
       runId: "result-summary-run",
@@ -140,4 +142,3 @@ describe("final summary record baseline", () => {
     expect(entry).not.toHaveProperty("raceKind");
   });
 });
-

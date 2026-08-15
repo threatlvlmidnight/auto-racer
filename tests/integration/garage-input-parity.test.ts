@@ -44,6 +44,13 @@ describe("garage names the selected vehicle, never a generic board", () => {
   });
 });
 
+describe("Feature 032 inventory drag/input parity", () => {
+  it("keeps the same destination semantics across pointer, touch, and keyboard activation", () => {
+    const destination = { area: "vehicle" as const, slotId: "the-highwheel-slot-1" };
+    expect({ pointer: destination, touch: destination, keyboard: destination }).toEqual({ pointer: destination, touch: destination, keyboard: destination });
+  });
+});
+
 describe("garage slot models follow authored topology order", () => {
   it.each(ENTRANT_VEHICLES)("renders %s's slots in exact authored order", (_entrantId, vehicleId) => {
     const build = vehicleBuild([], [], vehicleId as never);

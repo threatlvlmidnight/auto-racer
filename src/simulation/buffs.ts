@@ -1,5 +1,6 @@
 import { firesOnLap } from "./laps";
-import type { IdentityTag, ItemPhysicsContribution, OfferedItem, StatTarget } from "./types";
+import { matchesTarget, resolveConditionPercent } from "./synergy";
+import type { IdentityTag, ItemDefinition, ItemPhysicsContribution, OfferedItem, ScalingClassification, StatTarget, SynergyEffect } from "./types";
 
 /** The four physical stats a Buff/SynergyEffect can target, excluding legacy "time". */
 export type PhysicalStatTarget = Exclude<StatTarget, "time">;
@@ -76,6 +77,96 @@ export function matchingDirectItemCount(allHeldItems: OfferedItem[], item: Offer
 export function matchingStatItemCount(allHeldItems: OfferedItem[], item: OfferedItem, stat: PhysicalStatTarget): number {
   return allHeldItems.filter((candidate) => candidate !== item && hasDeltaForStat(candidate, stat)).length;
 }
+
+/**
+ * Feature 032 T019 (FR-005, research Decision 2): the audited scaling
+ * vocabulary. Classifies one item's scaling-like rule as `composition`,
+ * `fitted-value`, or `lap-activation` from the authored item plus the held
+ * build (and retained lap evidence for stacking cadence). Returns null for
+ * anything that is not scaling-like — direct effects, flat amplifiers,
+ * economy placeholders, configurable controls. Pure and deterministic; no
+ * cross-race/day persistence is ever implied (labels name inputs, not time).
+ */
+export interface ScalingClassificationContext {
+  /** Every held item (installed + stored) — count-synergy counting spans storage. */
+  heldItems: readonly ItemDefinition[];
+  /** Installed (vehicle-slot) items only — synergy and fitted-value inputs. */
+  installedItems: readonly ItemDefinition[];
+  /** Retained lap evidence for stacking cooldown buffs, if playback has produced any. */
+  lapActivations?: { activations: number; currentPercent: number };
+}
+
+function synergyNextTriggerLabel(effect: SynergyEffect): string {
+  const targetLabel = effect.target.kind === "tag" ? effect.target.tag : effect.target.category;
+  if (effect.condition.kind === "linear-per-count") {
+    return `+${effect.condition.percentPerMatch}% per other matching ${targetLabel} item installed`;
+  }
+  return `Needs exactly ${effect.condition.count} other matching ${targetLabel} items for +${effect.condition.bonusPercent}%`;
+}
+
+export function classifyScalingItem(
+  item: ItemDefinition,
+  context: ScalingClassificationContext,
+): ScalingClassification | null {
+  const buff = item.buff;
+  const targetStat: StatTarget = buff?.targetStat ?? "time";
+
+  if (buff?.scalesWithFittedValue) {
+    const fittedValue = sumFittedValue(context.installedItems);
+    return {
+      kind: "fitted-value",
+      sourceItemId: item.id,
+      targetStat,
+      currentInput: fittedValue,
+      currentMagnitude: buff.boostPercent * fittedValue,
+      nextTriggerLabel: "Grows with the total price of installed parts",
+    };
+  }
+
+  if (buff?.perCount) {
+    const count = targetStat === "time"
+      ? matchingDirectItemCount([...context.heldItems], item)
+      : matchingStatItemCount([...context.heldItems], item, targetStat as PhysicalStatTarget);
+    return {
+      kind: "composition",
+      sourceItemId: item.id,
+      targetStat,
+      currentInput: count,
+      currentMagnitude: buff.boostPercent * count,
+      nextTriggerLabel: `+${buff.boostPercent}% per other matching item held`,
+    };
+  }
+
+  if (buff && item.cooldown !== undefined) {
+    const evidence = context.lapActivations;
+    const activations = evidence?.activations ?? 0;
+    return {
+      kind: "lap-activation",
+      sourceItemId: item.id,
+      targetStat,
+      currentInput: activations,
+      currentMagnitude: evidence?.currentPercent ?? activations * buff.boostPercent,
+      nextTriggerLabel: `Fires every ${item.cooldown} laps — repeats, never persists`,
+    };
+  }
+
+  const selfScaling = (item.synergyEffects ?? []).find((effect) => effect.appliesTo === "self");
+  if (selfScaling) {
+    const matchingInstalled = context.installedItems
+      .filter((other) => other !== item && matchesTarget(other, selfScaling.target)).length;
+    return {
+      kind: "composition",
+      sourceItemId: item.id,
+      targetStat: selfScaling.targetStat ?? "time",
+      currentInput: matchingInstalled,
+      currentMagnitude: resolveConditionPercent(selfScaling.condition, matchingInstalled) ?? 0,
+      nextTriggerLabel: synergyNextTriggerLabel(selfScaling),
+    };
+  }
+
+  return null;
+}
+
 
 export function computeBoostsForLap(
   activeItems: OfferedItem[],

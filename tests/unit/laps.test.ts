@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LEGACY_ITEM_POOL } from "../fixtures/legacy-item-pool";
-import { firesOnLap, simulatePlayerLaps } from "../../src/simulation/laps";
+import { deriveLiveStatChanges, deriveLiveStatChangesByLap, firesOnLap, simulatePlayerLaps } from "../../src/simulation/laps";
 import {
   generateTrack,
   matchesPhysicsCondition,
@@ -309,7 +309,6 @@ describe("simulatePlayerLaps", () => {
     });
   });
 });
-
 describe("simulatePlayerLaps — installation-aware behavior (010 US3)", () => {
   it("adds the item's Fitted behavior on top of its base effect in a matching-category slot", () => {
     // item-001 is a Power item; The Highwheel's slot 1 is Power.
@@ -1634,5 +1633,133 @@ describe("simulatePlayerLaps setup delta application (T025, contract §4)", () =
     const build = vehicleBuild([testItem({ id: "x", name: "X", price: 0, timeModifier: 0, physics: { topSpeedDelta: 4 } })]);
 
     expect(simulatePlayerLaps(build, LAP_COUNT, track, {})).toEqual(simulatePlayerLaps(build, LAP_COUNT, track));
+  });
+});
+
+// --- Feature 032 T015: live-stat change evidence (strict red-green) ------
+
+describe("deriveLiveStatChanges (032 FR-001/FR-002)", () => {
+  const track = generateTrack(20, 1);
+  const directTopSpeed = testItem({
+    id: "live-direct", name: "Live Direct", price: 2, timeModifier: 0,
+    cooldown: 1, physics: { topSpeedDelta: 2 },
+  });
+  const flatAmplifier = testItem({
+    id: "live-amplifier", name: "Live Amplifier", price: 4, timeModifier: 0,
+    buff: { boostPercent: 15, targetStat: "topSpeed" },
+  });
+  const directAccel = testItem({
+    id: "live-accel", name: "Live Accel", price: 2, timeModifier: 0,
+    cooldown: 1, physics: { accelerationDelta: 10 },
+  });
+  const stackingAccelBuff = testItem({
+    id: "live-stacking", name: "Live Stacking", price: 4, timeModifier: 0,
+    cooldown: 2, buff: { boostPercent: 3, targetStat: "acceleration" },
+  });
+
+  const namesOf = (...items: OfferedItem[]) => new Map(items.map((item) => [item.id, item]));
+
+  it("emits one lap-1 change per contributing item with before/current/delta/source", () => {
+    const laps = simulatePlayerLaps(vehicleBuild([directTopSpeed]), LAP_COUNT, track);
+    const changes = deriveLiveStatChanges(laps, STOCK_PHYSICAL_STATS, namesOf(directTopSpeed));
+
+    const topSpeedChanges = changes.filter((change) => change.stat === "topSpeed" && change.lap === 1);
+    expect(topSpeedChanges).toHaveLength(1);
+    const change = topSpeedChanges[0];
+    expect(change.previousValue).toBe(STOCK_PHYSICAL_STATS.topSpeed);
+    expect(change.currentValue).toBe(STOCK_PHYSICAL_STATS.topSpeed + 2);
+    expect(change.delta).toBe(2);
+    expect(change.direction).toBe("up");
+    expect(change.sourceItemId).toBe("live-direct");
+    expect(change.sourceItemName).toBe("Live Direct");
+    expect(change.amplifierSources).toEqual([]);
+  });
+
+  it("attributes amplifiers: source, target, magnitude, and final effective value", () => {
+    const laps = simulatePlayerLaps(vehicleBuild([directTopSpeed, flatAmplifier]), LAP_COUNT, track);
+    const changes = deriveLiveStatChanges(laps, STOCK_PHYSICAL_STATS, namesOf(directTopSpeed, flatAmplifier));
+
+    const change = changes.find((candidate) => candidate.stat === "topSpeed" && candidate.lap === 1)!;
+    expect(change.sourceItemId).toBe("live-direct");
+    // Amplified resolved delta: 2 * 1.15.
+    expect(change.delta).toBeCloseTo(2.3, 10);
+    expect(change.currentValue).toBeCloseTo(STOCK_PHYSICAL_STATS.topSpeed + 2.3, 10);
+    expect(change.amplifierSources).toHaveLength(1);
+    expect(change.amplifierSources[0]).toMatchObject({
+      sourceItemId: "live-amplifier",
+      sourceItemName: "Live Amplifier",
+      magnitudePercent: 15,
+    });
+  });
+
+  it("publishes stacking cooldown activations at the firing lap only", () => {
+    const laps = simulatePlayerLaps(
+      vehicleBuild([directAccel, stackingAccelBuff]), LAP_COUNT, track,
+    );
+    const changes = deriveLiveStatChanges(
+      laps, STOCK_PHYSICAL_STATS, namesOf(directAccel, stackingAccelBuff),
+    );
+
+    // Lap 1 fires (firesOnLap(2, 1) === true): the activation rides the
+    // race-start boundary and is attributed through amplifier evidence.
+    const lap1 = changes.filter((change) => change.lap === 1 && change.stat === "acceleration");
+    expect(lap1.map((change) => change.sourceItemId)).toContain("live-accel");
+    const lap1Direct = lap1.find((change) => change.sourceItemId === "live-accel")!;
+    expect(lap1Direct.amplifierSources.map((source) => source.sourceItemId)).toContain("live-stacking");
+
+    // Lap 2 does not fire: no acceleration changes at all.
+    expect(changes.filter((change) => change.lap === 2 && change.stat === "acceleration")).toEqual([]);
+
+    // Lap 3 fires again (3% -> 6%): one change sourced by the stacking buff.
+    const lap3 = changes.filter((change) => change.lap === 3 && change.stat === "acceleration");
+    expect(lap3).toHaveLength(1);
+    expect(lap3[0].sourceItemId).toBe("live-stacking");
+    expect(lap3[0].direction).toBe("up");
+    expect(lap3[0].delta).toBeCloseTo(10 * 0.03, 10);
+    expect(lap3[0].previousValue).toBeCloseTo(STOCK_PHYSICAL_STATS.acceleration + 10.3, 10);
+    expect(lap3[0].currentValue).toBeCloseTo(STOCK_PHYSICAL_STATS.acceleration + 10.6, 10);
+  });
+
+  it("reconciles: lap-1 changes per stat sum exactly to stats minus baseline", () => {
+    const laps = simulatePlayerLaps(vehicleBuild([directTopSpeed, flatAmplifier]), LAP_COUNT, track);
+    const changes = deriveLiveStatChanges(laps, STOCK_PHYSICAL_STATS, namesOf(directTopSpeed, flatAmplifier));
+    const lap1Stats = laps[0].physics!.stats;
+
+    (["acceleration", "topSpeed", "brakingPower", "corneringSpeed"] as const).forEach((stat) => {
+      const sum = changes
+        .filter((change) => change.lap === 1 && change.stat === stat)
+        .reduce((total, change) => total + change.delta, 0);
+      expect(sum, stat).toBeCloseTo(lap1Stats[stat] - STOCK_PHYSICAL_STATS[stat], 8);
+    });
+  });
+
+  it("emits nothing without physics evidence and nothing for zero deltas", () => {
+    const noTrack = simulatePlayerLaps(vehicleBuild([directTopSpeed]), LAP_COUNT);
+    expect(deriveLiveStatChanges(noTrack, STOCK_PHYSICAL_STATS, namesOf(directTopSpeed))).toEqual([]);
+
+    const empty = simulatePlayerLaps(vehicleBuild(), LAP_COUNT, track);
+    expect(deriveLiveStatChanges(empty, STOCK_PHYSICAL_STATS, new Map())).toEqual([]);
+  });
+
+  it("is pure: inputs are never mutated and reruns are deeply equal", () => {
+    const laps = simulatePlayerLaps(vehicleBuild([directTopSpeed]), LAP_COUNT, track);
+    const snapshot = structuredClone(laps);
+    const names = namesOf(directTopSpeed);
+
+    const first = deriveLiveStatChanges(laps, STOCK_PHYSICAL_STATS, names);
+    const second = deriveLiveStatChanges(laps, STOCK_PHYSICAL_STATS, names);
+
+    expect(laps).toEqual(snapshot);
+    expect(first).toEqual(second);
+    expect(first).not.toBe(laps);
+  });
+
+  it("groups a complete race without resetting lap numbers or boundary ids", () => {
+    const laps = simulatePlayerLaps(vehicleBuild([directAccel, stackingAccelBuff]), LAP_COUNT, track);
+    const grouped = deriveLiveStatChangesByLap(laps, STOCK_PHYSICAL_STATS, namesOf(directAccel, stackingAccelBuff));
+    expect(grouped).toHaveLength(LAP_COUNT);
+    expect(grouped[2].every((entry) => entry.lap === 3 && entry.boundaryId.includes("lap3"))).toBe(true);
+    const ids = grouped.flat().map((entry) => entry.boundaryId);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });
