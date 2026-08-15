@@ -1,8 +1,8 @@
 # Handoff
 
-## Latest session — feature 031 implemented; first public release awaits owner
+## Latest session — feature 031 implemented; demo-v0.1.0 published
 
-**Updated**: 2026-08-14 on `codex/031-demo-deployment`.
+**Updated**: 2026-08-14 on `main` (`310ab58`, tag `demo-v0.1.0`).
 
 Feature 031 (demo deployment) is implemented end to end on this branch, which
 carries feature 030's completed playback controls via merge `4bf783d` — the
@@ -25,10 +25,12 @@ previous-tag drills all diagnose and recover as specified. Live drill results
 are in `specs/031-demo-deployment/acceptance-evidence.md`. All feature-031
 work is committed on the branch.
 
-**Not done, by design**: T050 — the first public `demo-v0.1.0` release —
-requires the owner's one-time Pages enablement (Settings → Pages → GitHub
-Actions) and explicit dispatch authorization. The prepared tag command and
-owner checklist sit in the acceptance-evidence file. Remaining manual
+**Published**: T050 completed with owner authorization — repository made
+public, Pages source set to GitHub Actions, `demo-v0.1.0` tagged at `310ab58`
+and dispatched; run `31860050113` deployed and smoked healthy at
+https://threatlvlmidnight.github.io/auto-racer/ (live evidence, including the
+pre-tag dispatch failing exactly at the no-tag-no-deploy guard, is recorded
+in `specs/031-demo-deployment/acceptance-evidence.md`). Remaining manual
 acceptance: the interactive clean-cache four-viewport browser walkthrough
 (T022/T046 recorded their network-level equivalents). Feature 032
 (multiplayer) must respect the static demo boundary — see the new row in

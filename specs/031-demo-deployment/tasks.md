@@ -125,7 +125,7 @@
 - [X] T047 Re-run the Constitution Check from `plan.md` against delivered code and record final PASS evidence in `specs/031-demo-deployment/acceptance-evidence.md`
 - [X] T048 Reconcile `specs/HANDOFF.md` and `specs/DEFERRED.md` with the deployed-demo boundary and feature 032 multiplayer dependency
 - [X] T049 Prepare—but do not push—the proposed first `demo-v0.1.0` tag command and owner checklist in `specs/031-demo-deployment/acceptance-evidence.md`
-- [ ] T050 After explicit owner authorization and one-time Pages enablement, create/push `demo-v0.1.0`, manually dispatch it, verify the public URL/build footer/smoke result, and record the live evidence in `specs/031-demo-deployment/acceptance-evidence.md`
+- [X] T050 After explicit owner authorization and one-time Pages enablement, create/push `demo-v0.1.0`, manually dispatch it, verify the public URL/build footer/smoke result, and record the live evidence in `specs/031-demo-deployment/acceptance-evidence.md`
 
 ---
 

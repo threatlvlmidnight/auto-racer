@@ -343,8 +343,42 @@ Owner checklist:
 6. Open the URL in a clean browser; confirm the title footer shows
    `demo-v0.1.0 · <short-revision>` and the game is playable.
 
-### T050 — awaiting owner authorization
+### T050 — first public release published (owner-authorized)
 
-Deliberately not executed: the live first release requires the owner's
-explicit authorization and the one-time Pages enablement above. Everything
-it needs is prepared in T049.
+Owner authorization and administration completed 2026-08-14 (local): the
+repository was made public, the one-time Pages enablement was performed
+(Settings → Pages → Build and deployment → Source: **GitHub Actions**), and
+the owner approved the live dispatch below.
+
+1. `codex/031-demo-deployment` (tip `608f63d`) was merged into `main` as
+   `310ab58` ("Merge feature 031: demo deployment"; first parent `c5fade8`,
+   second parent `608f63d`).
+2. Tag created and pushed at the approved revision:
+   `git tag -a demo-v0.1.0 -m "First public demo release" 310ab58 &&
+   git push origin demo-v0.1.0`. Remote resolution verified: annotated
+   object `b67c7fe0f83718b601789773b341464d894fb954` dereferences to
+   `310ab586069d168a2d0f0bad4e5fb22397a62c1e`.
+3. The first dispatch (run `31859928398`) was made before the tag existed
+   and failed exactly at the pre-checkout guard with
+   `Tag 'demo-v0.1.0' does not exist in the repository; create it at the
+   approved revision first.` — live confirmation of the no-tag-no-deploy
+   behavior (FR-004); nothing was published by that run.
+4. Second dispatch (run `31860050113`, 2026-08-15T02:46Z) succeeded end to
+   end: "Validate tag, verify gates, build and audit artifact" (55s),
+   "Deploy to GitHub Pages" (12s), "Post-deployment public smoke check"
+   (15s) — all green; the smoke job reported the deployment healthy.
+5. Independent verification from a clean client:
+   `https://threatlvlmidnight.github.io/auto-racer/` → `200 text/html`;
+   entry bundle `assets/index-BK_rZZTE.js` → `200` and contains both
+   `demo-v0.1.0` and `310ab58` (build identity embedded and served).
+6. Run URL:
+   https://github.com/threatlvlmidnight/auto-racer/actions/runs/31860050113
+
+Remaining manual acceptance: the interactive clean-cache four-viewport
+browser walkthrough (title footer visible, full loop playable) — the same
+manual-item pattern feature 030 used; its network-level equivalents are
+recorded in T022/T046 and exercised by the smoke job above.
+
+Informational: the run carried Node.js 20 deprecation annotations for the
+pinned actions (GitHub forced Node 24; every step succeeded). Dependabot
+watches the pins; bumping them later is housekeeping, not a release blocker.
