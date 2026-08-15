@@ -151,6 +151,21 @@ export function nineSliceMarginsValid(region: UIChromeRegion): boolean {
 }
 
 /**
+ * Compact controls must not nine-slice when their destination is smaller
+ * than the fixed edge caps. Phaser preserves those caps at full size, causing
+ * them to overlap through the center and protrude beyond the intended button.
+ */
+export function canRenderUIChromeAsNineSlice(
+  region: UIChromeRegion,
+  width: number,
+  height: number,
+): boolean {
+  const margins = region.nineSliceMargins;
+  return width >= margins.left + margins.right
+    && height >= margins.top + margins.bottom;
+}
+
+/**
  * Returns a new registry with `region` added. Stable keys are unique —
  * re-registering an existing key throws rather than silently shadowing.
  */
@@ -244,19 +259,24 @@ export function createRuntimeTextControl(
   const enabled = options.enabled !== false;
   const state: UIChromeState = !enabled ? "disabled" : options.focused ? "focus" : "normal";
   const region = uiChromeRegionForState(options.family, state);
-  const frame = region && scene.textures.exists(UI_CHROME_MASTER_TEXTURE_KEY)
-    ? scene.add.nineslice(
-      options.x,
-      options.y,
-      UI_CHROME_MASTER_TEXTURE_KEY,
-      region.key,
-      options.width,
-      options.height,
-      region.nineSliceMargins.left,
-      region.nineSliceMargins.right,
-      region.nineSliceMargins.top,
-      region.nineSliceMargins.bottom,
-    ).setOrigin(0.5)
+  const hasChrome = region && scene.textures.exists(UI_CHROME_MASTER_TEXTURE_KEY);
+  const frame = hasChrome
+    ? canRenderUIChromeAsNineSlice(region, options.width, options.height)
+      ? scene.add.nineslice(
+        options.x,
+        options.y,
+        UI_CHROME_MASTER_TEXTURE_KEY,
+        region.key,
+        options.width,
+        options.height,
+        region.nineSliceMargins.left,
+        region.nineSliceMargins.right,
+        region.nineSliceMargins.top,
+        region.nineSliceMargins.bottom,
+      ).setOrigin(0.5)
+      : scene.add.image(options.x, options.y, UI_CHROME_MASTER_TEXTURE_KEY, region.key)
+        .setDisplaySize(options.width, options.height)
+        .setOrigin(0.5)
     : scene.add.rectangle(
       options.x,
       options.y,

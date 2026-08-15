@@ -9,6 +9,7 @@ import {
   UI_CHROME_STATES,
   UI_CHROME_TEXT_COLORS,
   UI_CHROME_STATE_REGION_KEYS,
+  canRenderUIChromeAsNineSlice,
   nineSliceMarginsValid,
   sourceRectInBounds,
   uiChromeRegionForState,
@@ -161,6 +162,22 @@ describe("feature 032 approved control-sheet masters (T006)", () => {
     expect(MASTER_PATH.endsWith("public/assets/ui/feature-032-controls-sheet.png")).toBe(true);
     expect(CHROMA_PATH.endsWith("public/assets/ui/source/feature-032-controls-sheet-chroma.png")).toBe(true);
     expect([chroma.width, chroma.height]).toEqual([master.width, master.height]);
+  });
+});
+
+describe("compact chrome rendering safety", () => {
+  it("uses proportional scaling when fixed nine-slice caps cannot fit", () => {
+    const primary = uiChromeRegionForState("primary", "normal")!;
+    const selector = uiChromeRegionForState("selector", "normal")!;
+
+    expect(canRenderUIChromeAsNineSlice(primary, 120, 30)).toBe(false);
+    expect(canRenderUIChromeAsNineSlice(primary, 150, 42)).toBe(false);
+    expect(canRenderUIChromeAsNineSlice(selector, 102, 28)).toBe(false);
+  });
+
+  it("retains nine-slicing when both destination axes fit their caps", () => {
+    const primary = uiChromeRegionForState("primary", "normal")!;
+    expect(canRenderUIChromeAsNineSlice(primary, 180, 60)).toBe(true);
   });
 });
 
