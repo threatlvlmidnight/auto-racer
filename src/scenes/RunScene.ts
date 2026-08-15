@@ -29,6 +29,7 @@ import {
   createDemoButton,
   DISPLAY_FONT,
   UI_FONT,
+  type DemoButtonOptions,
 } from "./demoTheme";
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
 import { championshipProgressModel, worldTourItineraryModel } from "./worldTourPresentation";
@@ -171,9 +172,9 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
-    this.addControl(width - 82, 402, "INVENTORY", () => {
+    this.addControl(width - 70, 396, "INVENTORY", () => {
       this.scene.start("InventoryScene", { run: this.run, host: "run-hub", returnScene: "RunScene", returnData: {} });
-    });
+    }, { width: 112, height: 30, fontSize: "11px" });
 
     const itinerary = worldTourItineraryModel(this.run);
     if (this.run.worldTour?.phase === "awaiting-destination" && itinerary) {
@@ -294,7 +295,11 @@ export class RunScene extends Phaser.Scene {
         align: "center",
         wordWrap: { width: 260 },
       }).setOrigin(0.5);
-      const enter = this.addControl(x, 315, "Enter", () => this.selectChoice(choice.id));
+      const enter = this.addControl(x, 304, "Enter", () => this.selectChoice(choice.id), {
+        width: 112,
+        height: 30,
+        fontSize: "12px",
+      });
       const inputTargets = enter.getData("uiChromeInputTargets") as Phaser.GameObjects.GameObject[] | undefined;
       (inputTargets ?? [enter]).forEach((target) => {
         target.on("pointerover", () => card?.setFrame("focus"));
@@ -364,7 +369,13 @@ export class RunScene extends Phaser.Scene {
     return parts.join(" · ");
   }
 
-  private addControl(x: number, y: number, label: string, action: () => void): Phaser.GameObjects.Text {
-    return createDemoButton(this, x, y, label, action);
+  private addControl(
+    x: number,
+    y: number,
+    label: string,
+    action: () => void,
+    options: DemoButtonOptions = {},
+  ): Phaser.GameObjects.Text {
+    return createDemoButton(this, x, y, label, action, true, options);
   }
 }

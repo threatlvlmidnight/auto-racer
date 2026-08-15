@@ -12,7 +12,11 @@ offers too few credible changes or dramatic payoffs to reward watching.
 
 Feature 033 will explore simulation-backed race phases, overtaking and comeback
 opportunities, signature driver/vehicle moments, crash risk, and their
-presentation. It must enrich the actual contest rather than fabricate spectacle.
+presentation. It also adds basic race engine audio and shared UI feedback sounds;
+background music remains deferred. It also replaces same-direction polygonal
+track variants with recognizable deterministic circuits containing features
+such as hairpins and switchbacks, and derives truthful braking demand from their
+braking zones. It must enrich the actual contest rather than fabricate spectacle.
 
 ## Uma Musume analysis
 
@@ -66,6 +70,8 @@ manual, so exact formulas are research input, not Auto Racer design authority.
 - Every shown overtake corresponds to authoritative position/time evidence.
 - Stock vehicles retain identical starting physical stats unless explicitly
   reopened by a later feature.
+- The same retained track geometry must drive physics, summaries, rendering,
+  replay, and async viewing; scenes may not invent decorative geometry.
 
 ## Questions for `/speckit.clarify`
 

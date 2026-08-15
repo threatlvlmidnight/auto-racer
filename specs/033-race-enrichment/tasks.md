@@ -169,19 +169,77 @@ and reduced motion; compare event IDs/order/result and inspect all evidence.
 
 ---
 
-## Phase 7: Corpus tuning and release gates
+## Phase 7: User Story 5 — Hear responsive race and UI feedback (Priority: P2)
+
+**Goal**: Scored and Test Day races have lifecycle-safe engine audio, shared UI
+controls have concise semantic cues, and mute/missing/browser-blocked audio never
+affects authoritative state.
+
+**Independent Test**: Exercise a mocked audio adapter through UI activation and
+race start/pause/rate/Skip/finish/shutdown; verify one-cue semantics, no leaked
+loops, silent fallback, and byte-identical race results with audio on/off.
+
+### Tests
+
+- [ ] T067 [P] [US5] Add failing semantic cue catalog, bounded volume, mute, browser-unlock, and missing-asset fallback tests in `tests/unit/audioPresentation.test.ts`
+- [ ] T068 [P] [US5] Add failing shared-control single-cue tests covering artwork/label dual hit targets, disabled controls, selection, back, and activation in `tests/integration/ui-audio.test.ts`
+- [ ] T069 [P] [US5] Add failing scored/Test Day engine start, pause, `1x`/`2x` bounded-rate, Skip, finish, visibility, and shutdown cleanup tests in `tests/integration/audio-lifecycle.test.ts`
+- [ ] T070 [P] [US5] Add failing audio-enabled/muted/blocked/missing deep-equal contest, playback-boundary, navigation, and settlement tests in `tests/integration/audio-authority.test.ts`
+
+### Implementation
+
+- [ ] T071 [US5] Add licensed local web-compressed engine/UI assets, provenance, stable asset keys, and Boot loading with optional-asset fallback in `public/assets/audio/`, `specs/033-race-enrichment/audio-asset-manifest.md`, and `src/scenes/BootScene.ts`
+- [ ] T072 [US5] Implement semantic cue IDs, session mute/effects volume, browser unlock, one-loop ownership, bounded rate mapping, and teardown in `src/scenes/audioPresentation.ts`
+- [ ] T073 [US5] Wire single semantic activation/selection cues into shared runtime controls and a visible mute control without duplicate emissions in `src/scenes/uiChrome.ts` and `src/scenes/demoTheme.ts`
+- [ ] T074 [US5] Integrate engine lifecycle with scored/Test Day playback and run T067-T073 across both speeds, pause, Skip, finish, scene exit, blocked audio, and mute; record evidence in `src/scenes/ContestScene.ts`, `src/scenes/PracticeContestScene.ts`, and `specs/033-race-enrichment/acceptance-evidence.md`
+
+**Checkpoint**: Sound improves presence and responsiveness without becoming authority or leaking across scenes.
+
+---
+
+## Phase 8: User Story 6 — Generate recognizable circuits (Priority: P1)
+
+**Goal**: Replace one-direction polygon loops with deterministic, validated
+circuits containing real racing features and geometry-derived braking demand.
+
+**Independent Test**: Generate a broad seed/ordinal/region corpus and reconcile
+geometry, feature classification, braking zones, displayed demand, and lap
+physics across every track consumer.
+
+### Tests
+
+- [ ] T075 [P] [US6] Add failing production-corpus tests for positive braking demand, retained braking-zone contributions, monotonic severity, and display/physics reconciliation in `tests/unit/tracks.test.ts` and `tests/integration/track-presentation.test.ts`
+- [ ] T076 [P] [US6] Add failing deterministic circuit-grammar tests for straights, sweepers, chicanes, hairpins, alternating-direction switchbacks, and seed/ordinal/region identity in `tests/unit/tracks.test.ts`
+- [ ] T077 [P] [US6] Add failing closure, viewport bounds, non-self-intersection, minimum curve radius, nonadjacent-lane separation, bounded-attempt fallback, and repeat-generation deep-equality tests in `tests/unit/tracks.test.ts`
+- [ ] T078 [P] [US6] Add failing corpus diversity and anti-regular-polygon similarity gates in `tests/regression/track-generation-corpus.test.ts`
+
+### Implementation
+
+- [ ] T079 [US6] Extend authoritative track types with curve direction/radius, sampled centerline, stable feature classifications, braking zones, and validation metadata in `src/simulation/tracks.ts`
+- [ ] T080 [US6] Implement deterministic circuit grammar and bounded candidate validation for straights, sweepers, chicanes, hairpins, and switchbacks in `src/simulation/tracks.ts`
+- [ ] T081 [US6] Replace the single sharp-angle threshold with geometry/approach/speed-reduction braking-zone derivation and aggregate positive production demand in `src/simulation/tracks.ts`
+- [ ] T082 [US6] Preserve one authoritative generated circuit through setup, Test Day, contest, playback, Results, summary, and async/run-history bridges in `src/simulation/run.ts`, `src/scenes/trackSummaryPresentation.ts`, and race scene consumers
+- [ ] T083 [US6] Render the validated sampled centerline without polygon shortcuts and expose derived feature/braking explanations in `src/scenes/ContestScene.ts`, `src/scenes/PreRaceScene.ts`, and `src/scenes/PracticeContestScene.ts`
+- [ ] T084 [US6] Run the track corpus and existing track/lap/setup/contest/playback regressions; record feature coverage, geometry rejection counts, diversity metrics, and braking-demand distribution in `specs/033-race-enrichment/acceptance-evidence.md`
+
+**Checkpoint**: Tracks look and behave like varied race circuits, and braking
+demand is a truthful nonzero consequence of their retained geometry.
+
+---
+
+## Phase 9: Corpus tuning and release gates
 
 **Purpose**: Tune defaults, prove constitutional boundaries, and close full-stack acceptance.
 
-- [ ] T067 [P] Run the representative corpus for post-Opening event ≥50%, full emphasis ≤33%, initial winner-change 10–25%, and stronger-build dominance in `tests/regression/race-enrichment-corpus.test.ts`
-- [ ] T068 [P] Run repeated 8-car/16-lap enriched resolution benchmarks against T001's recorded baseline and fail when the approved no-material-delay tolerance is exceeded in `tests/regression/race-enrichment-performance.test.ts`
-- [ ] T069 Tune only centralized validated defaults from T067 and document every value/baseline comparison in `src/simulation/enrichmentConfig.ts` and `specs/033-race-enrichment/acceptance-evidence.md`
-- [ ] T070 [P] Audit for live RNG, scene-side resolution, origin-gated signatures, hidden stock scalars, unisolated incident consumption, and persistent incident penalties in `tests/integration/race-enrichment-boundaries.test.ts`
-- [ ] T071 Run focused enrichment plus existing contest, laps, playback, setup, track, run, history, settlement, sponsor, inventory, Results, Test Day, and demo regression suites; record results in `specs/033-race-enrichment/acceptance-evidence.md`
-- [ ] T072 Run full `npm test`, `npm run lint`, and `npm run build` with no weakened assertions or new warnings; record results in `specs/033-race-enrichment/acceptance-evidence.md`
-- [ ] T073 Perform browser QA at 1920×1080, 1366×768, 1024×768, and 800×450 for all entrants, both speeds, Skip, reduced motion, incidents on/off, Results inspection, and Test Day in `specs/033-race-enrichment/acceptance-evidence.md`
-- [ ] T074 Re-run the Constitution Check from `plan.md` against delivered code and record final PASS evidence in `specs/033-race-enrichment/acceptance-evidence.md`
-- [ ] T075 Reconcile `specs/HANDOFF.md`, `specs/DEFERRED.md`, Feature 034/035 boundaries, and future picture-in-picture event-ID requirements after implementation
+- [ ] T085 [P] Run the representative corpus for post-Opening event ≥50%, full emphasis ≤33%, initial winner-change 10–25%, and stronger-build dominance in `tests/regression/race-enrichment-corpus.test.ts`
+- [ ] T086 [P] Run repeated 8-car/16-lap enriched resolution benchmarks against T001's recorded baseline and fail when the approved no-material-delay tolerance is exceeded in `tests/regression/race-enrichment-performance.test.ts`
+- [ ] T087 Tune only centralized validated defaults from T085 and document every value/baseline comparison in `src/simulation/enrichmentConfig.ts` and `specs/033-race-enrichment/acceptance-evidence.md`
+- [ ] T088 [P] Audit for live RNG, scene-side resolution, origin-gated signatures, hidden stock scalars, unisolated incident consumption, persistent incident penalties, audio authority leakage, or scene-side track reconstruction in `tests/integration/race-enrichment-boundaries.test.ts`
+- [ ] T089 Run focused enrichment plus existing contest, laps, playback, setup, track, run, history, settlement, sponsor, inventory, Results, Test Day, audio, track-corpus, and demo regression suites; record results in `specs/033-race-enrichment/acceptance-evidence.md`
+- [ ] T090 Run full `npm test`, `npm run lint`, and `npm run build` with no weakened assertions or new warnings; record results in `specs/033-race-enrichment/acceptance-evidence.md`
+- [ ] T091 Perform browser QA at 1920×1080, 1366×768, 1024×768, and 800×450 for all entrants, circuit feature families, both speeds, Skip, reduced motion, incidents on/off, Results inspection, Test Day, mute, blocked/missing audio, and engine/UI lifecycle in `specs/033-race-enrichment/acceptance-evidence.md`
+- [ ] T092 Re-run the Constitution Check from `plan.md` against delivered code and record final PASS evidence in `specs/033-race-enrichment/acceptance-evidence.md`
+- [ ] T093 Reconcile `specs/HANDOFF.md`, `specs/DEFERRED.md`, Feature 034/035 boundaries, future picture-in-picture event-ID requirements, and deferred background-music scope after implementation
 
 ---
 
@@ -195,13 +253,19 @@ and reduced motion; compare event IDs/order/result and inspect all evidence.
 - US2 depends on US1's action/event reducer and adds identity/signatures.
 - US3 depends on US1's timing/evidence path but can proceed alongside US2 after shared types stabilize.
 - US4 depends on retained US1-US3 events.
-- Phase 7 depends on all desired stories.
+- US5 depends on the shared control and playback presentation surfaces but not on
+  simulation enrichment authority.
+- US6 depends only on the existing track authority and may proceed after Phase 2;
+  it must complete before final corpus tuning because geometry changes lap timing.
+- Phase 9 depends on all desired stories.
 
 ### User-story dependency graph
 
 ```text
 Foundation → US1 phases/passing ─┬→ US2 identity/signatures ─┐
-                                 └→ US3 optional incidents ──┼→ US4 presentation → Gates
+                                 └→ US3 optional incidents ──┼→ US4 presentation ─┐
+Foundation → shared UI/playback ─────────────────────────────┴→ US5 audio ────────┤
+Foundation → authoritative track generation ─────────────────────→ US6 tracks ────┴→ Gates
 ```
 
 ### Parallel opportunities
@@ -212,7 +276,10 @@ Foundation → US1 phases/passing ─┬→ US2 identity/signatures ─┐
 - T030-T034 cover eligibility, origin parity, activation, presentation, and rivals independently.
 - T042-T046 cover risk, incidents, toggle isolation, mutation, and presentation independently.
 - T053-T058 cover rates, boundaries, emphasis, accessibility, Results, and Test Day independently.
-- T067-T068 and T070 are independent corpus, performance, and authority audits after implementation stabilizes.
+- T075-T078 cover independent braking, feature grammar, geometry validity, and
+  corpus-diversity contracts before track implementation.
+- T067-T070 cover independent audio catalog, UI, lifecycle, and authority contracts.
+- T085-T086 and T088 are independent corpus, performance, and authority audits after implementation stabilizes.
 
 ## Implementation strategy
 
@@ -228,9 +295,11 @@ replay-stable event evidence before driver identity, incidents, or spectacle.
 3. Add origin-agnostic stat-gated driver identities.
 4. Add toggleable bounded incidents.
 5. Project the retained narrative at revised speeds and Results.
-6. Tune only through centralized config and close full gates.
+6. Add lifecycle-safe engine and UI audio with mute/fallback behavior.
+7. Replace polygon loops with validated circuit grammar and braking zones.
+8. Tune only through centralized config and close full gates.
 
 ### Format validation
 
-All 75 executable tasks use a checkbox, sequential ID, optional `[P]`, required
+All 93 executable tasks use a checkbox, sequential ID, optional `[P]`, required
 story label inside story phases, and explicit repository file path.

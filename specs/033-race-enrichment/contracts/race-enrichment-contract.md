@@ -64,3 +64,26 @@ or compact form. Missing optional assets fall back without blocking navigation.
 Results reads the retained event log and never recomputes it. Test Day uses the
 same resolver and evidence without scored settlement. Corpus gates and every
 balance lever are configuration-driven and reproducible.
+
+## 12. Audio presentation
+
+Engine and UI audio are optional presentation consumers. One engine loop may be
+owned by an active scored/Test Day playback scene and must be cleaned up on
+pause, Skip, finish, shutdown, or visibility loss. Shared semantic UI actions
+emit at most one cue. Mute, browser rejection, missing assets, and playback-rate
+changes cannot alter schedule time, events, navigation, result, or settlement.
+Background music is outside this contract.
+
+## 13. Circuit geometry and braking demand
+
+Track generation is deterministic from seed, race ordinal, and region and uses
+bounded candidate attempts. The accepted authoritative circuit must be closed,
+in bounds, non-self-intersecting, sufficiently separated, and valid for the
+documented segment/radius limits. Stable feature and braking-zone identities are
+derived once from that geometry. Preparation, Test Day, contest physics,
+playback, Results, run history, and async viewers consume the same track object.
+
+Production braking demand is the aggregate of retained approach/severity/speed-
+reduction evidence and must be positive. Rendering may smooth the retained
+sampled centerline, but may not reconstruct a different polygon or infer
+physics from screen coordinates.

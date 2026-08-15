@@ -1,9 +1,42 @@
 # Handoff
 
-## Latest session — Feature 032 automated implementation complete (2026-08-15)
+## Latest session — Feature 034 planning complete (2026-08-15)
 
-Feature 032 has completed its automated implementation and release-gate work.
-The current task ledger is 107/110 complete. Completed scope includes retained
+The active SpecKit marker is now `034-roguelike-encounter-variety` via
+`.specify/feature.json`. Specification, owner clarification, research,
+implementation plan, data model, internal contract, quickstart, requirements
+checklist, 78 dependency-ordered implementation tasks, and the final consistency
+pass are complete under `specs/034-roguelike-encounter-variety/`. There are no
+unresolved questions or critical/high analysis findings. Feature 034 is ready for
+`/speckit.implement` after its T001 reconciliation with Feature 033's retained
+overtake/race-evidence contract.
+
+Key locked Feature 034 decisions: seven new encounter types; two-stage selected-
+type cooldown; no two-acquisition pair; two free Upgrade Workshop offers across
+the 40-stage championship (one in global stages 1–20 and one in 21–40 when
+eligible); instance-bound Workshop Modifications; canonical normalized physical
+stat points; catalog-wide Fitted/Improvised tuning; reserved-slot Scrutineering;
+unscored three-objective Exhibition Trials; and late-run Tag Specialist stock.
+Q16 and Q21 are accepted: the specialist requires two matching held tags and the
+player selects the tag, while one pending Sponsor and one pending Scrutineering
+effect may coexist but duplicate effects within either category may not.
+
+Feature 032 remains complete at 110/110 and its final UI follow-ups are included
+in this working state: the inventory routes to the authoritative vehicle/storage
+board, inventory buttons no longer overlap primary controls, encounter Enter
+buttons sit inside their cards, and all four installed race slots are laid out.
+The combined release gate passes: 85 test files / 1,555 tests, lint, TypeScript,
+and production build. No automated visual testing was performed; the owner retains
+browser visual acceptance.
+
+Feature 033 is planning-complete at 93 tasks and remains the next implementation
+owner chronologically. It now includes retained race phases/passing/identity/
+incidents, basic engine and UI audio, circuit grammar with hairpins/switchbacks,
+and geometry-derived positive braking demand. Feature 035 remains intake-only.
+
+## Latest session — Feature 032 implementation complete (2026-08-15)
+
+Feature 032 is complete. The current task ledger is 110/110. Completed scope includes retained
 live-stat feedback, tag/synergy and scaling inspection, supplier receipts and
 restock, inventory hosts with sale/Undo, settlement/economy/history, balance
 evidence, approved UI chrome runtime integration, replay invariants, and the
@@ -14,17 +47,14 @@ Evidence is recorded in
 [`specs/032-demo-feedback-bug-pass/balance-evidence.md`](032-demo-feedback-bug-pass/balance-evidence.md),
 and [`specs/032-demo-feedback-bug-pass/ui-asset-manifest.md`](032-demo-feedback-bug-pass/ui-asset-manifest.md).
 The automated gate passed with 81 test files / 1,531 tests, lint, production
-build, and Pages build.
-
-Remaining Feature 032 work is explicitly manual: T100 visual-priority review,
-T101 in-game asset-sheet decision, and T108 pointer/touch/keyboard and
-viewport walkthrough. Feature 032 must not be marked fully complete until
-those reviews are recorded. DEMO-001 remains a documented temporary guard with
+build, and Pages build. Owner-hosted-demo review closed T100/T101 and accepted
+T108 with the exhaustive physical touch/narrow matrix explicitly waived rather
+than reported as executed. DEMO-001 remains a documented temporary guard with
 the exact Reward Draft return fix deferred; DEMO-002 `SKIP REWARDS` is shipped.
 
-Feature 033 remains the next implementation owner after those reviews. Its
-scope and handoff remain under `specs/033-race-enrichment/`; no Feature 033
-mechanics were introduced by this pass.
+Feature 033 is now the next implementation owner. Its scope includes race
+phases/identity/passing/incidents, engine and UI audio, and authoritative circuit
+generation with hairpins, switchbacks, and geometry-derived braking demand.
 
 ## Features 034 and 035 recorded as TODO; Feature 033 clarification next
 
@@ -36,12 +66,12 @@ rarity/upgrade card feedback. Both have intake files and deferred-backlog rows.
 
 Feature 033 remains the active design target while Feature 032 is implemented
 elsewhere. Specification, clarification, planning, contracts, validation guide,
-75 implementation tasks, and consistency analysis remediation are complete under
+93 implementation tasks, and consistency analysis remediation are complete under
 `specs/033-race-enrichment/`.
 Active signatures use a resolved-stat threshold, so native, foreign, and mixed
 items count equally when they move a build toward the driver's preferred
-engineering outcome. Feature 033 is ready for `/speckit.implement` once Feature
-032 completes; implementation must begin with task T006 reconciliation. The repository-local
+engineering outcome. Feature 033 is ready for `/speckit.implement`; implementation
+must begin with task T006 reconciliation. The repository-local
 `speckit.clarify` agent now presents all material questions in one recommended
 questionnaire and accepts a batch answer.
 

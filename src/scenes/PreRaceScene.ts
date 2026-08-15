@@ -205,14 +205,14 @@ export class PreRaceScene extends Phaser.Scene {
     this.track(testDayButton);
     const startButton = createDemoButton(this, LOGICAL_WIDTH - 125, 422, "START RACE", () => this.startRace(), true, { fontSize: PRACTICE_CONTROL_FONT_SIZE });
     this.track(startButton);
-    const inventoryButton = createDemoButton(this, LOGICAL_WIDTH - 70, 394, "INVENTORY", () => this.scene.start("InventoryScene", {
+    const inventoryButton = createDemoButton(this, LOGICAL_WIDTH - 70, 374, "INVENTORY", () => this.scene.start("InventoryScene", {
       run: this.setupInput.run,
       host: "pre-race",
       returnScene: "PreRaceScene",
       returnData: { encounterId: this.setupInput.encounterId, originState: { setupSnapshot: {
         draftSelections: { ...this.selections }, rememberChecked: false, focusFamily: this.focusedFamily,
       } } },
-    }), true, { fontSize: "9px" });
+    }), true, { fontSize: "10px", width: 112, height: 30 });
     this.track(inventoryButton);
 
     this.focusRing = applyPracticeFocusRing(this, [...positionButtons, inventoryButton, backButton, testDayButton, startButton]);

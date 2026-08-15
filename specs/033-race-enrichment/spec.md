@@ -4,11 +4,12 @@
 
 **Created**: 2026-08-15
 
-**Status**: Specification package complete — ready for `/speckit.implement` after Feature 032 reconciliation
+**Status**: Specification package complete — ready for `/speckit.implement`
 
 **Input**: Make watched races remain credible and dramatic after the opening lap
 through deterministic phases, build-supported driver signatures, passing and
-defense, bounded incidents, and truthful event presentation.
+defense, bounded incidents, truthful event presentation, basic sound, and
+recognizable circuit generation with meaningful braking demands.
 
 ## Clarifications
 
@@ -69,6 +70,15 @@ defense, bounded incidents, and truthful event presentation.
   representative deterministic corpus contains a consequential post-Opening
   event, no more than one-third uses a full emphasis animation, and build
   strength remains the dominant predictor. Monitor and tune these thresholds.
+- Q: What audio ships? → A: Basic looping engine audio for scored and Test Day
+  race playback plus shared UI activation/selection feedback sounds. Audio is
+  presentation-only, user-muteable, and degrades silently when playback is
+  blocked or an asset is unavailable. Background music is deferred.
+- Q: What track work ships? → A: Replace regular one-direction polygon loops
+  with deterministic circuit grammar that can combine straights, sweepers,
+  chicanes, hairpins, and alternating-direction switchbacks. Braking demand is
+  derived from approach speed, corner severity, and braking zones; production
+  tracks may not all collapse to zero.
 
 ## User Scenarios & Testing
 
@@ -198,6 +208,69 @@ evidence and verify settlement is identical.
    can see its phase/boundary, trigger inputs, Composure, effect or loss, and
    authoritative before/after time and position.
 
+---
+
+### User Story 5 — Hear responsive race and UI feedback (Priority: P2)
+
+As a player or spectator, I hear a restrained engine bed during races and short
+feedback when I activate or select UI controls, while retaining a clear mute
+option and identical gameplay when audio is unavailable.
+
+**Why this priority**: Basic sound materially improves race presence and control
+responsiveness, but it must remain downstream of deterministic authority.
+
+**Independent Test**: Drive retained playback and shared controls through mocked
+audio adapters; verify cue order, lifecycle cleanup, mute behavior, missing-asset
+fallback, and byte-identical race results with audio enabled and disabled.
+
+**Acceptance Scenarios**:
+
+1. **Given** scored or Test Day race playback begins after user interaction,
+   **When** the presentation clock runs, pauses, changes speed, skips, finishes,
+   or exits, **Then** one engine loop follows that lifecycle without leaking into
+   another scene or changing schedule time.
+2. **Given** an enabled shared UI control, **When** it is activated or a selection
+   changes, **Then** one concise UI cue plays; disabled controls and duplicate
+   pointer/label targets do not emit duplicate cues.
+3. **Given** sound is muted, browser playback is blocked, or an optional asset is
+   missing, **When** the same interaction/race resolves, **Then** navigation,
+   retained events, settlement, and visible feedback remain fully operational.
+4. **Given** new `1x` or `2x` playback, **When** engine audio is active, **Then**
+   its bounded playback rate reflects the selected presentation speed without
+   using audio time as race authority.
+
+---
+
+### User Story 6 — Race on recognizable circuits (Priority: P1)
+
+As a player, I see varied closed circuits with credible racing features such as
+hairpins and switchbacks, and the stated braking demand reflects the geometry I
+am preparing for.
+
+**Why this priority**: A field of distorted regular polygons makes every venue
+feel interchangeable, while zero braking demand makes an existing vehicle stat
+and its pre-race explanation misleading.
+
+**Independent Test**: Generate a broad deterministic seed/ordinal/region corpus;
+verify closure, bounds, non-self-intersection, minimum separation, reproducible
+feature classification, visible left/right direction changes, and nonzero
+geometry-derived braking demand for production circuits.
+
+**Acceptance Scenarios**:
+
+1. **Given** a production track seed, **When** its circuit is generated, **Then**
+   it is a closed, non-self-intersecting, drivable centerline within the race
+   viewport rather than a regular convex polygon.
+2. **Given** the representative track corpus, **When** layouts are classified,
+   **Then** it contains recognizable hairpins, chicanes, sweepers, and
+   alternating-direction switchbacks across the corpus.
+3. **Given** a track with a severe corner after a meaningful approach, **When**
+   characteristics are derived, **Then** braking demand and braking-phase
+   evidence are greater than zero and increase with braking-zone severity.
+4. **Given** identical seed, race ordinal, and region, **When** any preparation,
+   Test Day, contest, replay, or Results surface requests the track, **Then** it
+   receives the same geometry, features, characteristics, and track identity.
+
 ### Edge Cases
 
 - Phase rounding assigns every lap exactly once at 8, 10, 12, 14, and 16 laps.
@@ -216,6 +289,15 @@ evidence and verify settlement is identical.
   retained events exactly once and reach the same Results state.
 - Missing optional presentation assets fall back to text/static treatment and
   never prevent race settlement or Results inspection.
+- Browser autoplay can delay engine start until the first valid user gesture;
+  delayed/blocked audio never delays playback or queues stale UI sounds.
+- Pause, Skip, scene shutdown, visibility loss, and race completion stop or pause
+  active engine loops; returning never creates stacked duplicate loops.
+- Degenerate circuit candidates, self-intersections, near-overlapping lanes, or
+  curves outside the viewport are deterministically rejected and regenerated
+  from bounded named attempts; no live randomness or infinite retry is allowed.
+- An intentionally braking-free unit fixture may report zero, but every shipped
+  production circuit must contain a real braking zone and positive demand.
 
 ## Requirements
 
@@ -298,6 +380,55 @@ evidence and verify settlement is identical.
   signature builds, incident-toggle state, and playback mode.
 - **FR-027**: Picture-in-picture character cutscenes and their bespoke character
   art MUST NOT be required or generated by Feature 033.
+- **FR-028**: Scored and Test Day race presentation MUST provide one basic looping
+  engine sound while playback is active. It MUST pause/stop on presentation
+  pause, Skip, finish, scene shutdown, and visibility loss as appropriate.
+- **FR-029**: Engine playback rate MAY respond to the selected `1x`/`2x` mode or
+  retained player pace only within documented audible bounds. Audio clocks and
+  callbacks MUST NOT advance, resolve, or modify authoritative race state.
+- **FR-030**: Shared enabled UI controls MUST emit concise activation feedback,
+  and selection changes MAY emit a distinct selection cue. One semantic action
+  MUST emit at most one cue even when artwork and label share the hit target.
+- **FR-031**: Disabled controls MUST NOT emit success/activation audio. Missing
+  assets or browser playback rejection MUST fail silently while preserving all
+  visible feedback, input, navigation, and settlement.
+- **FR-032**: A user-visible master sound toggle and bounded effects volume MUST
+  apply to engine and UI audio. The preference MAY remain session-local in this
+  feature and MUST default to audible only after browser interaction permits it.
+- **FR-033**: Audio assets MUST be local/offline-safe, compressed for web use,
+  attribution/license-audited, and registered through stable semantic cue IDs
+  rather than scene-specific file paths.
+- **FR-034**: Engine and UI audio MUST be owned by a presentation-only adapter
+  with explicit scene lifecycle cleanup and injectable/mocked tests; simulation,
+  playback authority, and retained result schemas MUST NOT depend on Phaser audio.
+- **FR-035**: Background music, adaptive score, voice-over, and bespoke character
+  vocalizations MUST NOT ship as part of Feature 033.
+- **FR-036**: Production track generation MUST use a deterministic circuit
+  grammar capable of straights, sweepers, chicanes, hairpins, and
+  alternating-direction switchbacks; it MUST NOT constrain every corner in a
+  circuit to the same turn direction.
+- **FR-037**: Every generated production centerline MUST be closed,
+  non-self-intersecting, inside the established race viewport, and satisfy
+  documented minimum segment length, curve radius, and nonadjacent-lane
+  separation constraints.
+- **FR-038**: Track feature classification MUST be derived from retained geometry
+  and expose stable feature identities for hairpins, switchbacks, chicanes,
+  sweepers, and braking zones without scene-side inference.
+- **FR-039**: Braking demand MUST be derived from retained braking zones using
+  corner severity, approach length/speed potential, and required speed reduction.
+  Production tracks MUST NOT report zero merely because no corner exceeds one
+  global angle threshold.
+- **FR-040**: Every shipped production track MUST have positive braking demand;
+  zero remains legal only for explicit synthetic test fixtures with no required
+  deceleration.
+- **FR-041**: Track generation MUST remain deterministic from seed, race ordinal,
+  and region theme, use bounded candidate attempts/fallbacks, and yield the same
+  track identity, segments, points, features, demands, and lap physics across
+  preparation, Test Day, contest, replay, Results, and asynchronous viewing.
+- **FR-042**: A deterministic corpus gate MUST reject regular-polygon monotony,
+  excessive layout similarity, missing feature families, self-intersection,
+  insufficient lane separation, zero production braking demand, and divergence
+  between displayed characteristics and authoritative physics.
 
 ### Key Entities
 
@@ -317,6 +448,14 @@ evidence and verify settlement is identical.
   feature toggle used for balance and developer tuning.
 - **Incident Risk Summary**: Pre-race qualitative band, inspectable sources, and
   safer legal changes without the resolved outcome.
+- **Audio Cue**: Stable presentation-only semantic ID for engine-loop and UI
+  feedback playback, independent of asset filename and simulation authority.
+- **Audio Settings**: Session preference containing mute state and bounded effects
+  volume, applied uniformly to race and UI buses.
+- **Circuit Geometry**: Deterministic closed centerline plus geometric primitives,
+  sampled points, bounds, feature classifications, and validation evidence.
+- **Braking Zone**: Retained approach, target corner/sequence, speed-reduction
+  requirement, severity, and contribution to aggregate braking demand.
 
 ## Success Criteria
 
@@ -354,12 +493,26 @@ evidence and verify settlement is identical.
 - **SC-011**: Pre-race and Results inspection expose every outcome-determining
   signature, Composure, passing, and incident input required by Constitution
   Principle III without hover, animation, or color-only meaning.
+- **SC-012**: In 100% of scored and Test Day lifecycle fixtures, at most one
+  engine loop is active and no loop remains after pause/Skip/finish/shutdown.
+- **SC-013**: Every tested semantic UI activation emits at most one matching cue;
+  muted, disabled, blocked, and missing-asset cases emit no unhandled rejection
+  and preserve identical navigation/state transitions.
+- **SC-014**: Enabling, muting, blocking, or removing optional audio produces
+  byte-identical authoritative race results, retained events, and settlement in
+  100% of deterministic comparison fixtures.
+- **SC-015**: Across the production track corpus, 100% of circuits are closed,
+  in bounds, non-self-intersecting, sufficiently separated, and report positive
+  braking demand that reconciles with retained braking-zone evidence.
+- **SC-016**: The deterministic corpus contains every required circuit feature
+  family and at least one left/right direction change per production track;
+  regular-polygon and duplicate-layout similarity gates report zero violations.
 
 ## Assumptions
 
-- Existing track segments, resolved vehicle stats, N-car contest evidence,
-  playback boundary consumption, Test Day, and async ghost rules are extended
-  rather than replaced.
+- Existing track identity, resolved vehicle stats, N-car contest evidence,
+  playback boundary consumption, Test Day, and async ghost rules are preserved;
+  the current polygonal segment generator is replaced behind that authority.
 - Exact driver passive/signature content, initial stat thresholds, Composure
   values, time caps, and risk formulas are planning/content-balancing decisions
   constrained by this specification and deterministic corpus gates.
@@ -368,6 +521,8 @@ evidence and verify settlement is identical.
 - Existing supported lap counts remain 8, 10, 12, 14, and 16.
 - The current static, serverless demo boundary remains valid; Feature 033 adds no
   account, matchmaking, or live multiplayer dependency.
+- Basic engine/UI sound assets can be authored or sourced under repository-safe
+  licenses; background music is not required for acceptance.
 
 ## Out of Scope
 
@@ -378,5 +533,6 @@ evidence and verify settlement is identical.
   fines, item loss, or race-to-race Composure.
 - Bespoke picture-in-picture character cutscenes or a new character-action asset
   production pipeline.
+- Background music, adaptive score, voice-over, or bespoke character vocalizations.
 - New between-race encounter families, owned by Feature 034.
 - Whole-game layout/card/location/vocabulary polish, owned by Feature 035.

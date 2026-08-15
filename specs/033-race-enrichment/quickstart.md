@@ -4,7 +4,7 @@
 
 - Node.js 20
 - Dependencies installed
-- Feature 032 changes integrated or otherwise reconciled before implementation
+- Feature 032 complete; begin by reconciling its final touched surfaces (T006)
 
 ## Automated gates
 
@@ -20,7 +20,11 @@ Run focused suites during implementation:
 npx vitest run tests/unit/raceEnrichment.test.ts
 npx vitest run tests/integration/enriched-contest.test.ts
 npx vitest run tests/integration/enriched-playback.test.ts
+npx vitest run tests/unit/audioPresentation.test.ts
+npx vitest run tests/integration/audio-lifecycle.test.ts
 npx vitest run tests/regression/race-enrichment-corpus.test.ts
+npx vitest run tests/unit/tracks.test.ts
+npx vitest run tests/regression/track-generation-corpus.test.ts
 ```
 
 ## Required deterministic scenarios
@@ -38,6 +42,11 @@ npx vitest run tests/regression/race-enrichment-corpus.test.ts
    and under reduced motion; confirm identical events and settlement.
 8. Run the representative corpus and record post-Opening event frequency,
    emphasis frequency, winner-change band, and stronger-build prediction.
+9. Exercise engine start/pause/rate/Skip/finish/shutdown and shared UI cues with
+   a mocked adapter; compare authoritative results with audio enabled/disabled.
+10. Generate the track seed/ordinal/region corpus; verify closure, bounds,
+    separation, non-intersection, deterministic feature classification, layout
+    diversity, positive braking demand, and braking-zone/physics reconciliation.
 
 ## Browser acceptance
 
@@ -51,6 +60,14 @@ At 800×450 and representative larger landscape viewports:
 - Reduced motion replaces movement/flashes with equivalent static feedback.
 - Results can inspect event inputs, costs, effects/loss, and before/after state.
 - Test Day exposes the same rules without scored-run mutation.
+- Scored and Test Day races play one engine loop after browser unlock; pause,
+  Skip, finish, and scene exit leave no residual/stacked loop.
+- Shared controls produce one restrained activation/selection cue, and the mute
+  control silences both UI and engine audio without changing navigation.
+- Missing or browser-blocked audio degrades silently; background music is absent.
+- Track samples visibly include hairpins, chicanes, sweepers, and switchbacks;
+  they are not regular polygon variants and every displayed braking demand is
+  legible, positive, and supported by the shown circuit geometry.
 
 ## Acceptance evidence
 

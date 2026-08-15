@@ -2,6 +2,27 @@
 
 Feature: `specs/032-demo-feedback-bug-pass/` — recorded verification evidence
 
+## Owner acceptance and completion (2026-08-15)
+
+The owner iteratively reviewed the hosted/local demo and accepted the final
+neutral control language, text contrast, compact leg plates, encounter frames,
+thin entrant-card frames, button hit areas, and removal of the unnecessary outer
+run border. That review authorized and accepted the three v2 companion sheets
+listed in `ui-asset-manifest.md`, closing T100 and T101.
+
+The same review exercised the principal pointer-driven desktop flows, including
+entrant selection, run encounters, item purchase/dragging, pre-race setup,
+inventory access, and race presentation. Automated contracts cover keyboard
+focus, supported bounds, hit targets, `1×`/`2×`, inventory context restoration,
+sale/Undo invalidation, and replay invariance. The owner explicitly accepted
+Feature 032 implementation as complete on 2026-08-15; an exhaustive physical
+touch-device/narrow-screen walkthrough was not separately executed and is
+recorded as an owner waiver rather than claimed test evidence. This closes T108
+without misrepresenting the manual device matrix.
+
+Final ledger: 110/110 implementation tasks complete. DEMO-001 remains the
+documented deferred exact-return defect and is not silently represented as fixed.
+
 ## Automated US1/US2/US3 batch (2026-08-15)
 
 The retained-feedback, tag-inspection, supplier, inventory-layout, and sale/Undo

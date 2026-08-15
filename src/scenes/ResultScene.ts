@@ -91,10 +91,10 @@ export class ResultScene extends Phaser.Scene {
       const run = continueRunFromResult(this.run, this.encounterId, this.result);
       this.scene.start("RunScene", { run });
     });
-    createDemoButton(this, width - 76, 402, "INVENTORY", () => this.scene.start("InventoryScene", {
+    createDemoButton(this, width - 70, 382, "INVENTORY", () => this.scene.start("InventoryScene", {
       run: this.run, host: "result", returnScene: "ResultScene",
       returnData: { result: this.result, encounterId: this.encounterId },
-    }));
+    }), true, { fontSize: "10px", width: 112, height: 30 });
   }
 
   private renderDetails(width: number): void {

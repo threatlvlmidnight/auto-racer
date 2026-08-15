@@ -14,7 +14,7 @@ adaptation, or route planning to feel like a roguelike.
 ## Intended scope
 
 - Define encounter families beyond purchasing and drafting, such as repair,
-  transformation, sacrifice, scouting, risk/reward, and future-route effects.
+  transformation, sacrifice, solo Exhibition, upgrades, and tag-specific shops.
 - Give encounter choices materially different inputs, consequences, and reasons
   to choose them at different points in a run.
 - Establish generation and cadence rules that prevent repeated shop-like pairs.
@@ -22,6 +22,12 @@ adaptation, or route planning to feel like a roguelike.
   the authoritative run history and async-first architecture.
 - Add enough initial content to demonstrate the new cadence without treating a
   framework-only implementation as complete.
+- Establish Workshop Modifications as a second, run-persistent item-build axis:
+  one modification per item instance can graft a normalized stat, double signed
+  base stats, defend one overtake, or retain Fitted behavior when Improvised,
+  independently from tier upgrades.
+- Include Factory Development as the first encounter that applies an exact,
+  item-compatible Workshop Modification with before/after preview.
 
 ## Boundaries
 
@@ -30,4 +36,3 @@ adaptation, or route planning to feel like a roguelike.
   adjustable-item vocabulary.
 - This feature may reuse Feature 032 inventory and transaction systems but must
   not duplicate or weaken their authority.
-

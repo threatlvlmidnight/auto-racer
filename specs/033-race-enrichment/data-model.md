@@ -130,3 +130,45 @@ committed inputs
   → playback consumes event boundaries at 1x/2x or Skip
   → Results summarizes and inspects the same events
 ```
+
+## AudioCue / AudioSettings
+
+`AudioCueId` is a closed presentation-only vocabulary:
+
+- `race-engine-loop`
+- `ui-activate`
+- `ui-select`
+- `ui-back`
+
+`AudioSettings` contains `muted` and bounded `effectsVolume`. It is session-local
+for this feature. `AudioPlaybackState` tracks browser-unlocked state, active
+engine-loop ownership, and selected presentation-rate band. None is serialized
+into contest input, retained events, result ranking, or settlement.
+
+The audio adapter consumes semantic UI actions and the existing presentation
+clock lifecycle. It never emits authoritative events and never blocks a scene
+transition while waiting for browser audio promises.
+
+## CircuitGeometry / TrackFeature / BrakingZone
+
+`CircuitGeometry` retains the deterministic closed centerline, geometric
+primitives, sampled render points, bounds, generation attempt, and validation
+result. Curves carry signed direction and radius so alternating turns are
+authoritative rather than inferred from pixels.
+
+`TrackFeature` is a stable classified span: `straight | sweeper | chicane |
+hairpin | switchback`. A switchback contains adjacent meaningful turns of
+opposite sign; a chicane is a shorter alternating sequence; thresholds are
+centralized and tested against geometry, not scene scale.
+
+`BrakingZone` retains approach span/distance, entry speed potential, target
+corner or sequence, target speed, required speed reduction, and normalized
+severity. `TrackCharacteristics.brakingDemand` aggregates these zones. A
+production circuit has at least one positive zone; zero is reserved for
+explicit synthetic fixtures.
+
+Candidate generation is bounded and deterministic from seed, race ordinal, and
+region. Validation rejects open paths, intersections, insufficient separation,
+invalid radii/segment lengths, or viewport overflow before the track becomes
+authoritative. Every scene and simulation consumer receives this same retained
+object; none regenerates or reclassifies it.

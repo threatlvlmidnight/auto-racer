@@ -7,6 +7,7 @@ import {
   purchaseStock,
   restockSupplier,
   sellHeldItem,
+  sellInventoryItem,
   invalidateSaleUndo,
   toggleLock,
   type PartsSupplierPayload,
@@ -22,7 +23,7 @@ import {
   type GarageReplacement,
   type GarageSource,
 } from "../simulation/garage";
-import type { OfferedItem, SlotType } from "../simulation/types";
+import type { InventoryHost, OfferedItem, SlotType } from "../simulation/types";
 import type { PracticeOriginInput, ProtectedPreparationOrigin } from "../simulation/practice";
 import { prepareTestDayControlVisible } from "./practicePresentation";
 import type { DuplicateResolution } from "../simulation/tiering";
@@ -84,15 +85,30 @@ export class PrepareScene extends Phaser.Scene {
   private keyboardDestinationIndex = -1;
   /** False for Cross-Pollination, whose subtitle already occupies the only gap this compact readout would use. */
   private vehicleStatSummaryVisible = false;
+  private inventoryOnly = false;
+  private inventoryHost: InventoryHost = "run-hub";
+  private returnScene = "RunScene";
+  private returnData: Readonly<Record<string, unknown>> = {};
 
   constructor() {
     super("PrepareScene");
   }
 
-  create(data: { run?: Run; originState?: ProtectedPreparationOrigin }): void {
+  create(data: {
+    run?: Run;
+    originState?: ProtectedPreparationOrigin;
+    inventoryOnly?: boolean;
+    inventoryHost?: InventoryHost;
+    returnScene?: string;
+    returnData?: Readonly<Record<string, unknown>>;
+  }): void {
     configureHiDpiScene(this);
     const run = data.run;
-    if (!run?.activeEncounter) {
+    this.inventoryOnly = data.inventoryOnly === true;
+    this.inventoryHost = data.inventoryHost ?? "run-hub";
+    this.returnScene = data.returnScene ?? "RunScene";
+    this.returnData = data.returnData ?? {};
+    if (!run || (!this.inventoryOnly && !run.activeEncounter)) {
       this.scene.start("RunScene", { unavailable: true });
       return;
     }
@@ -104,9 +120,9 @@ export class PrepareScene extends Phaser.Scene {
     this.selectedSource = null;
     this.selectedContext = null;
     this.statusMessage = null;
-    if (run.activeEncounter.type !== "reward-draft"
-      && run.activeEncounter.type !== "cross-pollination"
-      && run.activeEncounter.type !== "parts-supplier") {
+    if (!this.inventoryOnly && run.activeEncounter!.type !== "reward-draft"
+      && run.activeEncounter!.type !== "cross-pollination"
+      && run.activeEncounter!.type !== "parts-supplier") {
       this.scene.start("RunScene", { run });
       return;
     }
@@ -131,7 +147,7 @@ export class PrepareScene extends Phaser.Scene {
       const entry = this.keyboardDestinations[this.keyboardDestinationIndex];
       if (entry && (this.selectedOfferId || this.selectedSource)) this.commitSelectedDestination(entry.destination);
     });
-    this.input.keyboard?.on("keydown-ESC", () => this.clearSelection());
+    this.input.keyboard?.on("keydown-ESC", () => this.inventoryOnly ? this.closeInventory() : this.clearSelection());
   }
 
   private render(): void {
@@ -140,7 +156,31 @@ export class PrepareScene extends Phaser.Scene {
     this.keyboardItems = [];
     this.keyboardDestinations = [];
     const run = this.run!;
-    const encounter = run.activeEncounter!;
+    const encounter = run.activeEncounter;
+    if (this.inventoryOnly) {
+      const header = garageVehicleHeader(run.identity);
+      addRunStamp(this, run).forEach((object) => this.track(object));
+      this.track(this.add.text(LOGICAL_WIDTH / 2, 42, "Inventory · Vehicle Board", {
+        fontSize: "22px", fontFamily: DISPLAY_FONT, fontStyle: "bold", color: "#f1eee5",
+      }).setOrigin(0.5).setDepth(20));
+      this.track(this.add.text(LOGICAL_WIDTH / 2, 67, `From ${this.inventoryHost.replace(/-/g, " ")} · drag items between equipped slots and storage`, {
+        fontSize: "10px", fontFamily: UI_FONT, color: "#9eb5c9",
+      }).setOrigin(0.5).setDepth(20));
+      this.vehicleStatSummaryVisible = true;
+      this.showVehicleStatModel(currentVehicleStatModel({ build: run.build, stock: STOCK_PHYSICAL_STATS }));
+      this.createControl(400, 204, "RETURN", () => this.closeInventory());
+      this.renderSlots(header.label, header.topologyLabel);
+      this.renderStorage(header.storageLabel);
+      this.renderSelectedInspector();
+      if (this.statusMessage) {
+        this.track(this.add.text(LOGICAL_WIDTH / 2, STORAGE_Y + SLOT_HEIGHT / 2 + 22, this.statusMessage, {
+          fontSize: "12px", fontFamily: UI_FONT, color: "#d9a7a7", align: "center",
+          wordWrap: { width: LOGICAL_WIDTH - 80 },
+        }).setOrigin(0.5));
+      }
+      return;
+    }
+    if (!encounter) return;
     const supplier = encounter.type === "parts-supplier";
     const header = garageVehicleHeader(run.identity);
     // Purchases and restocks mutate credits in place and then re-render, so the
@@ -608,7 +648,9 @@ export class PrepareScene extends Phaser.Scene {
 
   private sellHeldItemAt(source: Extract<GarageSource, { area: "vehicle" | "storage" }>): void {
     try {
-      this.run = sellHeldItem(this.run!, this.run!.activeEncounter!.id, source);
+      this.run = this.inventoryOnly
+        ? sellInventoryItem(this.run!, source)
+        : sellHeldItem(this.run!, this.run!.activeEncounter!.id, source);
       this.selectedItemId = null;
       this.selectedSource = null;
       this.selectedContext = null;
@@ -619,6 +661,11 @@ export class PrepareScene extends Phaser.Scene {
       this.statusMessage = "That item could not be sold.";
       this.render();
     }
+  }
+
+  private closeInventory(): void {
+    const run = invalidateSaleUndo(this.run!);
+    this.scene.start(this.returnScene, { ...this.returnData, run });
   }
 
   /** Rearranging items already on the vehicle or in storage never loses one —

@@ -49,6 +49,10 @@
 - **Q17 accepted with monitoring**: Adopt the proposed initial watchability
   target, measure it continuously against a representative deterministic corpus,
   and keep its balance thresholds tunable during development.
+- **Q18 owner addition**: Feature 033 includes basic engine audio during scored
+  and Test Day races plus shared UI activation/selection feedback. Audio is
+  presentation-only, muteable, resilient to browser autoplay/missing assets,
+  and cannot affect race authority. Background music is explicitly deferred.
 
 ## Q7 resolution — active-signature build support
 
@@ -251,6 +255,21 @@ should establish exact corpus thresholds from baseline measurements.
 **Why**: This directly tests the reported problem—races feeling settled after
 lap one—without mandating artificial reversals in every race.
 
+### Q18 — What basic audio belongs in this feature?
+
+**Decision**: Basic engine loops for scored/Test Day races and semantic UI
+activation/selection cues, with mute and silent fallback. No background music.
+
+### Q19 — What track generation belongs in this feature?
+
+**Decision**: Replace same-direction polygon variants with deterministic,
+validated circuit grammar containing straights, sweepers, chicanes, hairpins,
+and alternating-direction switchbacks. Derive positive production braking
+demand from retained braking zones rather than a single corner-angle threshold.
+
+**Why**: Real circuit geometry and truthful braking preparation are part of race
+credibility, not an unrelated visual reskin.
+
 ## Fast response template
 
 ```text
@@ -259,4 +278,6 @@ Q2 Accept
 Q3 ...
 ...
 Q17 Accept
+Q18 Accept
+Q19 Accept
 ```

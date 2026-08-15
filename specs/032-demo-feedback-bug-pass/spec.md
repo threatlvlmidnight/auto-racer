@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-14
 
-**Status**: Tasks generated — ready for `/speckit.analyze`
+**Status**: Implementation complete — owner accepted 2026-08-15
 
 **Input**: Consolidate hosted-demo feedback covering race-stat feedback,
 item/synergy clarity, scaling progression, acquisition and inventory UX,

@@ -127,3 +127,51 @@ picture asset feature replace rendering without modifying settlement.
 
 **Alternatives considered**: Generating provisional character cutscene assets
 was rejected as unplanned production scope.
+
+## Decision 11 — Keep audio semantic, local, and presentation-only
+
+**Decision**: Add one web-compressed looping engine asset (with optional bounded
+variants later) and a small UI cue set behind stable semantic IDs. A Phaser-side
+adapter owns mute/volume, browser unlock, rate changes, and lifecycle cleanup.
+Simulation and retained playback evidence never import or await audio.
+
+**Rationale**: Engine ambience adds presence and UI cues add responsiveness, but
+browser autoplay, missing assets, or device audio state cannot be allowed to
+delay or influence deterministic settlement. Semantic IDs allow assets to change
+without editing every scene.
+
+**Alternatives considered**: Driving race time from audio playback was rejected
+as competing authority. Scene-local sound creation was rejected because it leaks
+loops and duplicates cues. Background music and adaptive scoring were deferred.
+
+## Decision 12 — Generate from circuit grammar, then validate geometry
+
+**Decision**: Build a signed-turn circuit grammar from straights, sweepers,
+chicanes, hairpins, and switchbacks; sample one authoritative centerline and
+accept it only when closure, bounds, intersection, radius, segment-length, and
+nonadjacent-lane-separation checks pass. Candidate attempts and fallback are
+bounded and deterministically named from seed, ordinal, and region.
+
+**Rationale**: The current generator forces every corner in one direction and
+normalizes total turn to 360 degrees, which naturally produces convex polygon
+variants and prevents real switchbacks. Explicit feature grammar provides shape
+language while validation protects rendering and physics.
+
+**Alternatives considered**: More vertices in the existing polygon solver was
+rejected because it preserves the same visual failure. Scene-side spline noise
+was rejected because visible geometry would diverge from simulation authority.
+
+## Decision 13 — Derive braking demand from braking zones
+
+**Decision**: Identify braking zones from approach speed potential, signed curve
+sequence/severity, target apex speed, and required deceleration. Aggregate their
+normalized severities for the displayed demand and retain each contribution for
+physics/presentation reconciliation.
+
+**Rationale**: The existing `turnDegrees > 55` threshold produces zero whenever
+the closure-normalized corners fall below that cutoff, even though cars still
+decelerate. Approach and required speed reduction describe actual braking work.
+
+**Alternatives considered**: Raising a minimum display value was rejected as
+cosmetic and untruthful. Lowering the global angle cutoff was rejected because
+it still ignores approach speed and compound corner geometry.

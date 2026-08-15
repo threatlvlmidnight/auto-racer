@@ -234,8 +234,8 @@ no clipping, false focus, color-only state, or loss of item/build dominance.
 - [X] T097 [US5] Replace championship leg/round primitives first while preserving labels and progress meaning in `src/scenes/RunScene.ts` and `src/scenes/worldTourPresentation.ts`
 - [X] T098 [US5] Replace pre-race selector/buttons and remove the unintended persistent blue border while retaining true keyboard focus in `src/scenes/PreRaceScene.ts`
 - [X] T099 [US5] Replace shared primary buttons on the agreed surfaces without changing actions or focus order in `src/scenes/PrepareScene.ts`, `src/scenes/ResultScene.ts`, and `src/scenes/DestinationScene.ts`
-- [ ] T100 [US5] Validate neutral chrome, restrained state color, World's Fair/editorial accents, and item/build visual priority in `specs/032-demo-feedback-bug-pass/acceptance-evidence.md`
-- [ ] T101 [US5] Decide from in-game evidence whether additional sprite sheets are needed; if so, record their exact crop inventory/prompts before generation in `specs/032-demo-feedback-bug-pass/ui-asset-manifest.md`
+- [X] T100 [US5] Validate neutral chrome, restrained state color, World's Fair/editorial accents, and item/build visual priority in `specs/032-demo-feedback-bug-pass/acceptance-evidence.md`
+- [X] T101 [US5] Decide from in-game evidence whether additional sprite sheets are needed; if so, record their exact crop inventory/prompts before generation in `specs/032-demo-feedback-bug-pass/ui-asset-manifest.md`
 
 **Checkpoint**: US5 is independently reviewable and the first approved sheet is
 proven in-game before any further image-generation spend.
@@ -253,7 +253,7 @@ regression safety.
 - [X] T105 Verify Reward Draft continues hiding Test Day and document the permanent exact-return defect as deferred rather than silently re-enabling it in `specs/DEMO-BUGS.md`
 - [X] T106 Run all focused suites listed in `specs/032-demo-feedback-bug-pass/quickstart.md` and reconcile failures to `specs/032-demo-feedback-bug-pass/contracts/demo-feedback-contract.md` before full verification
 - [X] T107 Run `npm test`, `npm run lint`, `npm run build`, and `npm run build:pages`; record commands/counts/results in `specs/032-demo-feedback-bug-pass/acceptance-evidence.md`
-- [ ] T108 Perform pointer/touch/keyboard and wide/narrow manual QA from `quickstart.md`, including `1×`/`2×`, sell/Undo expiry, exact context return, and UI states; record evidence in `specs/032-demo-feedback-bug-pass/acceptance-evidence.md`
+- [X] T108 Perform pointer/touch/keyboard and wide/narrow manual QA from `quickstart.md`, including `1×`/`2×`, sell/Undo expiry, exact context return, and UI states; record evidence in `specs/032-demo-feedback-bug-pass/acceptance-evidence.md`
 - [X] T109 Re-run the balance harness from a clean process and verify byte-identical fixture output and both numeric bands in `specs/032-demo-feedback-bug-pass/balance-evidence.md`
 - [X] T110 Update `specs/HANDOFF.md`, `specs/DEFERRED.md`, and Feature 032 status with completed scope, evidence links, remaining DEMO-001 work, and Feature 033 ownership; do not mark complete while any required task remains
 

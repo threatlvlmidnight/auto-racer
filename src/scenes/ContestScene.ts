@@ -1,6 +1,5 @@
 import Phaser from "phaser";
 import { resolveContest } from "../simulation/contest";
-import { installedItems } from "../simulation/slots";
 import {
   buildNCarPlaybackSchedule,
   createPlaybackController,
@@ -20,7 +19,6 @@ import { generateTrack, pointAtProgress } from "../simulation/tracks";
 import { STOCK_PHYSICAL_STATS, type PhysicalStats } from "../simulation/tracks";
 import { deriveLiveStatChangesByLap } from "../simulation/laps";
 import {
-  SLOT_CAPACITY,
   type NCarContestResult,
   type OfferedItem,
   type ItemPhysicsContribution,
@@ -46,10 +44,9 @@ import { regionalRaceBackdrop } from "./visualAssets";
 import { resolveLocalField } from "../simulation/localOpponents";
 import { selectEliteFinaleOpponents } from "../simulation/rivals";
 import type { RivalProfile } from "../simulation/types";
+import { raceBoardLayout } from "./raceBoardPresentation";
 
-const BOARD_SLOT_WIDTH = 190;
 const BOARD_SLOT_HEIGHT = 58;
-const BOARD_SLOT_GAP = 18;
 const BOARD_Y = 406;
 const SIDEBAR_X = 686;
 const SIDEBAR_TOP_Y = 70;
@@ -190,7 +187,7 @@ export class ContestScene extends Phaser.Scene {
     this.previousFinishedCarIds = [];
     this.projectionState = { kind: "awaiting-first-split", label: "Awaiting Lap 1 Split" };
     this.trails.clear();
-    this.renderTrack(installedItems(input.build), input.lapCount);
+    this.renderTrack(input.build.slots.map((slot) => slot.item), input.lapCount);
     this.renderPlaybackControls();
     // 030-race-playback-controls (T038): keys 1/2 select normal/fast with
     // pointer/touch parity; shutdown tears down control objects + listeners.
@@ -496,22 +493,20 @@ export class ContestScene extends Phaser.Scene {
 
   private renderBoard(board: (OfferedItem | null)[]): void {
     this.boardHighlights.clear();
-    const totalWidth =
-      SLOT_CAPACITY * BOARD_SLOT_WIDTH + (SLOT_CAPACITY - 1) * BOARD_SLOT_GAP;
-    const startX = (LOGICAL_WIDTH - totalWidth) / 2 + BOARD_SLOT_WIDTH / 2;
+    const layout = raceBoardLayout(board.length, LOGICAL_WIDTH);
 
-    this.add.text((LOGICAL_WIDTH - totalWidth) / 2, 365, "THE HIGHWHEEL · INSTALLED", {
+    this.add.text((LOGICAL_WIDTH - layout.totalWidth) / 2, 365, "VEHICLE · INSTALLED", {
       fontSize: "12px",
       fontFamily: UI_FONT,
       fontStyle: "bold",
       color: "#d7e4e7",
     });
 
-    Array.from({ length: SLOT_CAPACITY }, (_, index) => board[index] ?? null).forEach(
+    board.forEach(
       (item, index) => {
-        const x = startX + index * (BOARD_SLOT_WIDTH + BOARD_SLOT_GAP);
+        const x = layout.centers[index];
         this.add
-          .rectangle(x, BOARD_Y, BOARD_SLOT_WIDTH, BOARD_SLOT_HEIGHT, 0x171d21)
+          .rectangle(x, BOARD_Y, layout.slotWidth, BOARD_SLOT_HEIGHT, 0x171d21)
           .setStrokeStyle(2, item ? 0x6f91a8 : 0x45515a);
 
         if (!item) {
@@ -526,11 +521,11 @@ export class ContestScene extends Phaser.Scene {
         }
 
         const highlight = this.add
-          .rectangle(x, BOARD_Y, BOARD_SLOT_WIDTH, BOARD_SLOT_HEIGHT, 0xffd447, 0)
+          .rectangle(x, BOARD_Y, layout.slotWidth, BOARD_SLOT_HEIGHT, 0xffd447, 0)
           .setStrokeStyle(3, 0xffe98a, 0);
         this.boardHighlights.set(item.id, highlight);
         const card = createItemCard(this, x, BOARD_Y, item, {
-          width: BOARD_SLOT_WIDTH - 16,
+          width: layout.slotWidth - 16,
           height: BOARD_SLOT_HEIGHT - 8,
           iconSize: 42,
         }).setInteractive({

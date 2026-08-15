@@ -64,9 +64,9 @@ export class DestinationScene extends Phaser.Scene {
     });
     const back = createDemoButton(this, 260, 420, "BACK", () => this.back());
     const confirm = createDemoButton(this, 540, 420, "CONFIRM TRAVEL", () => this.confirm(), this.selected !== null);
-    createDemoButton(this, 700, 420, "INVENTORY", () => this.scene.start("InventoryScene", {
+    createDemoButton(this, 730, 400, "INVENTORY", () => this.scene.start("InventoryScene", {
       run: this.run, host: "destination", returnScene: "DestinationScene", returnData: { selected: this.selected },
-    }));
+    }), true, { fontSize: "10px", width: 112, height: 30 });
     this.focusRing = applyPracticeFocusRing(this, [...buttons, back, confirm]);
   }
 
