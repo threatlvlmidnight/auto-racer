@@ -14,12 +14,12 @@ pure tests before Phaser wiring.
 **Purpose**: Preserve existing contest authority and measure the corpus that will
 govern tuning before enrichment changes it.
 
-- [ ] T001 Record current 8/10/12/14/16-lap field outcomes, post-opening lead retention, whole-race durations, playback labels, repeated 8-car/16-lap synchronous resolution timing, and the numeric no-material-delay tolerance in `specs/033-race-enrichment/acceptance-evidence.md`
-- [ ] T002 [P] Add immutable native/foreign/mixed build, entrant, rival, setup, track, and seed fixtures in `tests/fixtures/race-enrichment-fixtures.ts`
-- [ ] T003 [P] Add pre-enrichment N-car result/event absence and stable replay baselines in `tests/integration/race-enrichment-baseline.test.ts`
-- [ ] T004 [P] Add a representative deterministic baseline corpus runner and metrics projection in `tests/fixtures/race-enrichment-corpus.ts`
-- [ ] T005 Run T003-T004 against the current resolver and record baseline winner prediction, post-Opening event metrics, resolution timing distribution, and accepted performance tolerance in `specs/033-race-enrichment/acceptance-evidence.md`
-- [ ] T006 Reconcile Feature 032 changes touching `src/simulation/types.ts`, `src/simulation/laps.ts`, `src/simulation/contest.ts`, `src/simulation/playback.ts`, `src/scenes/PreRaceScene.ts`, `src/scenes/ContestScene.ts`, and `src/scenes/ResultScene.ts` before feature edits
+- [X] T001 Record current 8/10/12/14/16-lap field outcomes, post-opening lead retention, whole-race durations, playback labels, repeated 8-car/16-lap synchronous resolution timing, and the numeric no-material-delay tolerance in `specs/033-race-enrichment/acceptance-evidence.md`
+- [X] T002 [P] Add immutable native/foreign/mixed build, entrant, rival, setup, track, and seed fixtures in `tests/fixtures/race-enrichment-fixtures.ts`
+- [X] T003 [P] Add pre-enrichment N-car result/event absence and stable replay baselines in `tests/integration/race-enrichment-baseline.test.ts`
+- [X] T004 [P] Add a representative deterministic baseline corpus runner and metrics projection in `tests/fixtures/race-enrichment-corpus.ts`
+- [X] T005 Run T003-T004 against the current resolver and record baseline winner prediction, post-Opening event metrics, resolution timing distribution, and accepted performance tolerance in `specs/033-race-enrichment/acceptance-evidence.md`
+- [X] T006 Reconcile Feature 032 changes touching `src/simulation/types.ts`, `src/simulation/laps.ts`, `src/simulation/contest.ts`, `src/simulation/playback.ts`, `src/scenes/PreRaceScene.ts`, `src/scenes/ContestScene.ts`, and `src/scenes/ResultScene.ts` before feature edits
 
 ---
 
