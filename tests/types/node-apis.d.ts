@@ -89,6 +89,15 @@ declare module "node:http" {
   export function createServer(handler: (req: IncomingMessage, res: ServerResponse) => void): Server;
 }
 
+declare module "node:zlib" {
+  export function inflateSync(buffer: Uint8Array): Uint8Array;
+}
+
+declare module "node:fs" {
+  // Binary overload for asset-audit tests (feature 032 uiChrome master checks).
+  export function readFileSync(path: string): Uint8Array;
+}
+
 declare const __dirname: string;
 
 declare const process: {

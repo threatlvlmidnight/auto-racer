@@ -2,7 +2,7 @@
 
 **Created**: 2026-08-15
 
-**Status**: Exploratory — begin `/speckit.specify` after Feature 032 planning is complete.
+**Status**: Clarification pending — consolidated owner questionnaire prepared.
 
 ## Problem
 
@@ -68,6 +68,10 @@ manual, so exact formulas are research input, not Auto Racer design authority.
   reopened by a later feature.
 
 ## Questions for `/speckit.clarify`
+
+The complete one-round questionnaire, recommendations, rationale, and response
+template are in `clarification-questionnaire.md`. The original seed questions
+below remain as intake history.
 
 - Are signatures guaranteed when conditions are met, or driven by a fully
   inspectable deterministic pre-race roll?

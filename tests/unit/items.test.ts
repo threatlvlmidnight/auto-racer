@@ -5,6 +5,61 @@ import { simulatePlayerLaps } from "../../src/simulation/laps";
 import { applyTierBonus } from "../../src/simulation/tiering";
 import { generateTrack } from "../../src/simulation/tracks";
 import type { EntrantId, VehicleId } from "../../src/simulation/types";
+import {
+  amplifierFixture,
+  compositionScaledFixture,
+  configurableFixture,
+  cooldownLapFixture,
+  countSynergyBuffFixture,
+  directFixture,
+  economyFixtures,
+  exactCountSynergyFixture,
+  EXPECTED_CATALOG_SIZE,
+  fittedValueScaledFixture,
+  fullCatalogFixture,
+} from "../fixtures/demo-feedback-fixtures";
+
+describe("feature 032 demo-feedback fixtures (T002)", () => {
+  it("every fixture resolves to a real shipped catalog item", () => {
+    const catalogIds = new Set(fullCatalogFixture.map((item) => item.id));
+    [
+      directFixture,
+      amplifierFixture,
+      compositionScaledFixture,
+      countSynergyBuffFixture,
+      fittedValueScaledFixture,
+      cooldownLapFixture,
+      exactCountSynergyFixture,
+      configurableFixture,
+      economyFixtures.bookmakersChit,
+      economyFixtures.engineBuildersNameplate,
+      economyFixtures.patronsBrassPlaque,
+    ].forEach((item) => expect(catalogIds.has(item.id), item.id).toBe(true));
+  });
+
+  it("fixtures carry the mechanic shape their category name claims", () => {
+    expect(directFixture.physics).toBeDefined();
+    expect(amplifierFixture.buff?.targetStat).toBeDefined();
+    expect(amplifierFixture.buff?.perCount).toBeFalsy();
+    expect(compositionScaledFixture.synergyEffects?.[0].condition.kind).toBe("linear-per-count");
+    expect(countSynergyBuffFixture.buff?.perCount).toBe(true);
+    expect(fittedValueScaledFixture.buff?.scalesWithFittedValue).toBe(true);
+    expect(cooldownLapFixture.cooldown).toBeGreaterThan(1);
+    expect(exactCountSynergyFixture.synergyEffects?.[0].condition.kind).toBe("exact-other-count");
+    expect(configurableFixture.configurableSetup).toBeDefined();
+    // Economy placeholders are complete definitions with no race effect yet.
+    Object.values(economyFixtures).forEach((item) => {
+      expect(item.timeModifier).toBe(0);
+      expect(item.buff).toBeUndefined();
+      expect(item.physics).toBeUndefined();
+    });
+  });
+
+  it("the shipped catalog matches the audited size", () => {
+    expect(fullCatalogFixture).toHaveLength(EXPECTED_CATALOG_SIZE);
+  });
+});
+
 
 const VEHICLE_FOR: Record<EntrantId, VehicleId> = {
   "evelyn-mercer": "the-highwheel",

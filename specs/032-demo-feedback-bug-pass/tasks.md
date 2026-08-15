@@ -23,12 +23,12 @@ before Phaser scene integration. Art polish follows semantic/input/layout tests.
 **Purpose**: Freeze current behavior, asset inputs, and reported failures before
 changing shared authorities.
 
-- [ ] T001 Run and record the pre-feature `npm test`, `npm run lint`, `npm run build`, and `npm run build:pages` baselines in `specs/032-demo-feedback-bug-pass/acceptance-evidence.md`
-- [ ] T002 [P] Create catalog-backed deterministic fixtures for direct, amplifier, composition-scaled, fitted-value-scaled, cooldown/lap, synergy, economy, and configurable items in `tests/fixtures/demo-feedback-fixtures.ts`
-- [ ] T003 [P] Add regression coverage for DEMO-001 hidden Reward Draft Test Day and DEMO-002 skip semantics in `tests/integration/demo-regressions.test.ts`
-- [ ] T004 [P] Add baseline assertions for Supplier purchased-slot reuse, partial-stock restock, and duplicate-tier feedback gaps in `tests/integration/supplier-feedback.test.ts`
-- [ ] T005 [P] Add baseline position-language, Local third-place reputation, and final-summary record assertions in `tests/integration/result-summary.test.ts`
-- [ ] T006 [P] Validate and document the 1672×941 transparent/chroma masters, alpha corners, and source provenance in `tests/unit/uiChrome.test.ts` and `specs/032-demo-feedback-bug-pass/acceptance-evidence.md`
+- [X] T001 Run and record the pre-feature `npm test`, `npm run lint`, `npm run build`, and `npm run build:pages` baselines in `specs/032-demo-feedback-bug-pass/acceptance-evidence.md`
+- [X] T002 [P] Create catalog-backed deterministic fixtures for direct, amplifier, composition-scaled, fitted-value-scaled, cooldown/lap, synergy, economy, and configurable items in `tests/fixtures/demo-feedback-fixtures.ts`
+- [X] T003 [P] Add regression coverage for DEMO-001 hidden Reward Draft Test Day and DEMO-002 skip semantics in `tests/integration/demo-regressions.test.ts`
+- [X] T004 [P] Add baseline assertions for Supplier purchased-slot reuse, partial-stock restock, and duplicate-tier feedback gaps in `tests/integration/supplier-feedback.test.ts`
+- [X] T005 [P] Add baseline position-language, Local third-place reputation, and final-summary record assertions in `tests/integration/result-summary.test.ts`
+- [X] T006 [P] Validate and document the 1672×941 transparent/chroma masters, alpha corners, and source provenance in `tests/unit/uiChrome.test.ts` and `specs/032-demo-feedback-bug-pass/acceptance-evidence.md`
 
 **Checkpoint**: Every reported defect has a failing or pinned baseline and both
 approved asset masters are reproducible.

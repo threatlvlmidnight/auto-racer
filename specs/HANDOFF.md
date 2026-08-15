@@ -1,5 +1,17 @@
 # Handoff
 
+## Features 034 and 035 recorded as TODO; Feature 033 clarification next
+
+Hosted-demo follow-up is now split into two protected future features:
+`034-roguelike-encounter-variety` for mechanically distinct between-race events
+and cadence, and `035-interface-clarity-reward-feedback` for circuit locations,
+reserved `Adjustable` vocabulary, whole-game overlap/readability QA, and
+rarity/upgrade card feedback. Both have intake files and deferred-backlog rows.
+
+Feature 033 remains the active design target while Feature 032 is implemented
+elsewhere. Its next action is one consolidated owner clarification round before
+the specification is finalized.
+
 ## Feature 032 tasks generated — analyze next
 
 `specs/032-demo-feedback-bug-pass/tasks.md` now defines 110 implementation tasks
