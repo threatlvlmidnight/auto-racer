@@ -23,6 +23,7 @@ import {
 } from "../simulation/garage";
 import type { OfferedItem, SlotType } from "../simulation/types";
 import type { PracticeOriginInput, ProtectedPreparationOrigin } from "../simulation/practice";
+import { prepareTestDayControlVisible } from "./practicePresentation";
 import type { DuplicateResolution } from "../simulation/tiering";
 import {
   garageInstallationPresentation,
@@ -167,7 +168,9 @@ export class PrepareScene extends Phaser.Scene {
 
     if (supplier) this.renderSupplier(encounter.payload as PartsSupplierPayload);
     else this.renderReward(encounter.payload as RewardDraftPayload | CrossPollinationPayload);
-    this.createControl(680, 204, "TEST DAY", () => this.openTestDay());
+    if (prepareTestDayControlVisible(encounter.type)) {
+      this.createControl(680, 204, "TEST DAY", () => this.openTestDay());
+    }
     this.renderSlots(header.label, header.topologyLabel);
     this.renderStorage(header.storageLabel);
     this.renderSelectedInspector();

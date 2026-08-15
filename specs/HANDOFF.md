@@ -1,5 +1,62 @@
 # Handoff
 
+## Feature 032 tasks generated — analyze next
+
+`specs/032-demo-feedback-bug-pass/tasks.md` now defines 110 implementation tasks
+across baselines/foundations, five independently testable user stories, and a
+combined release gate. Consequential logic is explicitly test-first, additional
+UI sheet generation is blocked until the approved controls pass in-game review,
+and Feature 033 race enrichment remains excluded. Run `/speckit.analyze` next;
+implementation has not started.
+
+
+## Feature 032 planned — task generation next
+
+Feature 032 now has a complete technical package in
+`specs/032-demo-feedback-bug-pass/`: plan, research, data model, consolidated
+contract, quickstart, and a passing requirements checklist. The plan keeps one
+feature with four workstreams, uses strict test-first development for
+consequential simulation/economy/Undo/history/balance logic, and derives scene
+feedback from pure presentation contracts. The approved neutral control sheet
+and transparent/chroma sources are preserved under `public/assets/ui/` but are
+not integrated at runtime. `/speckit.tasks` is the next phase; implementation
+has not started.
+
+
+## Feature 033 intake — race enrichment
+
+`specs/033-race-enrichment/intake.md` preserves the next exploratory feature:
+make watched races remain credible and dramatic after the opening lap through
+simulation-backed phases, conditional signature moments, overtaking windows,
+and possibly deterministic incidents. The intake records lessons from Uma
+Musume while protecting Auto Racer's async parity: all outcome-affecting events
+must be precomputed and retained, and playback may dramatize but never invent or
+change them. Feature 033 has not entered `/speckit.specify`; Feature 032 remains
+the active feature and `.specify/feature.json` still points to it.
+
+
+## Feature 032 intake — demo feedback bug pass
+
+The consolidated hosted-demo feedback is now captured in
+`specs/032-demo-feedback-bug-pass/spec.md`. It covers live vehicle-stat and
+amplification feedback, complete tags/synergy explanations, scaling visibility
+and correctness, Supplier purchase/restock state, tier-up feedback, third-place
+language, final-run win/loss tally, additive entrant balance, pre-race focus styling, non-race inventory
+access, sell drop targets, unfinished economy items, and replacement of
+placeholder UI shapes. Deterministic crashes and driver skill are explicitly
+research-only until clarified. The feature is ready for `/speckit.clarify`, not
+planning or implementation.
+
+
+## Demo bug-fix intake — 2026-08-14
+
+Hosted-demo reports are tracked in `specs/DEMO-BUGS.md`. Reward Draft currently
+hides its Test Day entry as a temporary guard against a stale return-context
+failure (DEMO-001). A separate documented UX fix should replace the ambiguous
+`Decline all` label with an explicit `SKIP REWARDS` action backed by the existing
+declined-reward transition (DEMO-002); that change has not been implemented.
+
+
 ## Latest session — feature 031 implemented; demo-v0.1.0 published
 
 **Updated**: 2026-08-14 on `main` (`310ab58`, tag `demo-v0.1.0`).

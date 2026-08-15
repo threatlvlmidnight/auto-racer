@@ -8,6 +8,11 @@ import type {
   OfferedItem,
 } from "../simulation/types";
 
+/** Temporary bug guard: Reward Draft cannot safely round-trip through Test Day. */
+export function prepareTestDayControlVisible(encounterType: string): boolean {
+  return encounterType !== "reward-draft";
+}
+
 export interface PracticeBriefingModel {
   title: "TEST DAY";
   status: "UNSCORED";

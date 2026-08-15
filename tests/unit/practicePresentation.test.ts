@@ -19,6 +19,7 @@ import {
   practiceBriefingControlPlan,
   practiceContestControlPlan,
   practiceResultControlPlan,
+  prepareTestDayControlVisible,
 } from "../../src/scenes/practicePresentation";
 import { testDayAvailability } from "../../src/simulation/practice";
 import { resolveContest } from "../../src/simulation/contest";
@@ -35,6 +36,12 @@ import {
 import { runHubPracticeFixture } from "../fixtures/practice-run-fixtures";
 
 describe("practice briefing presentation", () => {
+  it("hides Test Day during Reward Draft while retaining valid preparation entries", () => {
+    expect(prepareTestDayControlVisible("reward-draft")).toBe(false);
+    expect(prepareTestDayControlVisible("parts-supplier")).toBe(true);
+    expect(prepareTestDayControlVisible("cross-pollination")).toBe(true);
+  });
+
   it("discloses the locked deterministic unscored sample and consequences", () => {
     const fixture = runHubPracticeFixture();
     const context = createPracticeReturnContext(fixture.run, {
