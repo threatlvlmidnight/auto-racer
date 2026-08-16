@@ -160,3 +160,66 @@ export function validateAuditCases(cases: readonly UiAuditCase[]): { kind: "vali
   return issues.length ? { kind: "invalid", issues } : { kind: "valid" };
 }
 
+// --- Feature 035 US3/T033/T035: compact / pinned layout decisions -----------
+
+/** A deliberate, readable secondary-inspection layout choice (never shrink-and-clip). */
+export interface CardLayoutDecision {
+  treatment: "full" | "pinned" | "compact";
+  /** Line count the metadata block is allowed to occupy (never one line when dense). */
+  metadataLines: number;
+  /** How many effect lines fit before the "+ N MORE · PIN FOR DETAILS" hint. */
+  effectLinesVisible: number;
+  /** True when content exceeds the visible box and must be read via inspect/pin. */
+  truncateToDetail: boolean;
+  reason: string;
+}
+
+/**
+ * Decide a card's layout from its box and incoming content length so dense or
+ * long-copy cards use a deliberate compact/pinned treatment instead of
+ * overlapping or clipping (T033 combined-card-state + longest-copy fixtures).
+ */
+export function resolveCardLayout(input: {
+  width: number;
+  height: number;
+  nameLength: number;
+  effectCount: number;
+  metadataDensity: number;
+}): CardLayoutDecision {
+  // Never squeeze metadata into a single clipped line (review B finding).
+  const metadataLines = input.metadataDensity > 0 ? 2 : 1;
+
+  // Compact width leaves no room for a readable side-by-side layout.
+  if (input.width < 120) {
+    const effectLinesVisible = input.height >= 90 ? 2 : 1;
+    return {
+      treatment: "compact",
+      metadataLines,
+      effectLinesVisible,
+      truncateToDetail: input.effectCount > effectLinesVisible,
+      reason: "compact width — constrain metadata and effect lines; keep facts via inspect",
+    };
+  }
+
+  // Dense combined card state: pin the essential facts and push detail to inspect.
+  if (input.effectCount > 3 || input.nameLength > 24) {
+    const effectLinesVisible = 2;
+    return {
+      treatment: "pinned",
+      metadataLines,
+      effectLinesVisible,
+      truncateToDetail: input.effectCount > effectLinesVisible,
+      reason: "dense/long-copy card — pinned identity + price + upgrade/state, effect detail via inspect",
+    };
+  }
+
+  return {
+    treatment: "full",
+    metadataLines,
+    effectLinesVisible: input.effectCount,
+    truncateToDetail: false,
+    reason: "fits the supported box",
+  };
+}
+
+

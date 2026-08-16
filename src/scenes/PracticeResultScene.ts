@@ -62,9 +62,9 @@ export class PracticeResultScene extends Phaser.Scene {
     const width = LOGICAL_WIDTH;
     const height = LOGICAL_HEIGHT;
     addDemoBackdrop(this, "race-day", 0.8);
-    this.add.text(width / 2, 38, "TEST DAY · UNSCORED", {
+    this.add.text(width / 2, 38, "FIXED TEST DAY · UNSCORED", {
       fontFamily: DISPLAY_FONT,
-      fontSize: "28px",
+      fontSize: "24px",
       fontStyle: "bold",
       color: "#f1eee5",
     }).setOrigin(0.5);

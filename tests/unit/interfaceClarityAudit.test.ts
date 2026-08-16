@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   AUDIT_CASES,
   AUDIT_VIEWPORTS,
+  cardFeedbackState,
+  resolveCardLayout,
   validateAuditCases,
   type UiAuditCase,
 } from "../../src/scenes/cardFeedbackPresentation";
+import { longCopyItem } from "../fixtures/interface-clarity-fixtures";
 
 describe("Feature 035 audit-case matrix (T011)", () => {
   it("validates the shipped finite landscape matrix", () => {
@@ -44,5 +47,32 @@ describe("Feature 035 audit-case matrix (T011)", () => {
       expect(result.issues.some((issue) => issue.includes("unsupported viewport"))).toBe(true);
       expect(result.issues.some((issue) => issue.includes("duplicate"))).toBe(true);
     }
+  });
+
+  it("longest-copy and dense combined-card-state fixtures stay readable (T033)", () => {
+    // Longest authored copy must resolve to a pinned layout, not shrink-and-clip.
+    const effectCount = longCopyItem.synergyEffects?.length ?? 1;
+    const layout = resolveCardLayout({ width: 220, height: 104, nameLength: longCopyItem.name.length + 6, effectCount: effectCount + 2, metadataDensity: 1 });
+    expect(layout.truncateToDetail).toBe(true);
+
+    // A card that is rare + unavailable + selected + focused still exposes every
+    // consequential fact without suppression.
+    const dense = cardFeedbackState({
+      item: longCopyItem,
+      role: "offer",
+      availability: "unavailable",
+      selected: true,
+      focused: true,
+      upgradeEligible: true,
+      upgradeReason: "Held duplicate upgrades to Tier 2",
+      reducedMotion: true,
+    });
+    expect(dense.rarityLabel).toBeTruthy();
+    expect(dense.availability).toBe("unavailable");
+    expect(dense.selected).toBe(true);
+    expect(dense.focused).toBe(true);
+    expect(dense.upgradeEligible).toBe(true);
+    expect(dense.motionMode).toBe("reduced");
+    expect(dense.framePriority[0]).toBe("unavailable");
   });
 });

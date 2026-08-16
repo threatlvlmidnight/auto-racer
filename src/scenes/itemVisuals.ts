@@ -9,6 +9,7 @@ import {
   type PlacementComparisonModel,
 } from "./itemPresentation";
 import { itemVisualDescriptor } from "./itemVisualDescriptor";
+import { cardFeedbackState, resolveCardLayout } from "./cardFeedbackPresentation";
 import { DEMO_COLORS, UI_FONT } from "./demoTheme";
 
 export function createItemIcon(
@@ -103,12 +104,26 @@ export function createItemCard(
     emphasis?: "compact" | "offer";
     adjustable?: import("./adjustablePresentation").AdjustablePresentation;
     reducedMotion?: boolean;
+    role?: import("./cardFeedbackPresentation").CardRole;
+    availability?: import("./cardFeedbackPresentation").CardAvailability;
+    upgradeEligible?: boolean;
+    upgradeReason?: string | null;
   },
 ): Phaser.GameObjects.Container {
   const model = compactItemModel(item, options.context ?? { surface: "garage-slot", tier: 1 });
   const offerEmphasis = options.emphasis === "offer";
   const adjustable = options.adjustable;
   const adjustableAvailable = adjustable?.status === "available";
+  const feedback = cardFeedbackState({
+    item,
+    role: options.role ?? "inventory",
+    availability: options.availability,
+    selected: options.selected,
+    focused: options.focused,
+    upgradeEligible: options.upgradeEligible,
+    upgradeReason: options.upgradeReason,
+    reducedMotion: options.reducedMotion,
+  });
   const frameWidth = model.rarity === "rare" ? 2 : 1;
   const border = scene.add.rectangle(0, 0, options.width, options.height, 0x172426, 0.94)
     .setStrokeStyle(options.selected || options.focused ? 3 : frameWidth,
@@ -140,10 +155,11 @@ export function createItemCard(
     ? model.conditionTokens.slice(0, 2).map((token) => `◆ ${token}`).join(" ")
     : `TAGS: ${model.stateBadges.length > 0 ? model.stateBadges.map((badge) => badge.label).join(" · ") : "none"}`;
   const metadata = scene.add.text(-options.width / 2 + 8, metadataY,
-    `${model.categoryLabel} · ${model.originLabel}${model.priceLabel ? ` · ${model.priceLabel}` : ""} · ${model.rarityLabel.toUpperCase()}${adjustableAvailable ? ` · [${adjustable.controlLabel} ${adjustable.currentValueLabel}]` : ""}\n${tagLine}`, {
+    [`${model.categoryLabel} · ${model.originLabel}${model.priceLabel ? ` · ${model.priceLabel}` : ""} · ${model.rarityLabel.toUpperCase()}${adjustableAvailable ? ` · [${adjustable.controlLabel} ${adjustable.currentValueLabel}]` : ""}`, tagLine].join("\n"), {
       fontSize: offerEmphasis ? "10px" : "8px", fontFamily: UI_FONT, color: "#b8c0c2",
       wordWrap: { width: options.width - 16 },
-      maxLines: 1,
+      maxLines: 2,
+      align: "left",
     });
   const rarityChip = scene.add.text(options.width / 2 - 4, -options.height / 2 + 4, `${model.rarityLabel.toUpperCase()}${model.rarity === "rare" ? " ★" : ""}`, {
     fontSize: "8px", fontFamily: UI_FONT, fontStyle: "bold",
@@ -155,7 +171,16 @@ export function createItemCard(
     const marker = line.direction === "gain" ? "▲" : line.direction === "loss" ? "▼" : "◆";
     return `${marker} ${line.statLabel} ${line.valueLabel}${line.conditionLabel ? ` · ${line.conditionLabel}` : ""}`;
   });
-  const visibleLineLimit = 2;
+  // Feature 035 US3/T035: deliberate compact/pinned layout decision instead of
+  // shrinking-and-clipping dense or long-copy cards.
+  const layout = resolveCardLayout({
+    width: options.width,
+    height: options.height,
+    nameLength: model.name.length,
+    effectCount: allEffectLines.length,
+    metadataDensity: 1,
+  });
+  const visibleLineLimit = layout.effectLinesVisible;
   const hiddenLineCount = Math.max(0, allEffectLines.length - visibleLineLimit);
   const effectText = allEffectLines.slice(0, visibleLineLimit).join("\n");
   const effects = scene.add.text(-options.width / 2 + 8, metadataY + metadata.height + 3, effectText, {
@@ -168,9 +193,25 @@ export function createItemCard(
   });
 
   const children: Phaser.GameObjects.GameObject[] = [border, rarityChip, name, metadata, effects];
-  if (hiddenLineCount > 0) {
+  // Feature 035 US2/B: structural (non-color) upgrade-eligibility and
+  // unavailable cues derived from authoritative state, not decoration.
+  if (feedback.upgradeEligible) {
     children.push(scene.add.text(options.width / 2 - 8, options.height / 2 - 8,
-      `+${hiddenLineCount} MORE · SELECT FOR DETAILS`, {
+      `⬆ UPGRADE${feedback.upgradeReason ? `: ${feedback.upgradeReason}` : ""}`, {
+        fontSize: "8px", fontFamily: UI_FONT, fontStyle: "bold",
+        color: "#101817", backgroundColor: "#e8d48b", padding: { x: 4, y: 2 },
+        wordWrap: { width: options.width * 0.7 }, maxLines: 2, align: "right",
+      }).setOrigin(1, 1));
+  }
+  if (feedback.availability === "unavailable") {
+    children.push(scene.add.text(-options.width / 2 + 8, options.height / 2 - 12, "UNAVAILABLE", {
+      fontSize: "7px", fontFamily: UI_FONT, fontStyle: "bold",
+      color: "#e9edf0", backgroundColor: "#5a2020", padding: { x: 3, y: 1 },
+    }).setOrigin(0, 1));
+  }
+  if (hiddenLineCount > 0) {
+    children.push(scene.add.text(options.width / 2 - 8, options.height / 2 - 24,
+      `+${hiddenLineCount} MORE · PIN FOR DETAILS`, {
         fontSize: offerEmphasis ? "8px" : "7px",
         fontFamily: UI_FONT,
         fontStyle: "bold",
@@ -182,6 +223,9 @@ export function createItemCard(
   const card = scene.add.container(x, y, children).setSize(options.width, options.height);
   const a11yParts = [model.accessibilityLabel, `Rarity ${model.rarityLabel}`];
   if (adjustableAvailable) a11yParts.push(`Adjustable: ${adjustable!.controlLabel} ${adjustable!.currentValueLabel}`);
+  if (feedback.upgradeEligible) a11yParts.push(`Upgrade eligible: ${feedback.upgradeReason ?? "held duplicate can upgrade"}`);
+  if (feedback.availability === "unavailable") a11yParts.push("Unavailable");
+  if (feedback.motionMode === "reduced") a11yParts.push("Reduced motion");
   card.setData("accessibilityLabel", a11yParts.join(". "));
   card.setData("itemModel", model);
   return card;

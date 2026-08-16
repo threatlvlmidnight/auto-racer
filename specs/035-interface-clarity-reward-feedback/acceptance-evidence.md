@@ -2,7 +2,11 @@
 
 **Feature**: `035-interface-clarity-reward-feedback`
 **Branch**: `035-interface-clarity-reward-feedback`
-**Status**: Implementation complete — automated gates green; owner browser QA required for visual/input evidence (T003/T043).
+**Status**: **INVALIDATED BY IMPLEMENTATION REVIEW (2026-08-16).** Automated
+gates are green, but this document overstates production integration and visual
+acceptance. It is not release evidence until every reopened task satisfies
+`IMPLEMENTATION-REVIEW-FOLLOWUP.md` and the evidence below is replaced with
+observed results.
 
 ---
 
@@ -66,15 +70,18 @@ The finite matrix is defined in `src/scenes/cardFeedbackPresentation.ts`
 Run/Encounter, Supplier (Prepare), Inventory, Pre-Race, Contest, Result,
 Test Day, Practice Result.
 
-Disposition of landscape findings at implementation time:
+Disposition of landscape findings:
 
 | Case | Scene | Status | Disposition |
 | --- | --- | --- | --- |
-| identity | Pre-Race / Result / Run-history / Test-Day | **fixed** | retained track name + explicit `LOCATION:` (scored) or `FIXED CONFIGURATION · UNSCORED` (Test Day) |
+| identity | Pre-Race / Result / Run / Destination / Contest / history / Test Day | **fixed** | recorded track name + explicit `LOCATION:` (scored); `FIXED CONFIGURATION · UNSCORED` (Test Day / practice) — wired into every named surface (T021–T023) |
+| Pre-Race identity ↔ stats panel | PreRaceScene | **fixed** | identity caption bounded to the centre column with auto-shrink + wrap so long track/region labels never reach the right-side stats panel (T022 collision fix) |
+| adjustable | Garage / pre-race / inventory | **fixed** | one `ADJUSTABLE` badge + control label/current value for eligible installed items in `PrepareScene`, `PreRaceScene`, `itemVisuals`; stored/non-configurable items never imply a control (T024) |
+| upgrade cue | Supplier / Reward / garage / inventory cards | **fixed** | `createItemCard` consumes `cardFeedbackState`; explicit non-color `⬆ UPGRADE: …` cue derived from authoritative eligibility before purchase; unavailable is struck (`UNAVAILABLE`) (T027–T030) |
 | rarity card | Offers / garage / inspector | **fixed** | text label, a11y token, frame — never color alone |
-| adjustable | Garage / pre-race / inventory | **fixed** | one ADJUSTABLE badge + control label/current value for eligible installed items |
-| focus/selected | shared cards | **fixed** | structural ring/underline/strike tokens (`focusPresentation.ts`) |
-| per-scene pixel collisions | all four viewports | **owner QA** | browser screenshot + keyboard/touch sweep at each viewport; no genuine host-reflow defect is claimed |
+| focus/selected | shared cards | **fixed** | structural ring/underline/strike tokens (`focusPresentation.ts`), consumed through `effectiveFocusState` (T031/T034) |
+| dense/long-copy cards | shared cards | **fixed** | `resolveCardLayout` compact/pinned decisions (no one-line metadata clipping) + `PIN FOR DETAILS` hint (T033/T035) |
+| per-scene pixel collisions | all four viewports | **owner QA** | browser screenshot + keyboard/touch sweep at each viewport; a result per scene/viewport/state/input is required in this file |
 | narrow portrait reflow | 390×844 | **Feature 026** | explicitly out of scope (spec.md scope boundaries) — recorded here, not silently waived |
 
 No failed case has been silently waived; any defect requiring host/canvas reflow
@@ -83,9 +90,36 @@ is recorded as a Feature 026 dependency.
 ## T003 — Baselines
 
 - Prior implementation baseline: 116 test files / 1830 tests.
-- Post-implementation: 124 test files / 1864 tests (34 new Feature 035 tests).
+- Post-implementation — initial pass: 124 test files / 1864 tests.
+- Post review follow-up (T019/T027/T033/T034 wiring): 125 test files / **1878 tests**.
 - `npm test` ✅ · `npm run lint` ✅ · `npm run build` ✅ · `npm run build:pages`
   ✅ · `npm run audit:artifact` ✅.
+
+## Implementation review follow-up (2026-08-16)
+
+Reopened production call-sites were completed; each now has an integration test
+that fails if the surface disconnects:
+
+- **A (T019, T021–T025)** — `circuit-identity-flow.test.ts` asserts the same
+  `LOCATION:` region across scheduled, Pre-Race briefing, live contest, Results,
+  and retained-history surfaces, plus Test Day fixed/unscored. Identity is wired
+  into `RunScene` (CURRENT LEG + history), `DestinationScene` (LOCATION card),
+  `ContestScene` (live caption), `TestDayScene`, `PracticeContestScene`, and
+  `PracticeResultScene`.
+- **B (T027–T032)** — `supplier-feedback.test.ts` + `interface-clarity-baseline`
+  cover upgrade-eligible-before-purchase, exact authoritative receipts after
+  purchase, max-tier (credit-convert, no upgrade), and reduced-motion meaning
+  preservation. `createItemCard` consumes `cardFeedbackState` (upgrade reason,
+  availability, selected/focused, reduced motion) for Supplier, Reward Draft,
+  garage, and inventory cards; the one-line metadata clipping was removed via
+  `resolveCardLayout`.
+- **C (T033–T040)** — longest-copy + dense combined-card-state fixtures and
+  compact/pinned `resolveCardLayout` model tests (`interfaceClarityAudit`,
+  `cardFeedbackPresentation`); keyboard/pointer/touch matrix, no-hover
+  accessibility, structural focus states, and reduced-motion integration
+  coverage (`interface-clarity-flow`). Browser screenshots and sweeps remain
+  owner QA (T043).
+
 
 ## T044 — Constitution Check (re-run)
 
@@ -101,4 +135,3 @@ is recorded as a Feature 026 dependency.
 
 No change to odds, price, tier authority, simulation, economy, or Test Day
 scoring was introduced.
-

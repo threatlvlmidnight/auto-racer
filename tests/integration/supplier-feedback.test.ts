@@ -10,6 +10,8 @@ import {
 } from "../../src/simulation/encounters";
 import { createRun, RunTransitionError, runIdentityForEntrant } from "../../src/simulation/run";
 import { vehicleBuild } from "../fixtures/vehicle-build-fixtures";
+import { cardFeedbackState } from "../../src/scenes/cardFeedbackPresentation";
+import { resolveDuplicateAcquisition } from "../../src/simulation/tiering";
 
 /**
  * Feature 032 T004: pinned baselines for the Supplier feedback gaps reported
@@ -147,5 +149,48 @@ describe("Duplicate-tier feedback gap", () => {
     expect(after.receipts![1].changedEffects[0]).toEqual({
       label: "Authored effect", oldValue: "1× tier strength", newValue: "2× tier strength",
     });
+  });
+});
+
+describe("Feature 035 upgrade feedback (T027/T030)", () => {
+  it("exposes an explicit upgrade-eligible cue before purchase from authoritative state", () => {
+    // A held duplicate installed at tier 1.
+    const build = vehicleBuild([CHEAP_ITEM]);
+    const resolution = resolveDuplicateAcquisition(build, CHEAP_ITEM);
+    expect(resolution).toMatchObject({ kind: "tier-upgrade", toTier: 2 });
+
+    const card = cardFeedbackState({
+      item: CHEAP_ITEM,
+      role: "offer",
+      availability: "available",
+      upgradeEligible: true,
+      upgradeReason: `Held duplicate upgrades to Tier ${resolution.kind === "tier-upgrade" ? resolution.toTier : "2"}`,
+    });
+    expect(card.upgradeEligible).toBe(true);
+    expect(card.upgradeReason).toContain("upgrades to Tier 2");
+    // Price/rarity/frame facts are not suppressed by the cue.
+    expect(card.rarityLabel).toBeTruthy();
+    expect(card.framePriority).toContain("rarity");
+  });
+
+  it("does not imply an upgrade for a max-tier duplicate (converts to credits)", () => {
+    const base = vehicleBuild([CHEAP_ITEM]);
+    const tier3 = { ...base, slots: base.slots.map((slot, index) => (index === 0 ? { ...slot, item: CHEAP_ITEM, tier: 3 as const } : slot)) };
+    const resolution = resolveDuplicateAcquisition(tier3, CHEAP_ITEM);
+    expect(resolution).toEqual({ kind: "max-tier-convert", creditsGained: Math.floor(CHEAP_ITEM.price / 2) });
+
+    const card = cardFeedbackState({ item: CHEAP_ITEM, role: "offer", availability: "available", upgradeEligible: false });
+    expect(card.upgradeEligible).toBe(false);
+    expect(card.upgradeReason).toBeNull();
+  });
+
+  it("keeps rare/selected/upgrade meaning identical under reduced motion", () => {
+    const motion = cardFeedbackState({ item: CHEAP_ITEM, role: "offer", availability: "available", upgradeEligible: true, selected: true });
+    const reduced = cardFeedbackState({ item: CHEAP_ITEM, role: "offer", availability: "available", upgradeEligible: true, selected: true, reducedMotion: true });
+    expect(reduced.motionMode).toBe("reduced");
+    expect(reduced.rarityLabel).toBe(motion.rarityLabel);
+    expect(reduced.upgradeEligible).toBe(motion.upgradeEligible);
+    expect(reduced.selected).toBe(true);
+    expect(reduced.framePriority).toEqual(motion.framePriority);
   });
 });

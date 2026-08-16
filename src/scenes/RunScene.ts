@@ -203,7 +203,7 @@ export class RunScene extends Phaser.Scene {
     if (itinerary && this.run.worldTour?.selectedRegions.length) {
       const currentLeg = this.run.worldTour.legs[this.run.worldTour.legs.length - 1];
       const currentLegModel = itinerary.legs.find((leg) => leg.state === "current") ?? itinerary.legs[itinerary.legs.length - 1];
-      this.add.text(width / 2, 110, `CURRENT LEG · ${currentLegModel?.ordinal ?? currentLeg.ordinal}. ${currentLegModel?.name ?? currentLeg.regionId}`, {
+      this.add.text(width / 2, 110, `CURRENT LEG ${currentLegModel?.ordinal ?? currentLeg.ordinal} · LOCATION: ${currentLegModel?.name ?? currentLeg.regionId}`, {
         fontSize: "10px", fontFamily: UI_FONT, fontStyle: "bold", color: "#cddbd2",
       }).setOrigin(0.5);
       currentLeg.stages.forEach((stage, index) => {

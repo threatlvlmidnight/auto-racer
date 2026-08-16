@@ -166,7 +166,7 @@ export class PracticeContestScene extends Phaser.Scene {
       fontStyle: "bold",
       color: "#f1eee5",
     }).setOrigin(0.5);
-    this.add.text(width / 2, 72, "UNSCORED · deterministic playback", {
+    this.add.text(width / 2, 72, "FIXED CONFIGURATION · UNSCORED · deterministic playback", {
       fontFamily: UI_FONT,
       fontSize: "16px",
       color: "#d9483f",

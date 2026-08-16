@@ -196,9 +196,14 @@ export class PreRaceScene extends Phaser.Scene {
     if (stage?.regionId) {
       const raceLabel = stage.raceKind === "local" ? "LOCAL RACE" : "CHAMPIONSHIP RACE";
       // Feature 035 US1: recorded track name + explicit LOCATION identity.
+      // Bound the caption to the centre column so long track/region labels never
+      // collide with the right-side statistics panel (T022 collision fix).
       const identity = circuitPresentationIdentity(this.setupInput.track, stage);
-      this.track(this.add.text(LOGICAL_WIDTH / 2, 51, `${circuitIdentityLine(identity)} · ${raceLabel}`, {
-        fontSize: "11px", fontFamily: UI_FONT, fontStyle: "bold", color: "#cddbd2",
+      const caption = `${circuitIdentityLine(identity)} · ${raceLabel}`;
+      const fontSize = caption.length > 52 ? 9 : 11;
+      this.track(this.add.text(LOGICAL_WIDTH / 2, 51, caption, {
+        fontSize: `${fontSize}px`, fontFamily: UI_FONT, fontStyle: "bold", color: "#cddbd2",
+        align: "center", wordWrap: { width: 520 }, maxLines: 2,
       }).setOrigin(0.5));
     }
 
@@ -317,7 +322,10 @@ export class PreRaceScene extends Phaser.Scene {
   private renderControlRow(control: SetupControlRow, y: number): Phaser.GameObjects.Text[] {
     const focused = control.family === this.focusedFamily;
     const sourceSuffix = control.isUniversal ? "" : ` (${control.sourceLabel})`;
-    this.track(this.add.text(70, y, `${control.label}${sourceSuffix}`, {
+    // Feature 035 US1/T024: eligible installed equipment controls are labelled
+    // ADJUSTABLE so the reserved vocabulary is explicit and consistent.
+    const adjustableToken = control.isUniversal ? "" : "ADJUSTABLE · ";
+    this.track(this.add.text(70, y, `${adjustableToken}${control.label}${sourceSuffix}`, {
       fontSize: "12px", fontFamily: UI_FONT, fontStyle: focused ? "bold" : "normal",
       color: focused ? "#ffd447" : "#d7e4e7",
     }));

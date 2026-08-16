@@ -88,6 +88,16 @@ export function circuitIdentityLine(identity: CircuitPresentationIdentity): stri
   return `${identity.trackName} · LOCATION: ${identity.locationLabel}`;
 }
 
+/**
+ * Scheduled (upcoming) scored-race location line. No retained track exists yet,
+ * so it shows only the region LOCATION and race kind — it never invents a track.
+ */
+export function scheduledRaceLine(stage: CircuitStageContext | null): string | null {
+  if (!stage?.regionId) return null;
+  const raceKindLabel = stage.raceKind === "local" ? "LOCAL RACE" : "CHAMPIONSHIP RACE";
+  return `LOCATION: ${regionDefinition(stage.regionId).name} · ${raceKindLabel}`;
+}
+
 /** Stable non-color identity facts exposed for accessibility labels. */
 export function circuitIdentityTokens(identity: CircuitPresentationIdentity): readonly string[] {
   const tokens = [identity.trackName, `LOCATION: ${identity.locationLabel}`];

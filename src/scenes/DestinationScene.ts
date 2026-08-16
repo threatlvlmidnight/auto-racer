@@ -54,6 +54,9 @@ export class DestinationScene extends Phaser.Scene {
       this.add.text(x, 110, `${index + 1} · ${card.name.toUpperCase()}`, {
         fontFamily: DISPLAY_FONT, fontSize: "19px", fontStyle: "bold", color: this.selected === card.regionId ? "#ffd447" : "#f1eee5",
       }).setOrigin(0.5);
+      this.add.text(x, 136, `LOCATION: ${card.name.toUpperCase()}`, {
+        fontFamily: UI_FONT, fontSize: "11px", fontStyle: "bold", color: "#f4d58d",
+      }).setOrigin(0.5);
       this.add.text(x, 160, card.visualTheme, { fontFamily: UI_FONT, fontSize: "13px", color: "#d7e1e6", align: "center", wordWrap: { width: 276 } }).setOrigin(0.5);
       this.add.text(x, 225, `Engineering tendency\n${card.engineeringTendency}`, { fontFamily: UI_FONT, fontSize: "13px", color: "#cddbd2", align: "center", wordWrap: { width: 276 } }).setOrigin(0.5);
       this.add.text(x, 290, card.cadence, { fontFamily: UI_FONT, fontSize: "12px", color: "#9eb5c9", align: "center", wordWrap: { width: 276 } }).setOrigin(0.5);

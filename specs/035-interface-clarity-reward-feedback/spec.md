@@ -4,7 +4,10 @@
 
 **Created**: 2026-08-15
 
-**Status**: Implemented (2026-08-16, branch `035-interface-clarity-reward-feedback`) — automated gates green; owner browser QA records visual/input evidence in acceptance-evidence.md.
+**Status**: Implemented (2026-08-16, branch `035-interface-clarity-reward-feedback`).
+Reopened production tasks completed in a second pass; automated gates green.
+Only T043 (owner browser QA) remains — see `IMPLEMENTATION-REVIEW-FOLLOWUP.md`
+and `acceptance-evidence.md`.
 
 **Input**: Resolve the remaining demo readability and reward-feedback debt:
 make circuit context and adjustable controls unambiguous, make cards and

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cardFeedbackState } from "../../src/scenes/cardFeedbackPresentation";
+import { cardFeedbackState, resolveCardLayout } from "../../src/scenes/cardFeedbackPresentation";
 import {
   mixedRarityCards,
   duplicateUpgradePair,
@@ -64,5 +64,30 @@ describe("Feature 035 card feedback state (T010)", () => {
     const card = cardFeedbackState({ item: held, role: "held" });
     expect(card.upgradeEligible).toBe(false);
     expect(card.upgradeReason).toBeNull();
+  });
+});
+
+describe("Feature 035 compact/pinned layout decisions (T033/T035)", () => {
+  it("resolves a full layout for a short, sparse card", () => {
+    const layout = resolveCardLayout({ width: 240, height: 120, nameLength: 12, effectCount: 1, metadataDensity: 1 });
+    expect(layout.treatment).toBe("full");
+    expect(layout.truncateToDetail).toBe(false);
+    expect(layout.metadataLines).toBe(2);
+  });
+
+  it("pins dense/long-copy cards instead of shrinking and clipping", () => {
+    const layout = resolveCardLayout({ width: 240, height: 120, nameLength: 34, effectCount: 6, metadataDensity: 1 });
+    expect(layout.treatment).toBe("pinned");
+    expect(layout.truncateToDetail).toBe(true);
+    expect(layout.effectLinesVisible).toBeLessThan(6);
+    // Metadata is never forced onto a single clipped line.
+    expect(layout.metadataLines).toBe(2);
+  });
+
+  it("chooses a compact treatment on narrow boxes with a detail hint", () => {
+    const layout = resolveCardLayout({ width: 96, height: 80, nameLength: 10, effectCount: 3, metadataDensity: 1 });
+    expect(layout.treatment).toBe("compact");
+    expect(layout.effectLinesVisible).toBe(1);
+    expect(layout.truncateToDetail).toBe(true);
   });
 });

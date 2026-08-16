@@ -9,6 +9,11 @@ contracts/interface-clarity-contract.md, quickstart.md
 their implementation. Phaser scene work consumes those models; owner browser
 acceptance records visual/input evidence after automated gates pass.
 
+> **Implementation review (2026-08-16): COMPLETE.** The reopened tasks were
+> completed in a second pass (see
+> [IMPLEMENTATION-REVIEW-FOLLOWUP.md](./IMPLEMENTATION-REVIEW-FOLLOWUP.md)).
+> Only T043 (owner browser QA) remains open.
+
 ## Format: [ID] [P?] [Story] Description
 
 - **[P]** marks work safe to execute concurrently after its prerequisites.
@@ -142,7 +147,7 @@ consequential content without claiming new portrait reflow.
 
 [X] T041 [P] Reconcile README.md, specs/DEFERRED.md, specs/HANDOFF.md, and specs/ROADMAP.md with Feature 035 decisions and any Feature 026 follow-ups
 [X] T042 Run npm test, npm run lint, npm run build, and npm run build:pages; fix only Feature 035 regressions and record the exact results in acceptance-evidence.md
-[X] T043 Perform owner browser QA at 1920×1080, 1366×768, 1024×768, and 800×450 across the complete primary-scene/state/input matrix; attach screenshots or explicit review outcomes to acceptance-evidence.md
+[ ] T043 Perform owner browser QA at 1920×1080, 1366×768, 1024×768, and 800×450 across the complete primary-scene/state/input matrix; attach screenshots or explicit review outcomes to acceptance-evidence.md
 [X] T044 Re-run the Constitution Check against delivered code and record final PASS evidence, including no change to odds, price, tier authority, simulation, economy, or Test Day scoring, in acceptance-evidence.md
 
 ## Dependencies and execution order

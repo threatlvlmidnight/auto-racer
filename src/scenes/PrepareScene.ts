@@ -337,6 +337,7 @@ export class PrepareScene extends Phaser.Scene {
       priceVisible: true,
       credits: this.run!.credits,
     };
+    const encourageUpgrade = resolution.kind === "tier-upgrade";
     const itemCard = createItemCard(this, 0, -6, item, {
       width: OFFER_WIDTH - 12,
       height: 92,
@@ -344,6 +345,10 @@ export class PrepareScene extends Phaser.Scene {
       context,
       selected: this.selectedOfferId === offerId,
       emphasis: "offer",
+      role: "offer",
+      availability: enabled ? "available" : "unavailable",
+      upgradeEligible: encourageUpgrade,
+      upgradeReason: encourageUpgrade ? `Held duplicate upgrades to Tier ${resolution.toTier}` : null,
     });
     const outcome = resolutionOutcomeLabel(resolution);
     const status = purchased ? "Purchased" : `${item.price} credits${enabled ? "" : " · unavailable"}`;
@@ -583,6 +588,8 @@ export class PrepareScene extends Phaser.Scene {
       context,
       selected: this.selectedItemId === item.id,
       adjustable,
+      role: source.area === "vehicle" ? "held" : "inventory",
+      availability: "available",
     })
       .setInteractive({ useHandCursor: true });
     this.track(card);

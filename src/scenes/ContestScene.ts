@@ -32,6 +32,7 @@ import { createItemCard, createItemInspector } from "./itemVisuals";
 import { resolvedItemEvidence, type ItemPresentationContext } from "./itemPresentation";
 import { contestSceneInput, raceLapLabel, type ContestSceneInput } from "./runPresentation";
 import { addDemoBackdrop, addRunStamp, DISPLAY_FONT, UI_FONT } from "./demoTheme";
+import { circuitIdentityLine, circuitPresentationIdentity } from "./circuitPresentation";
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
 import { recordedLapVehicleStatModel, reduceLiveStatPanel, vehicleItemLookup, type LiveStatPanelState } from "./vehicleStatPresentation";
 import { createLiveStatPanel, createVehicleStatPanel } from "./vehicleStatVisuals";
@@ -493,6 +494,19 @@ export class ContestScene extends Phaser.Scene {
         fontFamily: DISPLAY_FONT,
         fontStyle: "bold",
         color: "#f1eee5",
+      })
+      .setOrigin(0.5);
+    // Feature 035 US1 (T022): the resolved track name + LOCATION region identity.
+    const stage = this.run?.stages[this.run.stageIndex];
+    const identity = circuitPresentationIdentity(track, stage);
+    this.add
+      .text(width / 2, 60, circuitIdentityLine(identity).toUpperCase(), {
+        fontSize: "10px",
+        fontFamily: UI_FONT,
+        fontStyle: "bold",
+        color: "#cddbd2",
+        align: "center",
+        wordWrap: { width: 520 },
       })
       .setOrigin(0.5);
     this.add
