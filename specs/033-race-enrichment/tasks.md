@@ -88,18 +88,18 @@ and below-threshold passive-only behavior.
 
 ### Tests
 
-- [ ] T030 [P] [US2] Add failing exact-threshold, below-threshold, display-rounding, and non-finite-value eligibility tests in `tests/unit/raceEnrichment.test.ts`
-- [ ] T031 [P] [US2] Add failing native/foreign/mixed same-stat eligibility equivalence tests for all entrants in `tests/unit/raceEnrichment.test.ts`
-- [ ] T032 [P] [US2] Add failing always-active passive, eligible-no-context, context-no-budget, and successful signature tests in `tests/unit/raceEnrichment.test.ts`
-- [ ] T033 [P] [US2] Add failing relevant-stat/current/threshold/source pre-race projection tests in `tests/unit/raceEnrichmentPresentation.test.ts`
-- [ ] T034 [P] [US2] Add failing generated-rival identity parity and deterministic activation tests in `tests/integration/enriched-contest.test.ts`
+- [X] T030 [P] [US2] Add failing exact-threshold, below-threshold, display-rounding, and non-finite-value eligibility tests in `tests/unit/raceEnrichment.test.ts`
+- [X] T031 [P] [US2] Add failing native/foreign/mixed same-stat eligibility equivalence tests for all entrants in `tests/unit/raceEnrichment.test.ts`
+- [X] T032 [P] [US2] Add failing always-active passive, eligible-no-context, context-no-budget, and successful signature tests in `tests/unit/raceEnrichment.test.ts`
+- [X] T033 [P] [US2] Add failing relevant-stat/current/threshold/source pre-race projection tests in `tests/unit/raceEnrichmentPresentation.test.ts`
+- [X] T034 [P] [US2] Add failing generated-rival identity parity and deterministic activation tests in `tests/integration/enriched-contest.test.ts`
 
 ### Implementation
 
-- [ ] T035 [US2] Resolve authoritative committed physical stats and complete contributing item/setup sources for signature gates in `src/simulation/raceSetup.ts`
-- [ ] T036 [US2] Implement origin-agnostic signature eligibility and passive evaluation in `src/simulation/raceEnrichment.ts`
-- [ ] T037 [US2] Implement contextual signature activation, priority, Composure debit, temporary effect, and retained evidence in `src/simulation/raceEnrichment.ts`
-- [ ] T038 [P] [US2] Implement pure passive/signature/threshold/Composure briefing models in `src/scenes/raceEnrichmentPresentation.ts`
+- [X] T035 [US2] Resolve authoritative committed physical stats and complete contributing item/setup sources for signature gates in `src/simulation/raceSetup.ts`
+- [X] T036 [US2] Implement origin-agnostic signature eligibility and passive evaluation in `src/simulation/raceEnrichment.ts`
+- [X] T037 [US2] Implement contextual signature activation, priority, Composure debit, temporary effect, and retained evidence in `src/simulation/raceEnrichment.ts`
+- [X] T038 [P] [US2] Implement pure passive/signature/threshold/Composure briefing models in `src/scenes/raceEnrichmentPresentation.ts`
 - [ ] T039 [US2] Render shared phase, passive, signature, current/threshold progress, eligibility, source, and Composure briefing in `src/scenes/PreRaceScene.ts`
 - [ ] T040 [US2] Add the same eligibility and rule explanation to Test Day preparation in `src/scenes/TestDayScene.ts`
 - [ ] T041 [US2] Run T030-T040 for all four entrants and generated opponents; record foreign-item exploration evidence in `specs/033-race-enrichment/acceptance-evidence.md`
@@ -118,18 +118,18 @@ risk sources, isolated determinism, bounded consequences, and zero persistent mu
 
 ### Tests
 
-- [ ] T042 [P] [US3] Add failing risk-band/source/safer-alternative projection tests in `tests/unit/raceEnrichment.test.ts`
-- [ ] T043 [P] [US3] Add failing enabled incident selection, risk/context trigger, time-loss cap, and retained evidence tests in `tests/unit/raceEnrichment.test.ts`
-- [ ] T044 [P] [US3] Add failing disabled-toggle no-event/no-loss and unrelated-event deep-equivalence tests in `tests/unit/raceEnrichment.test.ts`
-- [ ] T045 [P] [US3] Add failing no-retirement/damage/item/fine/credit/run-mutation tests in `tests/integration/enriched-contest.test.ts`
-- [ ] T046 [P] [US3] Add failing risk-summary accessibility and outcome-nondisclosure tests in `tests/unit/raceEnrichmentPresentation.test.ts`
+- [X] T042 [P] [US3] Add failing risk-band/source/safer-alternative projection tests in `tests/unit/raceEnrichment.test.ts`
+- [X] T043 [P] [US3] Add failing enabled incident selection, risk/context trigger, time-loss cap, and retained evidence tests in `tests/unit/raceEnrichment.test.ts`
+- [X] T044 [P] [US3] Add failing disabled-toggle no-event/no-loss and unrelated-event deep-equivalence tests in `tests/unit/raceEnrichment.test.ts`
+- [X] T045 [P] [US3] Add failing no-retirement/damage/item/fine/credit/run-mutation tests in `tests/integration/enriched-contest.test.ts`
+- [X] T046 [P] [US3] Add failing risk-summary accessibility and outcome-nondisclosure tests in `tests/unit/raceEnrichmentPresentation.test.ts`
 
 ### Implementation
 
-- [ ] T047 [US3] Implement pure incident-risk sources, qualitative bands, and safer setup alternatives in `src/simulation/raceEnrichment.ts`
-- [ ] T048 [US3] Implement isolated deterministic incident selection and bounded time-loss events behind `incidentsEnabled` in `src/simulation/raceEnrichment.ts`
-- [ ] T049 [US3] Integrate incident timing evidence without persistent build/run/economy mutation in `src/simulation/laps.ts` and `src/simulation/contest.ts`
-- [ ] T050 [P] [US3] Implement pure risk-summary presentation and static source labels in `src/scenes/raceEnrichmentPresentation.ts`
+- [X] T047 [US3] Implement pure incident-risk sources, qualitative bands, and safer setup alternatives in `src/simulation/raceEnrichment.ts`
+- [X] T048 [US3] Implement isolated deterministic incident selection and bounded time-loss events behind `incidentsEnabled` in `src/simulation/raceEnrichment.ts`
+- [X] T049 [US3] Integrate incident timing evidence without persistent build/run/economy mutation in `src/simulation/laps.ts` and `src/simulation/contest.ts`
+- [X] T050 [P] [US3] Implement pure risk-summary presentation and static source labels in `src/scenes/raceEnrichmentPresentation.ts`
 - [ ] T051 [US3] Render risk band, sources, and safer legal adjustments without outcome spoilers in `src/scenes/PreRaceScene.ts` and `src/scenes/TestDayScene.ts`
 - [ ] T052 [US3] Run T042-T051 with both toggle states and record kill-switch/deep-equivalence evidence in `specs/033-race-enrichment/acceptance-evidence.md`
 

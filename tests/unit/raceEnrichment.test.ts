@@ -13,12 +13,15 @@ import {
   canAffordComposure,
   deriveNamedSubSeed,
   evaluateBoundary,
+  passivePaceFraction,
+  projectIncidentRisk,
   racePhaseForLap,
   resolveEnrichment,
+  resolveIncidentDecision,
   stableEventKindPriority,
   type BoundaryCarState,
 } from "../../src/simulation/raceEnrichment";
-import { generatedRivalIdentity } from "../../src/content/driverRaceIdentities";
+import { DRIVER_RACE_IDENTITIES, generatedRivalIdentity } from "../../src/content/driverRaceIdentities";
 import type { DriverRaceIdentity, StatTarget } from "../../src/simulation/types";
 import { ENRICHMENT_LAP_COUNTS } from "../fixtures/race-enrichment-fixtures";
 
@@ -416,3 +419,157 @@ describe("Feature 033 (T026): single authoritative enrichment pass", () => {
   });
 });
 
+
+describe("Feature 033 (T030/T031): signature eligibility edges and origin agnosticism", () => {
+  // Mercer's signature targets corneringSpeed at threshold 40 (config).
+  const mercer = DRIVER_RACE_IDENTITIES.find((identity) => identity.id === "evelyn-mercer")!;
+  const base = Array.from({ length: 8 }, (_, i) => ({ time: 20 + i }));
+  const stats = (corneringSpeed: number) => ({ corneringSpeed });
+
+  function elig(corneringSpeed: number) {
+    return resolveEnrichment({
+      config: DEFAULT_RACE_ENRICHMENT_CONFIG,
+      lapCount: 8,
+      seed: 1,
+      rosterOrder: ["a"],
+      cars: [{ id: "a", identity: mercer, baseLapTimes: base.map((l) => l.time), resolvedStats: stats(corneringSpeed), contributingSources: ["source-x"] }],
+    }).eligibility[0];
+  }
+
+  it("treats exact threshold equality as eligible", () => {
+    expect(elig(40).eligible).toBe(true);
+    expect(elig(40).threshold).toBe(40);
+    expect(elig(40).committedValue).toBe(40);
+  });
+  it("marks a value just below threshold ineligible (display rounding cannot qualify)", () => {
+    expect(elig(39.9999999).eligible).toBe(false);
+  });
+  it("marks non-finite committed values ineligible", () => {
+    expect(elig(Number.NaN).eligible).toBe(false);
+  });
+  it("below-threshold is ineligible and records the source", () => {
+    const entry = elig(10);
+    expect(entry.eligible).toBe(false);
+    expect(entry.contributingSources).toContain("source-x");
+  });
+
+  it("origin does not participate: eligibility depends only on the resolved own-stat vs threshold", () => {
+    // Mercer gates cornering (threshold 40); Soto gates acceleration (40).
+    const mercer = DRIVER_RACE_IDENTITIES[0];
+    const soto = DRIVER_RACE_IDENTITIES[1];
+    const make = (identity: typeof mercer, resolvedStats: Record<string, number>) =>
+      resolveEnrichment({
+        config: DEFAULT_RACE_ENRICHMENT_CONFIG, lapCount: 8, seed: 2, rosterOrder: ["a"],
+        cars: [{ id: "a", identity, baseLapTimes: base.map((l) => l.time), resolvedStats, contributingSources: [] }],
+      }).eligibility[0];
+    // Equal own-stat at their own threshold => equal eligibility (true) regardless of identity/origin.
+    expect(make(mercer, { corneringSpeed: 40 }).eligible).toBe(true);
+    expect(make(soto, { acceleration: 40 }).eligible).toBe(true);
+    // Below their own threshold => both ineligible.
+    expect(make(mercer, { corneringSpeed: 39 }).eligible).toBe(false);
+    expect(make(soto, { acceleration: 39 }).eligible).toBe(false);
+  });
+});
+
+describe("Feature 033 (T032): passives, activation, and budget", () => {
+  it("applies an always-active passive even to an ineligible car (bounded per-lap pace)", () => {
+    const noIncidents = { ...DEFAULT_RACE_ENRICHMENT_CONFIG, incidentsEnabled: false };
+    const output = resolveEnrichment({
+      config: noIncidents,
+      lapCount: 8,
+      seed: 3,
+      rosterOrder: ["a"],
+      cars: [{ id: "a", identity: DRIVER_RACE_IDENTITIES[0], baseLapTimes: Array.from({ length: 8 }, (_, i) => ({ time: 20 + i })).map((l) => l.time), resolvedStats: {}, contributingSources: [] }],
+    });
+    const car = output.cars[0];
+    expect(car.enrichedLaps.length).toBe(8);
+    expect(car.enrichedLaps.every((lap) => lap.enrichedTime < lap.baseTime)).toBe(true);
+    // Ineligible: never charged a signature.
+    expect(car.composureLedger.remaining).toBe(DEFAULT_RACE_ENRICHMENT_CONFIG.initialComposure);
+  });
+
+  it("never activates in a context phase the driver does not reach, and spends nothing", () => {
+    const output = resolveEnrichment({
+      config: DEFAULT_RACE_ENRICHMENT_CONFIG,
+      lapCount: 8,
+      seed: 4,
+      rosterOrder: ["a"],
+      cars: [{ id: "a", identity: DRIVER_RACE_IDENTITIES[0], baseLapTimes: Array.from({ length: 8 }, (_, i) => ({ time: 20 + i })).map((l) => l.time), resolvedStats: { corneringSpeed: 60 }, contributingSources: [], }],
+    });
+    const openingActivations = output.events.filter((e) => e.kind === "signature-activation" && e.phase === "opening");
+    expect(openingActivations).toHaveLength(0);
+  });
+
+  it("an eligible activated signature spends Composure and emits retained evidence", () => {
+    const output = resolveEnrichment({
+      config: DEFAULT_RACE_ENRICHMENT_CONFIG,
+      lapCount: 8,
+      seed: 5,
+      rosterOrder: ["a"],
+      cars: [{ id: "a", identity: DRIVER_RACE_IDENTITIES[0], baseLapTimes: Array.from({ length: 8 }, (_, i) => ({ time: 20 + i })).map((l) => l.time), resolvedStats: { corneringSpeed: 60 }, contributingSources: [], }],
+    });
+    const activation = output.events.find((e) => e.kind === "signature-activation");
+    expect(activation).toBeDefined();
+    expect(activation!.composure).toMatchObject({ spent: 3 });
+    const car = output.cars[0];
+    expect(car.composureLedger.remaining).toBe(DEFAULT_RACE_ENRICHMENT_CONFIG.initialComposure - 3);
+  });
+
+  it("bounding: passive pace fraction is clamped so it never dominates a lap", () => {
+    expect(passivePaceFraction(3)).toBeCloseTo(0.012, 9);
+    expect(passivePaceFraction(99999)).toBeLessThanOrEqual(0.06);
+    expect(passivePaceFraction(-5)).toBe(0);
+  });
+});
+
+describe("Feature 033 (T042): incident-risk projection", () => {
+  it("labels low-demand/high-stat setups low with no fabricated sources", () => {
+    const risk = projectIncidentRisk({ brakingPower: 80, corneringSpeed: 80 }, 0.1, DEFAULT_RACE_ENRICHMENT_CONFIG);
+    expect(risk.band).toBe("low");
+    expect(risk.revealsOutcome).toBe(false);
+    expect(risk.sources.length).toBeGreaterThan(0);
+  });
+  it("elevates risk when braking demand and stat deficits are high", () => {
+    const risk = projectIncidentRisk({ brakingPower: 5, corneringSpeed: 5 }, 1, DEFAULT_RACE_ENRICHMENT_CONFIG);
+    expect(risk.band).toBe("elevated");
+    expect(risk.saferSetupAlternatives.length).toBeGreaterThan(0);
+    expect(risk.sources.some((source) => source.label.toLowerCase().includes("braking"))).toBe(true);
+  });
+  it("never reveals whether an incident occurred", () => {
+    expect(projectIncidentRisk({}, 1, DEFAULT_RACE_ENRICHMENT_CONFIG).revealsOutcome).toBe(false);
+  });
+});
+
+describe("Feature 033 (T043/T044): isolated bounded incidents behind the toggle", () => {
+  it("produces incident decisions bounded by the configured loss cap", () => {
+    const max = DEFAULT_RACE_ENRICHMENT_CONFIG.incidentRiskCaps.maxTimeLossSeconds;
+    let sawIncident = false;
+    for (let seed = 0; seed < 3000; seed += 1) {
+      const roll = resolveIncidentDecision(seed, "player", 1, max);
+      if (roll.incident) {
+        sawIncident = true;
+        expect(roll.timeLossSeconds).toBeLessThanOrEqual(max);
+        expect(roll.timeLossSeconds).toBeGreaterThanOrEqual(0);
+      }
+      expect(Number.isFinite(roll.timeLossSeconds)).toBe(true);
+    }
+    expect(sawIncident).toBe(true);
+  });
+
+  it("determinism: identical incident inputs resolve identically", () => {
+    const a = resolveIncidentDecision(42, "rival-0", 3, 3);
+    const b = resolveIncidentDecision(42, "rival-0", 3, 3);
+    expect(b).toEqual(a);
+  });
+
+  it("disabled toggle emits no incident events and deep-equals across seeds", () => {
+    const offConfig = { ...DEFAULT_RACE_ENRICHMENT_CONFIG, incidentsEnabled: false };
+    const run = (seed: number) => resolveEnrichment({
+      config: offConfig, lapCount: 8, seed, rosterOrder: ["a"],
+      cars: [{ id: "a", identity: DRIVER_RACE_IDENTITIES[0], baseLapTimes: Array.from({ length: 8 }, (_, i) => ({ time: 20 + i })).map((l) => l.time), resolvedStats: { corneringSpeed: 60 }, contributingSources: [] }],
+    });
+    const first = run(7).events;
+    expect(first.some((event) => event.kind === "incident")).toBe(false);
+    expect(run(7).events).toEqual(first);
+  });
+});

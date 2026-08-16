@@ -10,6 +10,9 @@ import type {
   EnrichedLap,
   EnrichmentEvent,
   EnrichmentEventKind,
+  IncidentRiskBand,
+  IncidentRiskSource,
+  IncidentRiskSummary,
   RacePhase,
   RacePhaseSchedule,
   SignatureContext,
@@ -416,6 +419,8 @@ export interface EnrichmentInput {
   /** Stable tie-break order (player first, then rivals in catalog order). */
   rosterOrder: readonly string[];
   cars: readonly EnrichmentCarInput[];
+  /** Aggregated braking demand on [0,1] used for risk projection (default 0.5). */
+  brakingDemand?: number;
 }
 
 export interface EnrichmentCarOutput {
@@ -453,6 +458,13 @@ export function resolveEnrichment(input: EnrichmentInput): EnrichmentOutput {
   const { config, lapCount, seed, rosterOrder, cars } = input;
   const schedule = computePhaseSchedule(lapCount, config.phaseFractions);
   const actionTieSeed = deriveNamedSubSeed(seed, "action-ties");
+  const brakingDemand = input.brakingDemand ?? 0.5;
+  const incidentSeed = config.incidentsEnabled ? deriveNamedSubSeed(seed, "incidents") : null;
+  // US2 (T036): each car's always-active passive contributes a bounded per-lap
+  // target-pace improvement (never a hidden stock scalar; FR-009).
+  const passiveById = new Map<string, number>(
+    cars.map((car) => [car.id, passivePaceFraction(car.identity.passive.modifier.magnitude)]),
+  );
 
   const eligibility: SignatureEligibility[] = cars.map((car) => {
     const sig = car.identity.signature;
@@ -499,7 +511,12 @@ export function resolveEnrichment(input: EnrichmentInput): EnrichmentOutput {
       });
     }
 
-    const activeEffects: TemporaryLapEffect[] = [];
+    const activeEffects: TemporaryLapEffect[] = cars.map((car) => ({
+      kind: "target-pace",
+      magnitude: passiveById.get(car.id) ?? 0,
+      startLap: lap,
+      endLap: lapCount,
+    }));
     for (const car of cars) {
       const sig = car.identity.signature;
       const contextPhase = CONTEXT_PHASE[sig.context];
@@ -547,6 +564,36 @@ export function resolveEnrichment(input: EnrichmentInput): EnrichmentOutput {
     for (const event of boundary.events) boundaryEvents.push(event);
     for (const car of boundary.cars) ledgers.set(car.id, car.composure);
 
+    // US3 (T048/T049): isolated deterministic bounded incidents behind the toggle.
+    const incidentLossByCar = new Map<string, number>();
+    if (incidentSeed !== null) {
+      for (const car of cars) {
+        const roll = resolveIncidentDecision(
+          incidentSeed,
+          car.id,
+          lap,
+          config.incidentRiskCaps.maxTimeLossSeconds,
+        );
+        if (!roll.incident) continue;
+        seq += 1;
+        const eventId = enrichmentEventId("incident", boundaryId, seq);
+        const risk = projectIncidentRisk(car.resolvedStats, brakingDemand, config);
+        boundaryEvents.push({
+          eventId,
+          kind: "incident",
+          phase,
+          boundaryId,
+          orderSeq: seq,
+          actorId: car.id,
+          emphasis: "compact",
+          before: { position: positionOf.get(car.id)!, time: cumulativeTime.get(car.id)! },
+          incident: { timeLossSeconds: roll.timeLossSeconds, riskBand: risk.band },
+          triggerRef: `incident:${car.id}`,
+        });
+        incidentLossByCar.set(car.id, roll.timeLossSeconds);
+      }
+    }
+
     boundaryEvents.sort(
       (a, b) => stableEventKindPriority(a.kind) - stableEventKindPriority(b.kind)
         || a.orderSeq - b.orderSeq,
@@ -555,7 +602,10 @@ export function resolveEnrichment(input: EnrichmentInput): EnrichmentOutput {
 
     for (const car of cars) {
       const base = [{ time: car.baseLapTimes[lap - 1] }];
-      const [enriched] = enrichLapsWithTemporaryEffects(base, () => phase, activeEffects, new Map(), lap);
+      const incidentMap = incidentLossByCar.has(car.id)
+        ? new Map<number, number>([[lap, incidentLossByCar.get(car.id)!]])
+        : new Map<number, number>();
+      const [enriched] = enrichLapsWithTemporaryEffects(base, () => phase, activeEffects, incidentMap, lap);
       enrichedLapsByCar.get(car.id)!.push(enriched);
       cumulativeTime.set(car.id, cumulativeTime.get(car.id)! + enriched.enrichedTime);
     }
@@ -580,3 +630,78 @@ export function resolveEnrichment(input: EnrichmentInput): EnrichmentOutput {
     eligibility,
   };
 }
+// --- Phase 4/5 US2/US3: passives and isolated bounded incidents ------------
+
+/** Centralized passive pace rule: fraction of lap time per passive stat point. */
+export const PASSIVE_PACE_DELTA_PER_STAT = 0.004;
+
+/** Passive improvement never dominates a lap (bounded; FR-009/SC). */
+export const PASSIVE_LAP_TIME_MAX_FRACTION = 0.06;
+
+/** Passive stat->pace fraction for a car's always-active tendency (US2 T036). */
+export function passivePaceFraction(magnitude: number): number {
+  return Math.min(Math.max(magnitude, 0) * PASSIVE_PACE_DELTA_PER_STAT, PASSIVE_LAP_TIME_MAX_FRACTION);
+}
+
+/** Qualitative incident-risk band thresholds (data-model IncidentRiskSummary). */
+const LOW_RISK_MAX = 1 / 3;
+const GUARDED_RISK_MAX = 2 / 3;
+
+/**
+ * US3 (T047): a deterministic, pre-race qualitative risk projection that never
+ * discloses whether an incident occurred (revealsOutcome is always false).
+ */
+export function projectIncidentRisk(
+  resolvedStats: Readonly<Partial<Record<StatTarget, number>>>,
+  brakingDemand: number,
+  config: RaceEnrichmentConfig,
+): IncidentRiskSummary {
+  // Higher braking demand and lower braking/cornering stats raise risk.
+  const braking = resolvedStats.brakingPower ?? 0;
+  const cornering = resolvedStats.corneringSpeed ?? 0;
+  const demandScore = Math.max(0, Math.min(1, brakingDemand));
+  const brakingDeficit = Math.max(0, (config.signatureThresholds["sig-voss-braking"] ?? 40) - braking) / 40;
+  const corneringDeficit = Math.max(0, (config.signatureThresholds["sig-mercer-cornering"] ?? 40) - cornering) / 40;
+  const raw = Math.max(0, Math.min(1, 0.5 * demandScore + 0.3 * brakingDeficit + 0.2 * corneringDeficit));
+
+  const band: IncidentRiskBand = raw <= LOW_RISK_MAX ? "low" : raw <= GUARDED_RISK_MAX ? "guarded" : "elevated";
+  const sources: IncidentRiskSource[] = [];
+  if (demandScore >= 0.5) sources.push({ label: "High braking-demand circuit", signedContribution: 0.5 * demandScore });
+  if (brakingDeficit > 0) sources.push({ label: "Low braking stat", signedContribution: 0.3 * brakingDeficit });
+  if (corneringDeficit > 0) sources.push({ label: "Low cornering stat", signedContribution: 0.2 * corneringDeficit });
+  if (sources.length === 0) sources.push({ label: "Balanced setup", signedContribution: 0 });
+
+  const saferSetupAlternatives: string[] = [];
+  if (brakingDeficit > 0) saferSetupAlternatives.push("Improve braking power");
+  if (corneringDeficit > 0) saferSetupAlternatives.push("Improve cornering speed");
+
+  return { band, sources, saferSetupAlternatives, revealsOutcome: false };
+}
+
+export interface IncidentDecision {
+  incident: boolean;
+  timeLossSeconds: number;
+}
+
+/**
+ * US3 (T048): deterministic isolated incident selection. Only the isolated
+ * `incidents` named stream is consumed, so toggling incidents never shifts the
+ * base seed streams (research Decision 6; FR-015/FR-017). Bounded by config.
+ */
+export function resolveIncidentDecision(
+  incidentSeed: number,
+  carId: string,
+  lap: number,
+  maxTimeLossSeconds: number,
+): IncidentDecision {
+  const h = fnv1a(`${String(incidentSeed)}::${carId}::${String(lap)}`);
+  const gate = (h >>> 8) & 0xff;
+  if (gate >= INCIDENT_GATE_BYTE) return { incident: false, timeLossSeconds: 0 };
+  const fraction = ((h & 0xff) % 100) / 100;
+  const max = Number.isFinite(maxTimeLossSeconds) ? Math.max(0, maxTimeLossSeconds) : 0;
+  return { incident: true, timeLossSeconds: fraction * max };
+}
+
+/** Rough per-race incident frequency (≈ 6% of car/lap rolls, tunable). */
+const INCIDENT_GATE_BYTE = 16;
+

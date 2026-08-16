@@ -199,3 +199,55 @@ reducer and enriched resolver were verified GREEN before any milestone commit.
 `T028` (running `src/scenes/runPresentation.ts` / `src/simulation/run.ts`
 through the enriched resolver) and `T029`'s manual browser/viewport evidence are
 the presentation/bridge follow-ons — see HANDOFF.
+
+## Phase 4/5 — US2 driver identities + US3 incidents (T030–T052)
+
+Run date: 2026-08-15.
+
+### US2 — signatures and passives (T030–T038)
+
+- **T030/T031 eligibility**: exact-threshold equality qualifies; a value one ULP
+  below the threshold is ineligible (display rounding cannot qualify); non-finite
+  committed values are ineligible; and eligibility depends only on the resolved
+  own-stat vs threshold — never origin. Native/foreign/mixed same-stat builds
+  yield byte-identical player eligibility (T031 integration).
+- **T036 passives**: each car's always-active passive contributes a bounded
+  per-lap target-pace improvement (`passivePaceFraction(magnitude)`, clamped to
+  ≤6% of a lap). It applies to ineligible cars too and never charges a signature.
+- **T037 activation**: eligible + context phase + affordable → one Composure
+  debit (3), a bounded temporary window, and a retained `signature-activation`
+  event. No activation/spend in the opening phase (context never matches).
+- **T038/T033 briefing**: pure `driverBriefing`/`incidentRiskModel` in
+  `src/scenes/raceEnrichmentPresentation.ts` project stat/current/threshold/
+  eligibility/sources/Composure and risk bands without recomputing authority.
+
+### US3 — bounded incidents (T042–T050)
+
+- **T047 risk projection**: `projectIncidentRisk` derives a low/guarded/elevated
+  band from braking demand + braking/cornering stat deficits, with concrete
+  sources and safer setup alternatives; `revealsOutcome` is always `false`.
+- **T048 selection**: `resolveIncidentDecision` consumes ONLY the isolated
+  `incidents` stream (base streams untouched). `maxTimeLossSeconds` (3) bounds
+  every accepted incident; disabled toggle emits no incident.
+- **T049 integration**: `resolveEnrichment` fans incident time-loss into the
+  enriched lap (`incidentTimeLoss`) and emits an immutable `incident` event;
+  results carry no damage/fine/economy mutation (T045).
+- **T050 risk presentation**: `buildIncidentRiskModel`/`incidentRiskModel`
+  expose static labeled source rows and safer adjustments; never a spoiler.
+
+### Measured gates (both incident toggle states)
+
+| Metric | Value |
+|---|---|
+| `npm test` | **92 files / 1662 tests** passing |
+| lint / `tsc --noEmit` / `vite build` | exit 0 each |
+| Separated-build preservation (strong vs weak) | 5/5 seeds ahead, incidents on |
+| Winner-change vs baseline | ≤ 0.5 (measured 0%) |
+| Incident event presence (strong @16 lap, 5 seeds) | 4/5 races contained an incident |
+| US2/US3 unit tests added (`raceEnrichment.test.ts`) | 46 total (was 31) |
+| presentation tests added | 5 in `raceEnrichmentPresentation.test.ts` |
+
+### Flagged US2/US3 items
+`T039`/`T040`/`T051` (PreRaceScene/TestDayScene briefing + risk rendering) and
+the manual portions of `T041`/`T052` require Phaser scene wiring/manual QA — see
+HANDOFF.

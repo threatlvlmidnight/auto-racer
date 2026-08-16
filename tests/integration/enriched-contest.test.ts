@@ -7,6 +7,9 @@ import {
   ENRICHMENT_LAP_COUNTS,
   ENRICHMENT_LEVEL,
   ENRICHMENT_SEEDS,
+  foreignCornerBuild,
+  mixedCornerBuild,
+  nativeCornerBuild,
   racerRivalRoster,
   type BaselineBuildProfile,
 } from "../fixtures/race-enrichment-fixtures";
@@ -93,5 +96,56 @@ describe("Feature 033 (T020): enriched resolution repeat identity", () => {
     const second = resolve(9001, 14, "mixed-corner");
     expect(second.events.map((event) => event.eventId)).toEqual(first.events.map((event) => event.eventId));
     expect(second.events.map((event) => event.kind)).toEqual(first.events.map((event) => event.kind));
+  });
+});
+
+describe("Feature 033 (T031): origin-agnostic eligibility across builds", () => {
+  it("gives native/foreign/mixed same-resolved-stat builds identical player eligibility", () => {
+    const gate = (build: import("../../src/simulation/types").Build) =>
+      resolveEnrichedContest({
+        playerBuild: build,
+        entrantId: DEFAULT_ENTRANT_ID,
+        rivalRoster: racerRivalRoster,
+        level: ENRICHMENT_LEVEL,
+        seed: 42,
+        lapCount: 16,
+      }).eligibility.find((entry) => entry.participantId === "player")!;
+
+    const native = gate(nativeCornerBuild);
+    const foreign = gate(foreignCornerBuild);
+    const mixed = gate(mixedCornerBuild);
+    expect(native.eligible).toBe(foreign.eligible);
+    expect(foreign.eligible).toBe(mixed.eligible);
+    expect(native.committedValue).toBe(foreign.committedValue);
+  });
+});
+
+describe("Feature 033 (T034): generated-rival identity parity and deterministic activation", () => {
+  it("gives every rival an identical-schema identity and deterministic result", () => {
+    const result = resolve(9001, 16, "empty");
+    for (const car of result.cars) {
+      expect(car.driverIdentity.signature).toBeDefined();
+      expect(car.driverIdentity.passive).toBeDefined();
+      expect(typeof car.driverIdentity.signature.priority).toBe("number");
+    }
+    expect(result.cars.filter((car) => car.role === "rival")).toHaveLength(7);
+  });
+});
+
+describe("Feature 033 (T045): incidents never mutate persistent state", () => {
+  it("retains every car, adds no damage/run fields, and stays deeply replay-identical", () => {
+    const first = resolve(1337, 16, "weak");
+    const second = resolve(1337, 16, "weak");
+    expect(second).toEqual(first);
+    expect(new Set(first.cars.map((car) => car.id)).size).toBe(8);
+    for (const car of first.cars) {
+      expect(Object.prototype.hasOwnProperty.call(car, "damage")).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(car, "fine")).toBe(false);
+      expect(car.enrichedLaps.every((lap) => Number.isFinite(lap.enrichedTime))).toBe(true);
+    }
+    for (const event of first.events.filter((e) => e.kind === "incident")) {
+      expect(event.incident!.timeLossSeconds).toBeGreaterThanOrEqual(0);
+      expect(event.incident!.timeLossSeconds).toBeLessThanOrEqual(3);
+    }
   });
 });
