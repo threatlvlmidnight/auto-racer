@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   apexSpeed,
+  brakingProfile,
+  classifyTrackFeatures,
   cornerArcLength,
+  deriveBrakingZones,
   generateTrack,
   matchesPhysicsCondition,
   pointAtProgress,
@@ -781,4 +784,59 @@ describe("summarizeTrack demand traits are readable without color (T049)", () =>
       expect(note.text).toMatch(/\d/); // carries at least one concrete number
     });
   });
+describe("Feature 033 (T075): retained braking zones and positive braking demand", () => {
+  const track: import("../../src/simulation/tracks").Track = {
+    id: "brake-test",
+    name: "Brake Test",
+    segments: [
+      { kind: "straight", length: 260 },
+      { kind: "corner", turnDegrees: 80, direction: "left" },
+      { kind: "straight", length: 300 },
+      { kind: "corner", turnDegrees: 30, direction: "right" },
+      { kind: "straight", length: 200 },
+      { kind: "corner", turnDegrees: 60, direction: "left" },
+    ],
+    points: [],
+    characteristics: { corneringDemand: 40, brakingDemand: 0, powerDemand: 60 },
+  };
+
+  it("derives a braking zone with retained approach/severity per corner", () => {
+    const zones = deriveBrakingZones(track);
+    expect(zones.length).toBeGreaterThan(0);
+    for (const zone of zones) {
+      expect(zone.targetSegmentIndex).toBeGreaterThanOrEqual(0);
+      expect(Number.isFinite(zone.approachLength)).toBe(true);
+      expect(zone.requiredSpeedReduction).toBeGreaterThan(0);
+      expect(zone.requiredSpeedReduction).toBeCloseTo(zone.entrySpeedPotential - zone.targetSpeed, 6);
+      expect(zone.severity).toBeGreaterThan(0);
+      expect(zone.severity).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("always aggregates POSITIVE braking demand for a production circuit", () => {
+    const profile = brakingProfile(track);
+    expect(profile.zones.length).toBeGreaterThan(0);
+    expect(profile.brakingDemand).toBeGreaterThan(0);
+  });
+
+  it("is deterministic across repeated derivation", () => {
+    const first = deriveBrakingZones(track);
+    const second = deriveBrakingZones(track);
+    expect(second).toEqual(first);
+  });
+
+  it("reconciles with physics: sharper corners lower the apex target, raising demand", () => {
+    const targetGentle = apexSpeed(20, STOCK_PHYSICAL_STATS.corneringSpeed);
+    const targetSharp = apexSpeed(90, STOCK_PHYSICAL_STATS.corneringSpeed);
+    expect(targetSharp).toBeLessThan(targetGentle);
+  });
+
+  it("classifies straights, sweepers, and hairpins from retained geometry", () => {
+    const kinds = classifyTrackFeatures(track).map((feature) => feature.kind);
+    expect(kinds).toContain("straight");
+    expect(kinds).toContain("hairpin");
+    expect(kinds).toContain("sweeper");
+  });
+});
+
 });

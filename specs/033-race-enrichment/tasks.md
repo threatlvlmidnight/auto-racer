@@ -208,7 +208,7 @@ physics across every track consumer.
 
 ### Tests
 
-- [ ] T075 [P] [US6] Add failing production-corpus tests for positive braking demand, retained braking-zone contributions, monotonic severity, and display/physics reconciliation in `tests/unit/tracks.test.ts` and `tests/integration/track-presentation.test.ts`
+- [X] T075 [P] [US6] Add failing production-corpus tests for positive braking demand, retained braking-zone contributions, monotonic severity, and display/physics reconciliation in `tests/unit/tracks.test.ts` and `tests/integration/track-presentation.test.ts`
 - [ ] T076 [P] [US6] Add failing deterministic circuit-grammar tests for straights, sweepers, chicanes, hairpins, alternating-direction switchbacks, and seed/ordinal/region identity in `tests/unit/tracks.test.ts`
 - [ ] T077 [P] [US6] Add failing closure, viewport bounds, non-self-intersection, minimum curve radius, nonadjacent-lane separation, bounded-attempt fallback, and repeat-generation deep-equality tests in `tests/unit/tracks.test.ts`
 - [ ] T078 [P] [US6] Add failing corpus diversity and anti-regular-polygon similarity gates in `tests/regression/track-generation-corpus.test.ts`

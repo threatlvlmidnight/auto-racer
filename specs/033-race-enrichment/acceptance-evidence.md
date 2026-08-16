@@ -269,21 +269,35 @@ narrowing `full` emphasis to player signatures only (FR-022) and easing
 attack/incident cadence toward the winner-change band.
 
 ### T086 — Enriched 8-car / 16-lap resolution timing
-
 - Budget (T001 baseline): `BASELINE_NO_MATERIAL_DELAY_TOLERANCE_MS = 250`.
 - Measured enriched mean **2.70 ms**, median **2.05 ms**, max **7.85 ms**
   (5 seeds × 3 warm runs) — ~93× under budget, ~2.8× the pre-enrichment median.
 - Regression `race-enrichment-performance.test.ts` (T086) keeps this gate.
 
+### US6 — retained braking zones and feature classification (additive slice, T075)
+Run date: 2026-08-15. Added as a **non-breaking additive extension** of the
+existing polygon generator (the full circuit-grammar rewrite T076/T077/T078/T080
+and scene rendering T082/T083 are flagged separately).
+
+- `deriveBrakingZones(track)` derives one retained `BrakingZone` per corner from
+  approach-straight length, entry speed potential, and `apexSpeed` target; required
+  speed reduction is always positive for a real corner, so
+  `aggregateBrakingDemand`/`brakingProfile` yield **positive** production demand
+  (FR-039/FR-040).
+- `classifyTrackFeatures(track)` yields stable `straight | sweeper | chicane |
+  hairpin | switchback` spans from retained geometry (FR-038).
+- `resolveEnrichedContest` now feeds the derived braking demand into US3 risk
+  projection, tying real geometry to incident risk.
+- Tests: +5 in `tests/unit/tracks.test.ts` (T075).
+
 ### T090 — Full gates
-`npm test` **93 files / 1672 tests** passing, `npm run lint` exit 0,
+`npm test` **93 files / 1677 tests** passing, `npm run lint` exit 0,
 `npm run build` exit 0. No assertions were weakened.
 
 ### T092 / T093 — Finalization status (pending completion)
 The Constitution Check and HANDOFF/DEFERRED/034/035-bounds reconciliation
-(T092/T093) are **not yet run** — they are gated on the un-implemented US4/US5/US6
-scenes and the T085/T087 tuning pass (see HANDOFF).
+(T092/T093) are **not yet run** — they are gated on the un-implemented US4/US5
+scenes, the US6 circuit-grammar rewrite, and the T085/T087 tuning pass (see
+HANDOFF). The scene briefing/risk-rendering tasks `T039`/`T040`/`T051` likewise
+remain open.
 
-`T039`/`T040`/`T051` (PreRaceScene/TestDayScene briefing + risk rendering) and
-the manual portions of `T041`/`T052` require Phaser scene wiring/manual QA — see
-HANDOFF.

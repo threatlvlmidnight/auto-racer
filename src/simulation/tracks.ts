@@ -666,3 +666,158 @@ export function summarizeTrack(track: Track, lapCount: number): TrackComposition
     capabilityNotes: buildCapabilityNotes(track.characteristics, straights.length, corners.length, meanCornerDegrees),
   };
 }
+// --- Feature 033 US6 (T079/T081): retained braking zones and features (additive)
+
+/**
+ * Retained braking evidence for one corner's approach-and-apex pair. Derived
+ * purely from geometry (approach length, corner severity) and a reference build
+ * (entry speed potential, target apex speed) — never from pixels (FR-039).
+ */
+export interface BrakingZone {
+  id: string;
+  /** Index into `track.segments` of the target corner segment. */
+  targetSegmentIndex: number;
+  approachLength: number;
+  entrySpeedPotential: number;
+  targetSpeed: number;
+  requiredSpeedReduction: number;
+  /** Normalized 0..1 severity (required reduction / reference). */
+  severity: number;
+}
+
+export type TrackFeatureKind = "straight" | "sweeper" | "chicane" | "hairpin" | "switchback";
+
+export interface TrackFeature {
+  id: string;
+  kind: TrackFeatureKind;
+  /** Indices into `track.segments` covered by this feature. */
+  segmentIndexes: readonly number[];
+}
+
+export interface TrackBrakingProfile {
+  zones: readonly BrakingZone[];
+  brakingDemand: number;
+}
+
+/** Approach-speed slope (units of speed per unit of straight length). */
+const APPROACH_SPEED_SLOPE = 0.08;
+const HAIRPIN_DEGREES = 75;
+const SWEEPER_DEGREES = 35;
+
+/** The exact approach of a corner is the nearest straight segment behind it. */
+function approachLengthFor(segments: readonly TrackSegment[], cornerIndex: number): number {
+  for (let index = cornerIndex - 1; index >= 0; index -= 1) {
+    const candidate = segments[index];
+    if (candidate.kind === "straight") return candidate.length;
+  }
+  return 0;
+}
+
+/**
+ * Derive one braking-zone per non-trivial corner using retained geometry:
+ * entry speed potential comes from the approach straight (up to top speed),
+ * the target speed is the corner's apex speed, and required reduction is their
+ * difference. Any real corner yields a positive required reduction, so a
+ * production circuit aggregates to positive braking demand (FR-040).
+ */
+export function deriveBrakingZones(
+  track: Track,
+  corneringSpeedStat = STOCK_PHYSICAL_STATS.corneringSpeed,
+  topSpeedStat = STOCK_PHYSICAL_STATS.topSpeed,
+): readonly BrakingZone[] {
+  const zones: BrakingZone[] = [];
+  track.segments.forEach((segment, index) => {
+    if (segment.kind !== "corner") return;
+    const approachLength = approachLengthFor(track.segments, index);
+    const entrySpeedPotential = Math.min(
+      topSpeedStat,
+      corneringSpeedStat + approachLength * APPROACH_SPEED_SLOPE,
+    );
+    const targetSpeed = apexSpeed(segment.turnDegrees, corneringSpeedStat);
+    const requiredSpeedReduction = Math.max(0, entrySpeedPotential - targetSpeed);
+    if (requiredSpeedReduction <= PHYSICS_EPSILON) return;
+    zones.push({
+      id: `brake-${index}`,
+      targetSegmentIndex: index,
+      approachLength,
+      entrySpeedPotential,
+      targetSpeed,
+      requiredSpeedReduction,
+      severity: clamp(requiredSpeedReduction / BRAKING_REFERENCE, 0, 1),
+    });
+  });
+  return zones;
+}
+
+/** Aggregate normalized positive braking demand from retained zones (T081). */
+export function aggregateBrakingDemand(zones: readonly BrakingZone[]): number {
+  const total = zones.reduce((sum, zone) => sum + zone.requiredSpeedReduction, 0);
+  return clamp(zones.length > 0 ? total / BRAKING_REFERENCE : 0, 0, 1);
+}
+
+/** Build a retained braking profile for a track (never reclassifies geometry). */
+export function brakingProfile(
+  track: Track,
+  corneringSpeedStat = STOCK_PHYSICAL_STATS.corneringSpeed,
+  topSpeedStat = STOCK_PHYSICAL_STATS.topSpeed,
+): TrackBrakingProfile {
+  const zones = deriveBrakingZones(track, corneringSpeedStat, topSpeedStat);
+  return { zones, brakingDemand: aggregateBrakingDemand(zones) };
+}
+
+/**
+ * Stable geometry-derived feature classification (FR-038): straights and
+ * corners are classified from retained segments; a switchback is a pair of
+ * adjacent corners of opposite sign; a chicane is a pair of adjacent modest
+ * corners. Deterministic — identical segments classify identically.
+ */
+export function classifyTrackFeatures(track: Track): readonly TrackFeature[] {
+  const features: TrackFeature[] = [];
+  const segments = track.segments;
+
+  let straightStart = -1;
+  const flushStraight = (endExclusive: number) => {
+    if (straightStart === -1) return;
+    const indexes = Array.from({ length: endExclusive - straightStart }, (_, k) => straightStart + k);
+    features.push({ id: `straight-${straightStart}`, kind: "straight", segmentIndexes: indexes });
+    straightStart = -1;
+  };
+
+  segments.forEach((segment, index) => {
+    if (segment.kind === "straight") {
+      if (straightStart === -1) straightStart = index;
+      return;
+    }
+    flushStraight(index);
+    const corner = segment;
+    // Pair with the previous corner, if adjacent and opposite sign -> switchback.
+    const prev = segments[index - 1];
+    if (prev?.kind === "corner" && prev.direction !== corner.direction) {
+      // Merge the previous lone corner into a switchback pair.
+      const last = features[features.length - 1];
+      if (last && last.kind === "sweeper" && last.segmentIndexes[0] === index - 1) {
+        last.kind = "switchback";
+        last.segmentIndexes = [...last.segmentIndexes, index];
+        return;
+      }
+    }
+    // Two adjacent modest corners form a chicane; otherwise classify by angle.
+    if (
+      prev?.kind === "corner"
+      && corner.turnDegrees <= SWEEPER_DEGREES
+      && prev.turnDegrees <= SWEEPER_DEGREES
+    ) {
+      const merged = features[features.length - 1];
+      if (merged && merged.kind === "sweeper" && merged.segmentIndexes[0] === index - 1) {
+        merged.kind = "chicane";
+        merged.segmentIndexes = [...merged.segmentIndexes, index];
+        return;
+      }
+    }
+    const kind: TrackFeatureKind = corner.turnDegrees >= HAIRPIN_DEGREES ? "hairpin" : "sweeper";
+    features.push({ id: `${kind}-${index}`, kind, segmentIndexes: [index] });
+  });
+  flushStraight(segments.length);
+  return features;
+}
+

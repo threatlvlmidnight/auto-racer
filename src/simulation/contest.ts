@@ -11,7 +11,7 @@ import {
 } from "../content/driverRaceIdentities";
 import { resolveEnrichment } from "./raceEnrichment";
 import { installedItems, storedItems } from "./slots";
-import { generateTrack } from "./tracks";
+import { generateTrack, brakingProfile } from "./tracks";
 import type { Track } from "./tracks";
 import {
   LAP_COUNT,
@@ -315,6 +315,7 @@ export function resolveEnrichedContest(
   }
 
   const track = generateTrack(seed, level, regionTheme);
+  const trackBrakingDemand = brakingProfile(track).brakingDemand;
   const playerIdentity = identityForEntrant(entrantId)
     ?? DRIVER_RACE_IDENTITIES[0];
 
@@ -352,6 +353,7 @@ export function resolveEnrichedContest(
     lapCount,
     seed,
     rosterOrder,
+    brakingDemand: trackBrakingDemand,
     cars: metas.map((meta) => ({
       id: meta.id,
       identity: meta.identity,
