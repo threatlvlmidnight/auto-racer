@@ -18,6 +18,7 @@ import {
 } from "../../src/scenes/itemPresentation";
 import { testItem, vehicleBuild } from "../fixtures/vehicle-build-fixtures";
 import { itemTagVisualMetadata } from "../../src/scenes/itemVisualDescriptor";
+import { placementBehaviorInventory } from "../fixtures/item-presentation-fixtures";
 
 const ALL_ITEMS = [NEUTRAL_ITEMS, ...Object.values(EXCLUSIVE_ITEMS)].flat();
 
@@ -204,3 +205,18 @@ describe("tag inspection matching projection (032 FR-004B)", () => {
     expect(build).toEqual(snapshot);
   });
 });
+describe("Feature 034 placement-behavior inventory (T004/FR-040)", () => {
+  it("inventories every playable item with its authored Fitted/Improvised behavior", () => {
+    const inventory = placementBehaviorInventory();
+    const expectedCount = NEUTRAL_ITEMS.length + Object.values(EXCLUSIVE_ITEMS).flat().length;
+    expect(inventory).toHaveLength(expectedCount);
+    expect(new Set(inventory.map((entry) => entry.itemId)).size).toBe(expectedCount);
+    inventory.forEach((entry) => {
+      expect(["time-modifier", "buff-boost", "none"]).toContain(entry.fittedBehaviorKind);
+      expect(["time-modifier", "buff-boost", "none"]).toContain(entry.improvisedBehaviorKind);
+      expect(typeof entry.fittedDescription).toBe("string");
+      expect(typeof entry.improvisedDescription).toBe("string");
+    });
+  });
+});
+

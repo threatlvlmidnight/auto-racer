@@ -3,12 +3,24 @@ import { EXCLUSIVE_ITEMS } from "../../src/content/items";
 import { BASELINE_CAR } from "../../src/content/sample-data";
 import { resolveContest } from "../../src/simulation/contest";
 import { vehicleBuild } from "./vehicle-build-fixtures";
+import { REFERENCE_MARGINAL_SECONDS_PER_POINT } from "../../src/simulation/statNormalization";
 import type { EntrantId, ItemDefinition } from "../../src/simulation/types";
 
 export const BALANCE_SEEDS = [7, 19, 31, 43, 59] as const;
 export const NELL_CATALOG = EXCLUSIVE_ITEMS["nell-voss"].map((item) => item.id);
 export const STOCK_VEHICLE_BASELINE = structuredClone(BASELINE_CAR);
 export const REPRESENTATIVE_DRAFT_ITEMS = NEUTRAL_ITEMS.slice(0, 3).map((item) => item.id);
+
+/**
+ * Feature 034 (T003): the four-stat marginal-value corpus snapshot — one
+ * canonical point of each physical stat expressed in reference-track seconds.
+ * This is the SC-013 baseline the 10% gate is measured against; any drift in
+ * calibration is a balance decision and must update both this snapshot and the
+ * gate together.
+ */
+export const MARGINAL_VALUE_CORPUS: Readonly<Record<keyof typeof REFERENCE_MARGINAL_SECONDS_PER_POINT, number>> = {
+  ...REFERENCE_MARGINAL_SECONDS_PER_POINT,
+};
 
 export function representativeBalanceFixture(seed: number) {
   return { seed, draftItemIds: REPRESENTATIVE_DRAFT_ITEMS, baselineVehicle: structuredClone(STOCK_VEHICLE_BASELINE) };

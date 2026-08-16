@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   generateTagSpecialistStock,
   heldTagCounts,
+  purchaseTagStock,
   qualifyingTags,
   TAG_SPECIALIST_MODIFIED_PREMIUM,
   TAG_SPECIALIST_ELIGIBLE_WINDOW,
@@ -67,5 +68,31 @@ describe("generateTagSpecialistStock — stock shaping (T059/T061/T062/FR-048)",
     const first = generateTagSpecialistStock("twin", pool, seededRng(11), 40, "run-2");
     const second = generateTagSpecialistStock("twin", pool, seededRng(11), 40, "run-2");
     expect(second.map((entry) => entry.entryId)).toEqual(first.map((entry) => entry.entryId));
+  });
+});
+
+describe("purchaseTagStock — authoritative capacity + atomic placement (T063)", () => {
+  function stockFor(): ReturnType<typeof generateTagSpecialistStock> {
+    const pool = [taggedDef("x1", ["twin"]), taggedDef("x2", ["twin"]), taggedDef("x3", ["twin"])];
+    return generateTagSpecialistStock("twin", pool, seededRng(5), 40, "run-p");
+  }
+
+  it("installs into a free vehicle slot and keeps the modification", () => {
+    const stock = stockFor();
+    const modified = stock.find((entry) => entry.modified)!;
+    const result = purchaseTagStock(instanceBuild([]), stock, modified.entryId);
+    expect(result.kind).toBe("installed");
+    if (result.kind !== "installed") return;
+    const placed = result.build.slots.find((slot) => slot.instance?.definitionId === modified.definitionId);
+    expect(placed?.instance).not.toBeNull();
+    expect(placed?.instance?.modification).not.toBeNull();
+  });
+
+  it("rejects atomically when the garage is full", () => {
+    const stock = stockFor();
+    const full = instanceBuild([{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }], [{ id: "s1" }, { id: "s2" }, { id: "s3" }]);
+    const result = purchaseTagStock(full, stock, stock[0].entryId);
+    expect(result.kind).toBe("failure");
+    if (result.kind === "failure") expect(result.reason).toBe("full");
   });
 });

@@ -4,6 +4,8 @@ import {
   generateExhibitionTrial,
   type ExhibitionContestEvidence,
 } from "../../src/simulation/exhibition";
+import { resolveContest } from "../../src/simulation/contest";
+import { vehicleBuild } from "../fixtures/vehicle-build-fixtures";
 
 describe("generateExhibitionTrial — objective commitment (T051/T053)", () => {
   it("creates exactly one objective from each of the three families", () => {
@@ -57,5 +59,27 @@ describe("evaluateExhibitionResult — scoring 0–3 (T051/T054/FR-041)", () => 
       expect(typeof outcome.actual).toBe("number");
       expect(typeof outcome.threshold).toBe("number");
     });
+  });
+});
+
+describe("T055 — Exhibition reuses real race authority without Championship mutation", () => {
+  it("derives Exhibition evidence from the retained solo contest and confirms isolation", () => {
+    const build = vehicleBuild([]);
+    const contest = resolveContest(build, { id: "exhibition-ghost", lapTime: 6 }, 8);
+    const evidence: ExhibitionContestEvidence = {
+      fastestLapTime: Math.min(...contest.laps.map((lap) => lap.playerLapTime)),
+      itemActivations: contest.laps.reduce((sum, lap) => sum + lap.firedItems.length, 0),
+      demandScore: 0,
+    };
+    const trial = generateExhibitionTrial(7, 1);
+    const result = evaluateExhibitionResult(trial, evidence);
+
+    // The solo contest result carries no scored authority surface at all.
+    expect(contest).not.toHaveProperty("standings");
+    expect(contest).not.toHaveProperty("points");
+    expect(contest).not.toHaveProperty("rival");
+    // And Exhibition settlement can never touch Championship state.
+    expect(result.championshipUnchanged).toBe(true);
+    expect([0, 1, 2, 3]).toContain(result.score);
   });
 });

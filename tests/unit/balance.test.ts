@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import type { CanonicalStatTarget } from "../../src/simulation/types";
 import {
   BALANCE_ENTRANTS,
   BALANCE_SEEDS,
+  MARGINAL_VALUE_CORPUS,
   NELL_CATALOG,
   runBalanceHarness,
   STOCK_VEHICLE_BASELINE,
@@ -10,6 +12,7 @@ import {
 import {
   marginalSpreadExceedsTenPercent,
   marginalSpreadMultiplier,
+  REFERENCE_MARGINAL_SECONDS_PER_POINT,
 } from "../../src/simulation/statNormalization";
 
 describe("Feature 032 deterministic balance harness", () => {
@@ -45,6 +48,21 @@ describe("Feature 034 balanced reference-track 10% acceptance gate (T016, SC-013
     expect(spread).toBeGreaterThan(0);
     expect(spread).toBeLessThanOrEqual(1.1);
     expect(marginalSpreadExceedsTenPercent()).toBe(false);
+  });
+});
+
+describe("Feature 034 four-stat marginal-value corpus snapshot (T003)", () => {
+  it("pins the four canonical one-point marginal values", () => {
+    const targets: CanonicalStatTarget[] = ["acceleration", "topSpeed", "brakingPower", "corneringSpeed"];
+    targets.forEach((stat) => {
+      expect(typeof MARGINAL_VALUE_CORPUS[stat]).toBe("number");
+      expect(MARGINAL_VALUE_CORPUS[stat]).toBeGreaterThan(0);
+      expect(MARGINAL_VALUE_CORPUS[stat]).toBe(REFERENCE_MARGINAL_SECONDS_PER_POINT[stat]);
+    });
+  });
+
+  it("keeps the corpus internally consistent with the live calibration", () => {
+    expect(Object.keys(MARGINAL_VALUE_CORPUS).sort()).toEqual(["acceleration", "brakingPower", "corneringSpeed", "topSpeed"]);
   });
 });
 

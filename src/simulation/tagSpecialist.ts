@@ -1,6 +1,7 @@
 import { buildWorkshopModification } from "../content/itemModifications";
 import { offeredModificationsFor } from "./itemModifications";
-import { enumerateInstances } from "./itemInstances";
+import { createItemInstance, enumerateInstances } from "./itemInstances";
+import { placementCapacity } from "./encounterTransactions";
 import type { InstanceBuild, ItemDefinition, WorkshopModification } from "./types";
 
 /**
@@ -140,3 +141,47 @@ function shuffle<T>(items: readonly T[], rng: () => number, salt: number): reado
   }
   return copy;
 }
+export type TagPurchaseResult =
+  | { kind: "installed"; build: InstanceBuild; slotId: string }
+  | { kind: "stored"; build: InstanceBuild; index: number }
+  | { kind: "failure"; reason: "full" | "duplicate" };
+
+/**
+ * Purchase one retained stock entry through the authoritative capacity +
+ * atomic-placing path (034 T063). Installs into a free slot when possible,
+ * otherwise an empty storage index; refuses (typed) when the garage is full.
+ * The caller debits the exact `entry.price` credits against the run.
+ */
+export function purchaseTagStock(build: InstanceBuild, stock: readonly TagStockEntry[], entryId: string): TagPurchaseResult {
+  const entry = stock.find((candidate) => candidate.entryId === entryId);
+  if (!entry) return { kind: "failure", reason: "duplicate" };
+  const capacity = placementCapacity(build);
+  if (capacity.freeSlotId !== null) {
+    const instance = createItemInstance(entry.definitionId, "tag-specialist", 1);
+    if (entry.modification) instance.modification = { ...entry.modification };
+    return {
+      kind: "installed",
+      slotId: capacity.freeSlotId,
+      build: {
+        ...build,
+        slots: build.slots.map((slot) => (slot.slotId === capacity.freeSlotId ? { ...slot, instance } : slot)),
+      },
+    };
+  }
+  if (capacity.freeStorageIndex !== null) {
+    const instance = createItemInstance(entry.definitionId, "tag-specialist", 1);
+    if (entry.modification) instance.modification = { ...entry.modification };
+    return {
+      kind: "stored",
+      index: capacity.freeStorageIndex,
+      build: {
+        ...build,
+        storage: build.storage.map((position) =>
+          position.index === capacity.freeStorageIndex ? { ...position, instance } : position,
+        ),
+      },
+    };
+  }
+  return { kind: "failure", reason: "full" };
+}
+

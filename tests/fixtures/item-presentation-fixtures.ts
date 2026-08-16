@@ -23,3 +23,32 @@ export const ITEM_PRESENTATION_FIXTURES = {
   storageInert: requireItem((item) => !item.activeWhileStored),
   economyOnly: catalog.find((item) => item.timeModifier === 0 && !item.physics && !item.conditionalPhysics?.length && !item.buff && !item.synergyEffects?.length) ?? null,
 } as const;
+
+/**
+ * Feature 034 (T004): every playable item's authored placement behavior, from the
+ * authored catalog (never invented). Records the Fitted/Improvised consequence
+ * kind per item so T048/T049 corpus audits and presentation previews can reconcile
+ * every item's exact placement contribution. Purely derived — a snapshot helper,
+ * not a new authority.
+ */
+export interface PlacementBehaviorInventoryEntry {
+  itemId: string;
+  itemName: string;
+  fittedBehaviorKind: "time-modifier" | "buff-boost" | "none";
+  improvisedBehaviorKind: "time-modifier" | "buff-boost" | "none";
+  fittedDescription: string;
+  improvisedDescription: string;
+}
+
+/** Inventory of every playable item's exact placement behavior (T004). */
+export function placementBehaviorInventory(): readonly PlacementBehaviorInventoryEntry[] {
+  return catalog.map((item) => ({
+    itemId: item.id,
+    itemName: item.name,
+    fittedBehaviorKind: item.fittedBehavior.kind,
+    improvisedBehaviorKind: item.improvisedBehavior.kind,
+    fittedDescription: item.fittedBehavior.description,
+    improvisedDescription: item.improvisedBehavior.description,
+  }));
+}
+
