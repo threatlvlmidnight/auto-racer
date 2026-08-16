@@ -85,6 +85,39 @@ const ENCOUNTER_SUMMARIES = {
   "sponsor-meeting": "Take 2 credits now or accept a 7-credit race objective.",
 } as const;
 
+/**
+ * Feature 034 (T027): registered summaries for the seven new encounter types.
+ * Kept separate from ENCOUNTER_SUMMARIES so the legacy choice generator and its
+ * pinned fixtures are untouched; scenes that surface these types read from here.
+ */
+export const NEW_ENCOUNTER_SUMMARIES: Readonly<Record<NewEncounterType, string>> = {
+  "exhibition-trial": "Run an unscored solo race toward three exact objectives.",
+  scrutineering: "Voluntarily sacrifice one part for a one-race boost to the rest.",
+  "factory-development": "Attach one run-persistent Workshop Modification to a part.",
+  "upgrade-workshop": "A guaranteed free tier-upgrade offer (optional to accept).",
+  "privateer-exchange": "Swap one part for a same-tier foreign-origin part.",
+  "experimental-rebuild": "Pay 2 credits to rebuild a part one tier higher.",
+  "tag-specialist": "Stock keyed to a tag your garage already holds; one part already re-worked.",
+};
+
+/** The seven Feature 034 encounter types (types.ts EncounterType minus the legacy four). */
+export type NewEncounterType =
+  | "exhibition-trial"
+  | "scrutineering"
+  | "factory-development"
+  | "upgrade-workshop"
+  | "privateer-exchange"
+  | "experimental-rebuild"
+  | "tag-specialist";
+
+/** Every registered encounter type, legacy four + the seven new (T027 registration). */
+export function registeredEncounterTypes(): readonly (keyof typeof ENCOUNTER_SUMMARIES | NewEncounterType)[] {
+  return [
+    ...(Object.keys(ENCOUNTER_SUMMARIES) as (keyof typeof ENCOUNTER_SUMMARIES)[]),
+    ...(Object.keys(NEW_ENCOUNTER_SUMMARIES) as NewEncounterType[]),
+  ];
+}
+
 export function generateEncounterChoices(run: Run, rng: RandomSource): EncounterChoice[] {
   const stage = run.stages[run.stageIndex];
   if (!stage || stage.kind !== "choice") return [];

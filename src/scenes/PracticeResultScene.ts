@@ -24,6 +24,7 @@ import { resolvedItemEvidence, unresolvedPhysicalEvidence } from "./itemPresenta
 import type { OfferedItem } from "../simulation/types";
 import { configureHiDpiScene, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "./layout";
 import { recordedLapVehicleStatModel } from "./vehicleStatPresentation";
+import { enrichmentResultsSummary } from "./raceEnrichmentPresentation";
 
 export interface PracticeResultSceneData {
   run?: Run;
@@ -98,6 +99,20 @@ export class PracticeResultScene extends Phaser.Scene {
       color: "#9aa7ad",
       wordWrap: { width: width - 48 },
     }).setOrigin(0.5);
+    const retainedEvents = result.contest.enrichment?.events ?? [];
+    if (retainedEvents.length > 0) {
+      const summary = enrichmentResultsSummary(retainedEvents);
+      this.add.text(width - 24, 112, [
+        "RETAINED RACE MOMENTS",
+        ...summary.events.slice(0, 3).map((event) => `• ${event.text}`),
+      ].join("\n"), {
+        fontFamily: UI_FONT,
+        fontSize: "9px",
+        color: "#d7e1e6",
+        align: "right",
+        wordWrap: { width: 230 },
+      }).setOrigin(1, 0);
+    }
     const rows = model.laps.map((lap) =>
       `${lap.label} · ${model.contributions.filter((entry) => entry.lap === lap.lap).map((entry) => `${entry.itemName} ${entry.state} ${signed(entry.contribution)}s`).join(", ") || "no item contribution"}`
     );

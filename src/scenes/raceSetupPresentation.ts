@@ -1,7 +1,7 @@
 import { DELTA_KEY_FOR_STAT, type PhysicalStatTarget } from "../simulation/buffs";
 import { resolveCurrentBuildPhysicalStats } from "../simulation/laps";
 import { lockRaceSetup, type RaceSetupInput } from "../simulation/raceSetup";
-import { summarizeTrack, type Track } from "../simulation/tracks";
+import { summarizeTrack, trackCenterline, type Track } from "../simulation/tracks";
 import type {
   EligibleSetupControl,
   ItemPhysicsContribution,
@@ -217,18 +217,12 @@ const DEFAULT_PREVIEW_SUBDIVISIONS = 10;
 
 /**
  * A dense, smoothly-curved closed loop through the track's own authoritative
- * points (never a separate/regenerated shape — same `track.points` the full-
- * size renderers use). `track.points` holds one vertex per straight segment
- * with a sharp angle at every corner (tracks.ts's `deriveTrackPoints`) — at
- * full playback scale a thick stroke reads that as a track; shrunk to an
- * icon-sized preview the same sharp joins read as a rough polygon. Catmull-
- * Rom interpolation (cyclic, so the loop closes smoothly with no seam)
- * produces a rounded circuit silhouette instead, purely for this compact
- * preview — full-size renderers are untouched.
+ * retained centerline (never a separate/regenerated shape). Legacy fixtures
+ * without a sampled centerline fall back to their retained points.
  */
 export function trackPreviewPoints(track: Track, options: TrackPreviewOptions): readonly TrackPreviewPoint[] {
   const subdivisions = options.subdivisionsPerSegment ?? DEFAULT_PREVIEW_SUBDIVISIONS;
-  const base = track.points.map((point) => ({
+  const base = trackCenterline(track).map((point) => ({
     x: point.x * options.scale + options.offsetX,
     y: point.y * options.scale + options.offsetY,
   }));

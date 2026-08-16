@@ -226,6 +226,17 @@ export function toLegacyContestResult(result: NCarContestResult): ContestResult 
   const nearestRank = player.position === 1 ? 2 : player.position - 1;
   const nearest = result.cars.find((car) => car.position === nearestRank) ?? player;
 
+  const enriched = result as import("../simulation/types").EnrichedContestResult;
+  const enrichment = enriched.events
+    ? {
+      configVersion: enriched.configVersion,
+      phaseSchedule: enriched.phaseSchedule,
+      events: enriched.events,
+      incidentsEnabled: enriched.incidentsEnabled,
+      eligibility: enriched.eligibility,
+      ledgers: Object.fromEntries(enriched.cars.map((car) => [car.id, car.composureLedger])),
+    }
+    : undefined;
   return {
     lapCount: result.lapCount,
     playerTime: player.time,
@@ -248,6 +259,7 @@ export function toLegacyContestResult(result: NCarContestResult): ContestResult 
     contributions: player.laps.flatMap((lap) => lap.contributions),
     playerPosition: player.position,
     finishingOrder: result.cars.map((car) => car.role === "player" ? "player" : car.id),
+    enrichment,
   };
 }
 

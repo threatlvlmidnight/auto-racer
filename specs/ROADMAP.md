@@ -7,17 +7,13 @@ handoff; feature task ledgers remain the source of truth for individual tasks.
 
 ## Committed sequence
 
-1. **033 Race Enrichment** — implementation-ready, 93 tasks. Start with
-   T001–T006 baseline and Feature 032 reconciliation, then establish retained
-   race phases, passes, identity, incidents, circuit grammar, and audio.
-2. **034 Roguelike Encounter Variety** — implementation-ready, 78 tasks.
+1. **034 Roguelike Encounter Variety** — implementation-ready, 78 tasks.
    Begin only after 033's retained race-evidence contract is available; its
    T001 is the explicit handoff. This delivers instance-bound items, canonical
    stat points, encounter cadence, transformations, and Workshop effects.
-3. **035 Interface Clarity & Reward Feedback** — specification drafted and
-   ready for clarification. It owns whole-game readability and reward feedback,
-   not new encounter or race authority; complete clarification, plan, and tasks
-   before implementation.
+2. **035 Interface Clarity & Reward Feedback** — analyzed and ready for
+   implementation. It owns whole-game readability and reward feedback, not new
+   encounter or race authority.
 
 ## Planned follow-ups requiring scope refresh
 
@@ -35,6 +31,7 @@ handoff; feature task ledgers remain the source of truth for individual tasks.
 ## Completed or acceptance-only
 
 Implementation-complete features have current statuses in their `spec.md`
-files. Feature 001 retains owner browser-validation tasks, and Feature 030
+files. **033 Race Enrichment is complete at 93/93 tasks.** Feature 001 retains
+owner browser-validation tasks, and Feature 030
 retains its manual four-viewport playback matrix. These are acceptance debt,
 not the next implementation queue.

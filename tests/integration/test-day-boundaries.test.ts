@@ -9,6 +9,7 @@ import {
   protectedRunStateEquals,
   resolvePractice,
 } from "../../src/simulation/practice";
+import { pendingEligible } from "../../src/simulation/scrutineering";
 import { preRaceSetupPracticeFixture, runHubPracticeFixture } from "../fixtures/practice-run-fixtures";
 
 describe("Test Day authority boundaries", () => {
@@ -108,5 +109,30 @@ describe("setup-origin Test Day protected-state boundaries (T068)", () => {
     expect(fixture.run.activeEncounter!.id).toBe(encounterIdBefore);
     expect(fixture.run.activeEncounter!.status).toBe("active");
     expect(fixture.run.status).toBe(statusBefore);
+  });
+});
+
+// 034 T073: Test Day remains unscored and does not consume Sponsor/Scrutineering
+// state (FR-049 — pending effects await the *next scored race*, never Test Day).
+describe("Feature 034 Test Day pending-effect boundary (T073)", () => {
+  it("resolves Test Day without writing or consuming pending-effect state", () => {
+    const fixture = runHubPracticeFixture();
+    const context = createPracticeReturnContext(fixture.run, {
+      context: fixture.context,
+      selection: fixture.selection,
+      navigation: fixture.navigation,
+    });
+    const completed = resolvePractice(createPracticeSession(fixture.run, context));
+
+    // The unscored practice result never touches the pending-effect layer.
+    expect(completed.result).not.toHaveProperty("pendingEffects");
+    expect(completed.result).not.toHaveProperty("scrutineering");
+    expect(completed.result).not.toHaveProperty("sponsor");
+
+    // One Sponsor and one Scrutineering effect may therefore still coexist in
+    // the underlying run without being consumed by Test Day.
+    expect(pendingEligible(["sponsor"], "scrutineering")).toBe(true);
+    expect(pendingEligible(["sponsor"], "sponsor")).toBe(false);
+    expect(pendingEligible([], "sponsor")).toBe(true);
   });
 });

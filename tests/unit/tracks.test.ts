@@ -51,15 +51,15 @@ describe("TrackSegment / Track / TrackCharacteristics shapes (T002)", () => {
     });
   });
 
-  it("gives every corner in one track the same direction", () => {
+  it("includes both turn directions so the circuit can form switchbacks", () => {
     const corners = track.segments.filter(
       (segment): segment is Extract<TrackSegment, { kind: "corner" }> => segment.kind === "corner",
     );
     const directions = new Set(corners.map((corner) => corner.direction));
-    expect(directions.size).toBe(1);
+    expect(directions).toEqual(new Set(["left", "right"]));
   });
 
-  it("every corner's turnDegrees is in (0, 150) and the sequence sums to exactly 360", () => {
+  it("every corner's turnDegrees is in (0, 150) and the signed sequence closes at 360", () => {
     const corners = track.segments.filter(
       (segment): segment is Extract<TrackSegment, { kind: "corner" }> => segment.kind === "corner",
     );
@@ -67,8 +67,8 @@ describe("TrackSegment / Track / TrackCharacteristics shapes (T002)", () => {
       expect(corner.turnDegrees).toBeGreaterThan(0);
       expect(corner.turnDegrees).toBeLessThan(150);
     });
-    const sum = corners.reduce((total, corner) => total + corner.turnDegrees, 0);
-    expect(sum).toBeCloseTo(360, 6);
+    const signedSum = corners.reduce((total, corner) => total + corner.turnDegrees * (corner.direction === "left" ? 1 : -1), 0);
+    expect(Math.abs(signedSum)).toBeCloseTo(360, 6);
   });
 
   it("every straight has a positive length", () => {
@@ -348,16 +348,7 @@ describe("solveSpan (T004, contract §3)", () => {
 });
 
 describe("simulateLapPhysics shape-sensitivity (T005, SC-001)", () => {
-  // generateTrack(0, 1) and generateTrack(0, 2) are a real, verified pair:
-  // identical trackCharacteristics ({ powerDemand: 55, corneringDemand: 45,
-  // brakingDemand: 0 }), genuinely different segments. Deliberately real
-  // generated tracks, not a hand-permuted single multiset — a full-cycle
-  // reordering of the *same* corners/straights turns out to be mathematically
-  // invariant under this model (every corner appears exactly once as
-  // "previous" and once as "current" regardless of adjacency order, so the
-  // per-span sums cancel out identically) — a real property of the model,
-  // not a bug, but it means only genuinely different underlying segment data
-  // (as any two real generated tracks have) exercises shape-sensitivity.
+  // Two real generated circuits, rather than a hand-permuted segment multiset.
   const segmentsA = generateTrack(0, 1).segments;
   const segmentsB = generateTrack(0, 2).segments;
 
@@ -373,8 +364,8 @@ describe("simulateLapPhysics shape-sensitivity (T005, SC-001)", () => {
     expect(summed).toBeCloseTo(result.totalSeconds, 9);
   });
 
-  it("two real generated tracks with equal trackCharacteristics scores but different real layouts produce different lap times", () => {
-    expect(trackCharacteristics(segmentsA)).toEqual(trackCharacteristics(segmentsB));
+  it("two real generated layouts produce different physics and summary evidence", () => {
+    expect(trackCharacteristics(segmentsA)).not.toEqual(trackCharacteristics(segmentsB));
     expect(segmentsA).not.toEqual(segmentsB);
 
     const resultA = simulateLapPhysics(STOCK_PHYSICAL_STATS, segmentsA);
@@ -836,6 +827,19 @@ describe("Feature 033 (T075): retained braking zones and positive braking demand
     expect(kinds).toContain("straight");
     expect(kinds).toContain("hairpin");
     expect(kinds).toContain("sweeper");
+  });
+
+  it("retains production feature and braking evidence on the generated track", () => {
+    const production = generateTrack(33075, 4, "british-isles");
+    expect(production.brakingZones?.length).toBeGreaterThan(0);
+    expect(production.features?.length).toBeGreaterThan(0);
+    expect(production.validation).toMatchObject({ closed: true, inBounds: true, nonSelfIntersecting: true });
+    expect(production.centerline!.length).toBeGreaterThan(production.points.length);
+    expect(new Set(production.segments.filter((segment) => segment.kind === "corner").map((segment) => segment.direction))).toEqual(new Set(["left", "right"]));
+    expect(brakingProfile(production).zones).toBe(production.brakingZones);
+    expect(production.characteristics.brakingDemand).toBe(
+      Math.round(brakingProfile(production).brakingDemand * 100),
+    );
   });
 });
 

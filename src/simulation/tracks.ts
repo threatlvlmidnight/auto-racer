@@ -25,9 +25,30 @@ export interface Track {
   name: string;
   segments: readonly TrackSegment[];
   points: readonly { x: number; y: number }[];
+  /** Densely sampled authoritative centerline used by every renderer. */
+  centerline?: readonly { x: number; y: number }[];
   characteristics: TrackCharacteristics;
+  /**
+   * Feature 033: authoritative, generation-time evidence.  These are optional
+   * only to preserve compatibility with deliberately minimal legacy fixtures;
+   * every production track returned by generateTrack supplies both fields.
+   */
+  features?: readonly TrackFeature[];
+  brakingZones?: readonly BrakingZone[];
+  validation?: TrackValidationMetadata;
   /** Feature 029 presentation-only environment key; never read by physics. */
   regionTheme?: RegionId;
+}
+
+/** Retained acceptance facts for one generated production circuit. */
+export interface TrackValidationMetadata {
+  attempt: number;
+  closed: boolean;
+  inBounds: boolean;
+  nonSelfIntersecting: boolean;
+  minimumLaneSeparation: number;
+  minimumCurveRadius?: number;
+  usedFallback?: boolean;
 }
 
 export interface TrackPoint {
@@ -47,10 +68,6 @@ export interface PhysicalStats {
 // --- Balance-pass placeholders (research.md Decision 3/4) ------------------
 const MIN_CORNER_COUNT = 6;
 const MAX_CORNER_COUNT = 10;
-const RAW_CORNER_DEGREES_MIN = 20;
-const RAW_CORNER_DEGREES_MAX = 55;
-const BASE_STRAIGHT_LENGTH = 160;
-const MIN_STRAIGHT_LENGTH = 40;
 /**
  * Cornering "length" is a super-linear function of each corner's own angle,
  * not a linear one — every track's turnDegrees sum to exactly 360° by the
@@ -107,41 +124,6 @@ function randomInt(rng: () => number, min: number, max: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
-}
-
-/** Raw per-corner angles scaled to sum to exactly 360° (research.md Decision 1). */
-function generateCornerAngles(rng: () => number, count: number): number[] {
-  const raw = Array.from(
-    { length: count },
-    () => RAW_CORNER_DEGREES_MIN + rng() * (RAW_CORNER_DEGREES_MAX - RAW_CORNER_DEGREES_MIN),
-  );
-  const sum = raw.reduce((total, value) => total + value, 0);
-  const scale = 360 / sum;
-  return raw.map((value) => value * scale);
-}
-
-/**
- * Solves for each straight's length so the turtle-walk closes back to its
- * start position exactly (heading-closure is already guaranteed for free by
- * the corner angles summing to 360°). Distributes the closure correction
- * across every straight via a minimum-norm least-squares solve over the two
- * position constraints (Σ L·cosθ = 0, Σ L·sinθ = 0) — a closed-form
- * computation, never an iterative retry/rejection loop.
- */
-function closingStraightLengths(headingsDegrees: readonly number[]): number[] {
-  const headings = headingsDegrees.map((degrees) => (degrees * Math.PI) / 180);
-  const cosH = headings.map((h) => Math.cos(h));
-  const sinH = headings.map((h) => Math.sin(h));
-  const rx = cosH.reduce((sum, c) => sum + c, 0) * BASE_STRAIGHT_LENGTH;
-  const ry = sinH.reduce((sum, s) => sum + s, 0) * BASE_STRAIGHT_LENGTH;
-  const sxx = cosH.reduce((sum, c) => sum + c * c, 0);
-  const sxy = cosH.reduce((sum, c, i) => sum + c * sinH[i], 0);
-  const syy = sinH.reduce((sum, s) => sum + s * s, 0);
-  const det = sxx * syy - sxy * sxy;
-  const a = (-rx * syy + ry * sxy) / det;
-  const b = (-sxx * ry + sxy * rx) / det;
-  return headings.map((_, i) =>
-    Math.max(MIN_STRAIGHT_LENGTH, BASE_STRAIGHT_LENGTH + a * cosH[i] + b * sinH[i]));
 }
 
 /**
@@ -476,26 +458,32 @@ export function simulateLapPhysics(
  * with zero rework here (spec.md Assumptions).
  */
 export function generateTrack(seed: number, pvpOrdinal: number, regionTheme?: RegionId): Track {
-  const rng = seededRandom(seed * 1000003 + pvpOrdinal);
-  const cornerCount = randomInt(rng, MIN_CORNER_COUNT, MAX_CORNER_COUNT);
-  const direction: "left" | "right" = rng() < 0.5 ? "left" : "right";
-  const turnDegrees = generateCornerAngles(rng, cornerCount);
-
-  const headingsBeforeEachStraight: number[] = [];
-  let cumulative = 0;
-  for (let i = 0; i < cornerCount; i += 1) {
-    headingsBeforeEachStraight.push(cumulative);
-    cumulative += turnDegrees[i];
+  const combinedSeed = seed * 1000003 + pvpOrdinal;
+  let segments: readonly TrackSegment[] | undefined;
+  let acceptedAttempt = 0;
+  let usedFallback = false;
+  const maximumAttempts = 12;
+  for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
+    const rng = seededRandom(combinedSeed + attempt * 7919);
+    const cornerCount = randomInt(rng, MIN_CORNER_COUNT, MAX_CORNER_COUNT);
+    const candidate = segmentsFromVertices(circuitGrammarVertices(rng, cornerCount));
+    const candidatePoints = deriveTrackPoints(candidate);
+    const candidateDirections = new Set(candidate.filter((segment): segment is Extract<TrackSegment, { kind: "corner" }> => segment.kind === "corner").map((corner) => corner.direction));
+    if (candidate.every((segment) => segment.kind === "straight" || (segment.turnDegrees > 4 && segment.turnDegrees < 150))
+      && candidateDirections.size === 2
+      && !polylineSelfIntersects(candidatePoints)) {
+      segments = candidate;
+      acceptedAttempt = attempt;
+      break;
+    }
   }
-  const lengths = closingStraightLengths(headingsBeforeEachStraight);
-
-  const segments: TrackSegment[] = [];
-  for (let i = 0; i < cornerCount; i += 1) {
-    segments.push({ kind: "straight", length: lengths[i] });
-    segments.push({ kind: "corner", turnDegrees: turnDegrees[i], direction });
+  if (!segments) {
+    segments = segmentsFromVertices(circuitGrammarVertices(seededRandom(0x33f00d), 8));
+    acceptedAttempt = maximumAttempts;
+    usedFallback = true;
   }
 
-  return {
+  const baseTrack: Track = {
     id: `track-${seed}-${pvpOrdinal}`,
     name: `Circuit ${seed}-${pvpOrdinal}`,
     segments,
@@ -503,6 +491,121 @@ export function generateTrack(seed: number, pvpOrdinal: number, regionTheme?: Re
     characteristics: trackCharacteristics(segments),
     ...(regionTheme ? { regionTheme } : {}),
   };
+  const centerline = sampleClosedCenterline(baseTrack.points, 4);
+  const zones = deriveBrakingZones(baseTrack);
+  const brakingDemand = aggregateBrakingDemand(zones);
+  return {
+    ...baseTrack,
+    centerline,
+    characteristics: {
+      ...baseTrack.characteristics,
+      // Display uses the existing 0..100 demand convention; authority reads
+      // the retained zones/profile (0..1) rather than this rounded label.
+      brakingDemand: Math.round(brakingDemand * 100),
+    },
+    features: classifyTrackFeatures(baseTrack),
+    brakingZones: zones,
+    validation: {
+      attempt: acceptedAttempt,
+      closed: circuitCloses(segments),
+      inBounds: centerline.every((point) => point.x >= BOUNDING_BOX.minX - PHYSICS_EPSILON && point.x <= BOUNDING_BOX.maxX + PHYSICS_EPSILON && point.y >= BOUNDING_BOX.minY - PHYSICS_EPSILON && point.y <= BOUNDING_BOX.maxY + PHYSICS_EPSILON),
+      nonSelfIntersecting: !polylineSelfIntersects(baseTrack.points),
+      minimumLaneSeparation: minimumNonAdjacentVertexDistance(baseTrack.points),
+      minimumCurveRadius: Math.min(...segments.filter((segment): segment is Extract<TrackSegment, { kind: "corner" }> => segment.kind === "corner").map((corner) => 180 / corner.turnDegrees)),
+      usedFallback,
+    },
+  };
+}
+
+/** Deterministic star-shaped grammar with an intentional inset and both turn directions. */
+function circuitGrammarVertices(rng: () => number, count: number): readonly { x: number; y: number }[] {
+  const step = (Math.PI * 2) / count;
+  const notchIndex = randomInt(rng, 1, count - 2);
+  // Physics-space scale is deliberately independent of the fitted viewport:
+  // it creates genuine power- vs corner-biased circuits while rendering still
+  // consumes the same bounded centerline.
+  const baseRadius = 120 + rng() * 500;
+  const vertices = Array.from({ length: count }, (_, index) => {
+    const angle = index * step + (rng() - 0.5) * step * 0.22;
+    const radius = index === notchIndex ? baseRadius * 0.48 : baseRadius * (0.88 + rng() * 0.22);
+    return { x: radius * Math.cos(angle), y: radius * Math.sin(angle) };
+  });
+  const firstEdge = Math.atan2(vertices[1].y - vertices[0].y, vertices[1].x - vertices[0].x);
+  const cos = Math.cos(-firstEdge);
+  const sin = Math.sin(-firstEdge);
+  return vertices.map((point) => ({ x: point.x * cos - point.y * sin, y: point.x * sin + point.y * cos }));
+}
+
+function segmentsFromVertices(vertices: readonly { x: number; y: number }[]): readonly TrackSegment[] {
+  const segments: TrackSegment[] = [];
+  for (let index = 0; index < vertices.length; index += 1) {
+    const current = vertices[index];
+    const next = vertices[(index + 1) % vertices.length];
+    const after = vertices[(index + 2) % vertices.length];
+    const ax = next.x - current.x;
+    const ay = next.y - current.y;
+    const bx = after.x - next.x;
+    const by = after.y - next.y;
+    const signedTurn = Math.atan2(ax * by - ay * bx, ax * bx + ay * by) * 180 / Math.PI;
+    segments.push({ kind: "straight", length: Math.hypot(ax, ay) });
+    segments.push({ kind: "corner", turnDegrees: Math.abs(signedTurn), direction: signedTurn >= 0 ? "left" : "right" });
+  }
+  return segments;
+}
+
+function circuitCloses(segments: readonly TrackSegment[]): boolean {
+  let x = 0; let y = 0; let heading = 0;
+  segments.forEach((segment) => {
+    if (segment.kind === "straight") {
+      x += segment.length * Math.cos(heading);
+      y += segment.length * Math.sin(heading);
+    } else {
+      heading += (segment.direction === "left" ? 1 : -1) * segment.turnDegrees * Math.PI / 180;
+    }
+  });
+  return Math.hypot(x, y) < 1e-6 && Math.abs(Math.abs(heading) - Math.PI * 2) < 1e-6;
+}
+
+function sampleClosedCenterline(points: readonly { x: number; y: number }[], samplesPerEdge: number): readonly { x: number; y: number }[] {
+  return points.flatMap((point, index) => {
+    const next = points[(index + 1) % points.length];
+    return Array.from({ length: samplesPerEdge }, (_, sample) => {
+      const t = sample / samplesPerEdge;
+      return { x: point.x + (next.x - point.x) * t, y: point.y + (next.y - point.y) * t };
+    });
+  });
+}
+
+function orientation(a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }): number {
+  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}
+
+function polylineSelfIntersects(points: readonly { x: number; y: number }[]): boolean {
+  for (let first = 0; first < points.length; first += 1) {
+    const firstNext = (first + 1) % points.length;
+    for (let second = first + 1; second < points.length; second += 1) {
+      const secondNext = (second + 1) % points.length;
+      if (first === second || firstNext === second || secondNext === first) continue;
+      const a = points[first]; const b = points[firstNext]; const c = points[second]; const d = points[secondNext];
+      if (orientation(a, b, c) * orientation(a, b, d) < 0 && orientation(c, d, a) * orientation(c, d, b) < 0) return true;
+    }
+  }
+  return false;
+}
+
+function minimumNonAdjacentVertexDistance(points: readonly { x: number; y: number }[]): number {
+  let minimum = Number.POSITIVE_INFINITY;
+  for (let first = 0; first < points.length; first += 1) {
+    for (let second = first + 2; second < points.length; second += 1) {
+      if (first === 0 && second === points.length - 1) continue;
+      minimum = Math.min(minimum, Math.hypot(points[first].x - points[second].x, points[first].y - points[second].y));
+    }
+  }
+  return Number.isFinite(minimum) ? minimum : 0;
+}
+
+export function trackCenterline(track: Track): readonly { x: number; y: number }[] {
+  return track.centerline ?? track.points;
 }
 
 function segmentLengths(points: readonly { x: number; y: number }[]): number[] {
@@ -519,7 +622,7 @@ function segmentLengths(points: readonly { x: number; y: number }[]): number[] {
  * research.md Decision 6; unchanged by 018-track-generation, FR-011).
  */
 export function pointAtProgress(track: Track, progress: number): TrackPoint {
-  const points = track.points;
+  const points = trackCenterline(track);
   const lengths = segmentLengths(points);
   const total = lengths.reduce((sum, length) => sum + length, 0);
   const wrapped = ((progress % 1) + 1) % 1;
@@ -692,6 +795,8 @@ export interface TrackFeature {
   kind: TrackFeatureKind;
   /** Indices into `track.segments` covered by this feature. */
   segmentIndexes: readonly number[];
+  direction?: "left" | "right";
+  radius?: number;
 }
 
 export interface TrackBrakingProfile {
@@ -761,7 +866,13 @@ export function brakingProfile(
   corneringSpeedStat = STOCK_PHYSICAL_STATS.corneringSpeed,
   topSpeedStat = STOCK_PHYSICAL_STATS.topSpeed,
 ): TrackBrakingProfile {
-  const zones = deriveBrakingZones(track, corneringSpeedStat, topSpeedStat);
+  const usesStockReference = corneringSpeedStat === STOCK_PHYSICAL_STATS.corneringSpeed
+    && topSpeedStat === STOCK_PHYSICAL_STATS.topSpeed;
+  const zones = (usesStockReference ? track.brakingZones : undefined)
+    // Retained production evidence is valid for the stock reference stats.
+    // A caller asking for a different physical reference deliberately gets a
+    // fresh projection without mutating the authoritative track.
+    ?? deriveBrakingZones(track, corneringSpeedStat, topSpeedStat);
   return { zones, brakingDemand: aggregateBrakingDemand(zones) };
 }
 
@@ -791,15 +902,17 @@ export function classifyTrackFeatures(track: Track): readonly TrackFeature[] {
     flushStraight(index);
     const corner = segment;
     // Pair with the previous corner, if adjacent and opposite sign -> switchback.
-    const prev = segments[index - 1];
+    const previousCornerIndex = index >= 2 && segments[index - 2]?.kind === "corner" ? index - 2 : index - 1;
+    const prev = segments[previousCornerIndex];
+    const separatingStraight = segments[index - 1];
     if (prev?.kind === "corner" && prev.direction !== corner.direction) {
-      // Merge the previous lone corner into a switchback pair.
-      const last = features[features.length - 1];
-      if (last && last.kind === "sweeper" && last.segmentIndexes[0] === index - 1) {
-        last.kind = "switchback";
-        last.segmentIndexes = [...last.segmentIndexes, index];
-        return;
-      }
+      features.push({
+        id: `switchback-${previousCornerIndex}-${index}`,
+        kind: "switchback",
+        segmentIndexes: separatingStraight?.kind === "straight"
+          ? [previousCornerIndex, index - 1, index]
+          : [previousCornerIndex, index],
+      });
     }
     // Two adjacent modest corners form a chicane; otherwise classify by angle.
     if (
@@ -807,17 +920,17 @@ export function classifyTrackFeatures(track: Track): readonly TrackFeature[] {
       && corner.turnDegrees <= SWEEPER_DEGREES
       && prev.turnDegrees <= SWEEPER_DEGREES
     ) {
-      const merged = features[features.length - 1];
-      if (merged && merged.kind === "sweeper" && merged.segmentIndexes[0] === index - 1) {
-        merged.kind = "chicane";
-        merged.segmentIndexes = [...merged.segmentIndexes, index];
-        return;
-      }
+      features.push({
+        id: `chicane-${previousCornerIndex}-${index}`,
+        kind: "chicane",
+        segmentIndexes: separatingStraight?.kind === "straight"
+          ? [previousCornerIndex, index - 1, index]
+          : [previousCornerIndex, index],
+      });
     }
     const kind: TrackFeatureKind = corner.turnDegrees >= HAIRPIN_DEGREES ? "hairpin" : "sweeper";
-    features.push({ id: `${kind}-${index}`, kind, segmentIndexes: [index] });
+    features.push({ id: `${kind}-${index}`, kind, segmentIndexes: [index], direction: corner.direction, radius: 180 / corner.turnDegrees });
   });
   flushStraight(segments.length);
   return features;
 }
-

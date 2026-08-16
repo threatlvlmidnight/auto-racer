@@ -4,12 +4,30 @@
 
 **Created**: 2026-08-15
 
-**Status**: Specification drafted — ready for clarification
+**Status**: Task list complete — ready for implementation
 
 **Input**: Resolve the remaining demo readability and reward-feedback debt:
 make circuit context and adjustable controls unambiguous, make cards and
 upgrades meaningfully scannable, and remove overlap, clipping, and unreachable
 controls from the current primary-scene compositions.
+
+## Clarifications
+
+### Session 2026-08-15
+
+- Q: What is the player-facing geographic location for a circuit? → A: Use the
+  existing World Tour region name with an explicit LOCATION label; show the
+  recorded track name beside it, do not invent a city/venue field, and keep
+  Test Day marked fixed and unscored.
+- Q: What does Adjustable mean? → A: It is a consistent badge for an item that
+  exposes a live pre-race control. Keep established names where accurate, but
+  rename non-configurable Variable-Ratio Test Gearbox to Two-Speed Test Gearbox;
+  Variable-Pitch Propeller remains named as-is because it is configurable.
+- Q: What rarity system should cards use? → A: Every playable item receives an
+  explicit display-only Standard, Notable, or Rare catalog rarity. It affects
+  neither odds, price, tier scaling, economy, nor simulation and must never be
+  communicated by color alone.
+
 
 ## Scope and boundaries
 
@@ -186,9 +204,9 @@ focus sweeps for each relevant state.
 - **SC-001**: Every audited scored-race identity surface shows the same circuit
   name and location for the same recorded race; Test Day is consistently marked
   fixed and unscored.
-- **SC-002**: In controlled mixed-card fixtures, all participants can identify
-  rarity and upgrade eligibility before confirmation using text, icon, and
-  structure with color disabled.
+- **SC-002**: Controlled mixed-card fixture tests expose rarity and
+  upgrade-eligibility before confirmation through text, icon, and structure
+  with color disabled.
 - **SC-003**: The approved landscape audit matrix records zero consequential
   overlaps, clips, unreachable controls, or missing focus states.
 - **SC-004**: Every rare-offer and upgrade outcome has a reduced-motion
@@ -207,4 +225,3 @@ focus sweeps for each relevant state.
   automated canvas visual testing is not currently available.
 - Feature 026 remains the owner of true narrow-portrait reflow and the mobile
   text-size waiver, even if this feature discovers related defects.
-

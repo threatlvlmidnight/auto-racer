@@ -1,25 +1,89 @@
 # Handoff
 
-## Latest session — hygiene pass and Feature 035 specification drafted (2026-08-15)
+## Latest session — Feature 034 deterministic core implemented (2026-08-15)
 
-The active SpecKit marker is now `035-interface-clarity-reward-feedback` via
-`.specify/feature.json`. The historical stale status labels have been
-normalized; completed packages now say so, while Features 010 and 029 are
-explicitly marked partially implemented rather than implicitly complete.
+The first implementation pass for Feature 034 landed the **deterministic, pure
+simulation core** (the TDD-held portion) as additive modules with passing tests.
+`npm test` went from **1 698 → 1 780** (82 new Feature 034 tests across 111
+files); `npm run lint` and `npm run build` (incl. `tsc --noEmit`) are clean.
+Evidence is recorded in
+`specs/034-roguelike-encounter-variety/checklists/requirements.md` (T077).
+
+Delivered and tested (all additive, non-destructive of the 033 surface):
+
+- T001 contract reconciliation with Feature 033 for `Guarded` (consumes retained
+  `RaceEnrichmentReplayEvidence`, never re-runs enrichment).
+- T002 fixtures (`encounter-variety-fixtures.ts`) with a byte-stable seeded RNG
+  and instance-build builders.
+- Item-instance identity (`itemInstances.ts`), canonical stat normalization
+  (`statNormalization.ts`, incl. the SC-013 10% gate wired into `balance.test.ts`
+  as T016), `encounterCadence.ts` (family classification, two-stage cooldown,
+  no-two-acquisition pairs, Upgrade guarantee windows, bounded fallback),
+  `itemModifications.ts` + `content/itemModifications.ts` (stat-graft,
+  Twin-Tuned, Guarded, Adapted Mount), `scrutineering.ts` (formula/cap/impound/
+  reservation/coexistence/exact return), `encounterTransactions.ts` (upgrade/
+  foreign exchange/rebuild/capacity/atomic rollback), `exhibition.ts`
+  (unscored, three-objective, score 0–3, Championship-unchanged), and
+  `tagSpecialist.ts` (held-tag counts, cross-origin same-tag stock, one modified
+  premium). Content: `encounterVariants.ts` three variants per new type (T072 gate).
+- Integration coverage: Test-Day pending-effect boundary (T073), identical
+  rules across all four entrants + determinism (T074/T075 in
+  `encounter-variety-flow.test.ts`).
+
+**Not yet done — hand this to a follow-up pass.** The item-instance migration of
+the *live* garage/draft/build/run and all scene/presentation integration remain:
+Tasks T008–T011, T014–T015, T020–T022, T029–T030, T036–T037, T045–T050, T056–T058,
+T063–T071, plus T076 (quickstart reconcile) and the final manual/browser acceptance.
+The scalar `InstanceBuild`-based modules are structured so that next pass can
+switch the run's authoritative build to instances and route the scenes through the
+pure view models without reworking the deterministic rules.
+
+## Latest session — Feature 033 implementation complete (2026-08-15)
+
+Feature 033 Race Enrichment is complete at **93/93 tasks**. Scored races and
+Test Day share deterministic phases, Composure-backed passes/signatures,
+isolated bounded incidents, retained replay evidence, revised 1x/2x playback,
+Skip/reduced-motion/result inspection, semantic Web Audio feedback, and one
+validated generated circuit from physics through presentation. The final
+150-race tuning corpus meets all three bands (post-Opening 1.000, full-emphasis
+0.020, winner-change 0.100) while preserving stronger-build dominance.
+
+Verification is recorded in
+`specs/033-race-enrichment/acceptance-evidence.md`: 100 files / 1695 tests passed
+before the final three-test UI-audio addition, that focused addition is green,
+lint and production build pass, and browser QA has no overflow at the four
+required viewports. Browser QA also found and fixed Test Day recovery's handling
+of optional `undefined` fields.
+
+Feature 034 is now unblocked to perform its T001 retained-evidence
+reconciliation (this pass completed T001). Feature 035 remains presentation-only.
+Do not move enrichment resolution into either feature's scenes; consume retained
+event IDs and results.
+
+## Latest session — hygiene pass and Feature 035 planning complete (2026-08-15)
+
+The active SpecKit marker remains `033-race-enrichment` while Feature 033 is
+implemented. Feature 035 planning is complete as a parallel documentation
+track. The historical stale status labels have been normalized; completed
+packages now say so, while Features 010 and 029 are explicitly marked partially
+implemented rather than implicitly complete.
 
 `specs/LEGACY-LEDGER-RECONCILIATION.md` is the closing protocol for the 010
 and 029 residual ledgers. It separates their remaining work into current
 feature-owned presentation work and future authoritative follow-ups—without
 silently closing tasks based on related later code. `specs/ROADMAP.md` records
-the committed execution order: implement 033, then 034; continue planning 035;
-then refresh Feature 026 and create a World Tour completion package.
+the committed execution order: implement 033, then 034; implement Feature 035
+after task generation; then refresh Feature 026 and create a World Tour
+completion package.
 
-Feature 035 now has a bounded `spec.md` and is ready for
-`/speckit.clarify`. It is presentation-only: consistent circuit identity and
-location, reserved Adjustable vocabulary, non-color card rarity/upgrade cues,
-reduced-motion equivalents, and a landscape primary-scene overlap/readability
-audit. It deliberately does not take over Feature 026's responsive-host and
-390×844 work, Feature 032's upgrade transaction, or Feature 034's encounters.
+Feature 035 now has its complete Spec Kit planning package, 44
+dependency-ordered tasks, and a passing analysis. It is ready for
+implementation. It is presentation-only: region-as-location plus recorded
+circuit identity, an Adjustable capability badge, display-only
+Standard/Notable/Rare catalog rarity, non-color upgrade cues, reduced-motion
+equivalents, and a landscape primary-scene overlap/readability audit. It
+deliberately does not take over Feature 026's responsive-host and 390×844 work,
+Feature 032's upgrade transaction, or Feature 034's encounters.
 
 ## Latest session — Feature 034 planning complete (2026-08-15)
 

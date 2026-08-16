@@ -109,10 +109,10 @@ export const strongBuild = freeze(
 /** Clearly weaker all-round build, raced against the same field. */
 export const weakBuild = freeze(
   vehicleBuild([
-    racerItem("fixture-weak-accel", "Weak Accel", DEFAULT_ORIGIN, { accelerationDelta: 3 }),
-    racerItem("fixture-weak-top", "Weak Top Speed", DEFAULT_ORIGIN, { topSpeedDelta: 3 }),
-    racerItem("fixture-weak-brake", "Weak Brake", DEFAULT_ORIGIN, { brakingPowerDelta: 3 }),
-    racerItem("fixture-weak-corner", "Weak Corner", DEFAULT_ORIGIN, { corneringSpeedDelta: 3 }),
+    racerItem("fixture-weak-accel", "Weak Accel", DEFAULT_ORIGIN, { accelerationDelta: -20 }),
+    racerItem("fixture-weak-top", "Weak Top Speed", DEFAULT_ORIGIN, { topSpeedDelta: -20 }),
+    racerItem("fixture-weak-brake", "Weak Brake", DEFAULT_ORIGIN, { brakingPowerDelta: -15 }),
+    racerItem("fixture-weak-corner", "Weak Corner", DEFAULT_ORIGIN, { corneringSpeedDelta: -15 }),
   ]),
 );
 

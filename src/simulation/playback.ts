@@ -1,5 +1,5 @@
 import type { Track } from "./tracks";
-import type { CarRole, ContestResult, FiredItem, LiveStatChange, NCarContestResult, OfferedItem } from "./types";
+import type { CarRole, ContestResult, EnrichmentEvent, FiredItem, LiveStatChange, NCarContestResult, OfferedItem } from "./types";
 
 export const RACE_ANIMATION_SECONDS = 20;
 export const MIN_VISUAL_LAP_SECONDS = 0.5;
@@ -532,8 +532,8 @@ export function nCarFrameStateAt(
 
 // --- Feature 030: race playback controls ----------------------------------
 // A race-local, presentation-only clock (data-model.md "PresentationClock").
-// Its `1×` (normal) rate consumes the immutable playback schedule at half the
-// legacy rate and its `2×` (fast) rate at the legacy rate. Speed never carries
+// Its `1×` (normal) rate consumes the immutable playback schedule at the
+// legacy rate and its `2×` (fast) rate doubles it. Speed never carries
 // simulation authority (contract §1): it only scales how quickly presentation
 // consumes already-resolved evidence.
 
@@ -551,8 +551,8 @@ export interface PlaybackSpeedDescriptor {
 
 /** Exactly two speeds, in stable authored order (contract §2). */
 export const PLAYBACK_SPEEDS: readonly PlaybackSpeedDescriptor[] = [
-  { value: "normal", label: "1×", shortcut: "1", multiplier: 0.5 },
-  { value: "fast", label: "2×", shortcut: "2", multiplier: 1.0 },
+  { value: "normal", label: "1×", shortcut: "1", multiplier: 1 },
+  { value: "fast", label: "2×", shortcut: "2", multiplier: 2 },
 ];
 
 /** Rejects any value outside the closed {normal, fast} domain (data-model.md). */
@@ -588,8 +588,8 @@ export interface PresentationClock {
   readonly initialized: boolean;
 }
 
-/** Every new playback scene initializes to `2×`; `1×` remains selectable. */
-export function createPresentationClock(speed: PlaybackSpeed = "fast"): PresentationClock {
+/** Every new playback scene initializes to the legacy-rate `1×`. */
+export function createPresentationClock(speed: PlaybackSpeed = "normal"): PresentationClock {
   if (!isPlaybackSpeed(speed)) {
     throw new Error(`Invalid playback speed: ${String(speed)}`);
   }
@@ -665,6 +665,8 @@ export interface PlaybackBoundaryView {
   projectCheckpoint?: (completedLap: number) => CheckpointProjection;
   /** Retained stat evidence, parallel to playerLaps; playback only publishes it. */
   playerStatChanges?: readonly (readonly LiveStatChange[])[];
+  /** Immutable Feature 033 events, consumed at their recorded lap boundary. */
+  enrichmentEvents?: readonly EnrichmentEvent[];
 }
 
 export function nCarBoundaryView(
@@ -691,6 +693,7 @@ export function nCarBoundaryView(
     itemsById: new Map([...result.board, ...result.storage].map((item) => [item.id, item])),
     tieBreakOrder: result.tieBreakOrder,
     projectCheckpoint: (completedLap: number) => checkpointProjection(result, completedLap),
+    enrichmentEvents: (result as import("./types").EnrichedContestResult).events,
   };
 }
 
@@ -724,6 +727,7 @@ export type CrossedPlaybackEventKind =
   | "player-lap"
   | "item-callout"
   | "live-stat-change"
+  | "enrichment-event"
   | "checkpoint"
   | "car-finished"
   | "results-ready";
@@ -733,6 +737,7 @@ const CROSS_KIND_ORDER: Record<CrossedPlaybackEventKind, number> = {
   "player-lap": 1,
   "item-callout": 2,
   "live-stat-change": 2,
+  "enrichment-event": 2,
   checkpoint: 3,
   "car-finished": 4,
   "results-ready": 5,
@@ -749,6 +754,8 @@ export interface CrossedPlaybackEvent {
   callout?: CalloutEvent;
   /** Immutable stat changes crossed at this boundary; never recomputed here. */
   statChanges?: readonly LiveStatChange[];
+  /** Immutable enrichment fact; playback does not classify or mutate it. */
+  enrichmentEvent?: EnrichmentEvent;
   /** Checkpoint projection (checkpoint). */
   projection?: CheckpointProjection;
   /** Internal stable group id for ordering facts from one boundary together. */
@@ -787,7 +794,20 @@ function timeZeroEvents(view: PlaybackBoundaryView): CrossedPlaybackEvent[] {
   ];
   events.push(...playerCallouts(view, 1).map((event) => ({ ...event, scheduleTime: 0 })));
   events.push(...playerStatChanges(view, 1).map((event) => ({ ...event, scheduleTime: 0 })));
+  events.push(...enrichmentEventsForLap(view, 1).map((event) => ({ ...event, scheduleTime: 0 })));
   return events;
+}
+
+function enrichmentEventsForLap(view: PlaybackBoundaryView, lap: number): readonly CrossedPlaybackEvent[] {
+  return (view.enrichmentEvents ?? [])
+    .filter((event) => event.boundaryId === `lap-${lap}`)
+    .map((enrichmentEvent) => ({
+      kind: "enrichment-event" as const,
+      scheduleTime: 0,
+      lap,
+      enrichmentEvent,
+      boundaryKey: `player-start-${lap}`,
+    }));
 }
 
 function inOpenInterval(value: number, previous: number, next: number): boolean {
@@ -817,6 +837,7 @@ function intervalEvents(
     });
     events.push(...playerCallouts(view, m).map((event) => ({ ...event, scheduleTime: startBoundary })));
     events.push(...playerStatChanges(view, m).map((event) => ({ ...event, scheduleTime: startBoundary })));
+    events.push(...enrichmentEventsForLap(view, m).map((event) => ({ ...event, scheduleTime: startBoundary })));
     if (view.projectCheckpoint) {
       events.push({
         kind: "checkpoint",
@@ -924,13 +945,13 @@ export interface PlaybackController {
 }
 
 /**
- * Every new scored or Test Day playback initializes to the `2×` default
+ * Every new scored or Test Day playback initializes to the `1×` default
  * with no events and `resultsReady` false (data-model "State
  * Lifecycle"). The scene calls this in `create()` so each race gets a fresh
  * clock — no selection persists into another playback (contract §6).
  */
 export function createPlaybackController(view: PlaybackBoundaryView): PlaybackController {
-  return { view, clock: createPresentationClock("fast"), lastEvents: [], resultsReady: false };
+  return { view, clock: createPresentationClock("normal"), lastEvents: [], resultsReady: false };
 }
 
 /**

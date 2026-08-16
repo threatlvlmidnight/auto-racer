@@ -46,3 +46,30 @@ effect, canonical stat deltas, price, state, and confirmation consequence.
 Named seed domains isolate encounter type, authored variant, stock, modification,
 replacement, and objectives. Unknown versions or stale legacy structures return
 typed recovery/unavailable states; no silent migration guesses are permitted.
+
+## Feature 033 reconciliation for `Guarded` (T001)
+
+Feature 034's `Guarded` Workshop Modification requires the retained overtake
+attempt contract from Feature 033. This section pins the cross-feature boundary
+so `Guarded` can consume Feature 033's evidence without duplicating race
+authority or resolving a second enrichment pass from a stored run.
+
+- **Consumed authority (read-only).** `Guarded` reads but never recomputes
+  Feature 033's retained `EnrichmentEvent`s (`RaceEnrichmentReplayEvidence`),
+  specifically the events whose kind records an overtake attempt against the
+  player (`EnrichmentEventKind`) together with the retained `orderSeq`.
+- **Once-per-race defended attempt.** On the first otherwise-successful
+  overtake-against-player event in a run, `Guarded` converts it into a
+  *defended* attempt by rewriting the retained event's outcome when the event is
+  rendered/replayed. Exactly one conversion happens per race, per modified
+  instance (`resolveModificationEffect(...).guardedOncePerRace`).
+- **No playback-time mutation.** The conversion applies to retained event
+  presentation only; it never mutates `raceEnrichment.ts`/`contest.ts` authority
+  or alters stored results.
+- **Rendered-last ordering.** Because the conversion is applied at replay/
+  presentation time over retained evidence, it stays deterministic and never
+  changes committed contest outcomes or the championship.
+- **Guard.** If the retained evidence is absent or an unknown `configVersion` is
+  present, `Guarded` reports `available: false` (typed unavailable) rather than
+  guessing a conversion target.
+

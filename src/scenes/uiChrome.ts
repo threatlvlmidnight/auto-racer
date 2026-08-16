@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { emitBrowserCue } from "./audioPresentation";
 
 /**
  * Feature 032 T011: semantic UI crop-region/state contract (032 data-model.md
@@ -207,6 +208,26 @@ export interface RuntimeTextControlOptions {
   fontSize?: string;
 }
 
+/**
+ * One semantic cue and one action per input turn, even when artwork and label
+ * are both interactive hit targets. Exported so the shared-control audio
+ * contract can be verified without constructing a Phaser renderer.
+ */
+export function createSingleCueActivation(
+  action: () => void,
+  cue: "ui-select" | "ui-activate" = "ui-activate",
+  emit: (cueId: "ui-select" | "ui-activate") => void = emitBrowserCue,
+): () => void {
+  let activating = false;
+  return () => {
+    if (activating) return;
+    activating = true;
+    emit(cue);
+    action();
+    queueMicrotask(() => { activating = false; });
+  };
+}
+
 export interface UIChromeViewport { width: number; height: number; }
 export interface UIChromeControlBounds { x: number; y: number; width: number; height: number; }
 export const SUPPORTED_UI_VIEWPORTS: readonly UIChromeViewport[] = Object.freeze([
@@ -319,13 +340,7 @@ export function createRuntimeTextControl(
     // also prevents a duplicate activation if a scene enables multi-hit input.
     frame.setInteractive({ useHandCursor: true });
     text.setInteractive({ useHandCursor: true });
-    let activating = false;
-    const activate = (): void => {
-      if (activating || !options.action) return;
-      activating = true;
-      options.action();
-      queueMicrotask(() => { activating = false; });
-    };
+    const activate = createSingleCueActivation(options.action ?? (() => undefined));
     const targets = [frame, text] as const;
     targets.forEach((target) => {
       target.on("pointerover", () => setState("hover"));

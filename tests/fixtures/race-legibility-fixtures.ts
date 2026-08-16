@@ -14,9 +14,17 @@ export const TIE_ROSTER: readonly RivalProfile[] = RIVAL_PROFILES.map((profile) 
   levelScaling: () => ({ slotsToFill: 0, priceBias: "low" as const }),
 }));
 
-/** Real `generateTrack` output, not hand-authored segments — seeds chosen by direct search for the stated property. */
-export const SIX_CORNER_TRACK: Track = generateTrack(1, 1);
-export const TEN_CORNER_TRACK: Track = generateTrack(3, 1);
+function generatedTrackWithCornerCount(count: number): Track {
+  for (let seed = 0; seed < 500; seed += 1) {
+    const track = generateTrack(seed, 1);
+    if (track.segments.filter((segment) => segment.kind === "corner").length === count) return track;
+  }
+  throw new Error(`No deterministic ${count}-corner fixture found`);
+}
+
+/** Real `generateTrack` output, not hand-authored segments. */
+export const SIX_CORNER_TRACK: Track = generatedTrackWithCornerCount(6);
+export const TEN_CORNER_TRACK: Track = generatedTrackWithCornerCount(10);
 export const POWER_DEMAND_TRACK: Track = generateTrack(143, 1);
 export const BRAKING_DEMAND_TRACK: Track = generateTrack(19, 1);
 export const CORNERING_DEMAND_TRACK: Track = generateTrack(5, 1);

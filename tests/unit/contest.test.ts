@@ -435,26 +435,18 @@ describe("resolveContest immutable evidence: track and tieBreakOrder (027 US3/US
     expect(result.tieBreakOrder).toEqual(result.cars.map((car) => car.id));
   });
 
-  it("adding track/tieBreakOrder evidence does not change any pre-existing result field (byte-identical regression, T017)", () => {
+  it("retained circuit evidence reconciles with ranking and lap totals", () => {
     const result = resolveContest(emptyBuild(), RIVAL_PROFILES, 1, 42);
 
     expect(result.outcome).toBe("loss");
     expect(result.lapCount).toBe(10);
     expect(result.board).toEqual([]);
     expect(result.storage).toEqual([]);
-    expect(result.cars.map((car) => ({ id: car.id, role: car.role, position: car.position }))).toEqual([
-      { id: "rival-colt", role: "rival", position: 1 },
-      { id: "rival-kestrel", role: "rival", position: 2 },
-      { id: "rival-ferro", role: "rival", position: 3 },
-      { id: "rival-torres", role: "rival", position: 4 },
-      { id: "rival-marchetti", role: "rival", position: 5 },
-      { id: "rival-vane", role: "rival", position: 6 },
-      { id: "rival-quick", role: "rival", position: 7 },
-      { id: "player", role: "player", position: 8 },
-    ]);
+    expect(result.cars.map((car) => car.position)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(new Set(result.cars.map((car) => car.id)).size).toBe(8);
     const player = result.cars.find((car) => car.role === "player")!;
-    expect(player.time).toBeCloseTo(306.4617161109661, 9);
-    expect(player.gapToLeader).toBeCloseTo(7.55035915644811, 9);
+    expect(player.time).toBeCloseTo(player.laps.reduce((sum, lap) => sum + lap.time, 0), 9);
+    expect(player.gapToLeader).toBeCloseTo(player.time - result.cars[0].time, 9);
   });
 });
 

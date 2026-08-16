@@ -29,6 +29,12 @@ import { configureHiDpiScene, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "./layout";
 import { currentVehicleStatModel } from "./vehicleStatPresentation";
 import { createVehicleStatPanel } from "./vehicleStatVisuals";
 import { STOCK_PHYSICAL_STATS } from "../simulation/tracks";
+import { identityForEntrant } from "../content/driverRaceIdentities";
+import { DEFAULT_RACE_ENRICHMENT_CONFIG } from "../simulation/enrichmentConfig";
+import { signatureEligibilityFor } from "../simulation/raceEnrichment";
+import { resolveCurrentBuildPhysicalStats } from "../simulation/laps";
+import { installedItems } from "../simulation/slots";
+import { buildIncidentRiskModel, driverBriefing } from "./raceEnrichmentPresentation";
 
 export interface TestDaySceneData {
   run?: Run;
@@ -104,6 +110,7 @@ export class TestDayScene extends Phaser.Scene {
     createVehicleStatPanel(this, width / 2, 258, statModel, {
       viewport: { width: Math.min(680, width - 56), height: 60 },
     }).setDepth(20);
+    this.renderEnrichmentBriefing(width);
     const held = [
       ...this.session!.snapshot.build.slots.flatMap((slot) => slot.item ? [{ item: slot.item, tier: slot.tier }] : []),
       ...this.session!.snapshot.build.storage.flatMap((position) => position.item ? [{ item: position.item, tier: position.tier }] : []),
@@ -121,6 +128,30 @@ export class TestDayScene extends Phaser.Scene {
     const cancelButton = createDemoButton(this, width / 2 - 105, height - 72, plan[0].label, () => this.cancel(), true, { fontSize: PRACTICE_CONTROL_FONT_SIZE });
     const startButton = createDemoButton(this, width / 2 + 105, height - 72, plan[1].label, () => this.startTest(), true, { fontSize: PRACTICE_CONTROL_FONT_SIZE });
     this.focusRing = applyPracticeFocusRing(this, [cancelButton, startButton]);
+  }
+
+  private renderEnrichmentBriefing(width: number): void {
+    const identity = this.run && identityForEntrant(this.run.identity.entrantId);
+    const snapshot = this.session?.snapshot;
+    if (!identity || !snapshot) return;
+    const config = DEFAULT_RACE_ENRICHMENT_CONFIG;
+    const stats = resolveCurrentBuildPhysicalStats(snapshot.build).stats;
+    const sources = installedItems(snapshot.build)
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .map((item) => item.id);
+    const eligibility = signatureEligibilityFor("player", identity, stats, sources, config);
+    const brief = driverBriefing({ identity, eligibility, signatureThreshold: eligibility.threshold,
+      signatureComposureCost: config.signatureActivationCost, initialComposure: config.initialComposure });
+    const setupTrack = this.session?.returnContext.originState.setupSnapshot?.track;
+    const risk = setupTrack
+      ? buildIncidentRiskModel(stats, setupTrack.characteristics.brakingDemand / 100, config)
+      : null;
+    this.add.text(width / 2, 344, [
+      `${brief.passive.name} · ${brief.signature.name} ${brief.signature.currentValue}/${brief.signature.threshold} ${brief.signature.eligible ? "READY" : "BUILD TOWARD"}`,
+      risk
+        ? `Composure ${brief.initialComposure} · Risk ${risk.band}: ${risk.sources.map((source) => source.label).join(", ")}`
+        : `Composure ${brief.initialComposure} · Race-risk detail appears in pre-race setup.`,
+    ].join("\n"), { fontSize: "8px", fontFamily: UI_FONT, color: "#cddbd2", align: "center", wordWrap: { width: Math.min(620, width - 56) } }).setOrigin(0.5);
   }
 
   private showItem(item: OfferedItem, tier: 1 | 2 | 3): void {

@@ -57,6 +57,7 @@ export interface RaceEnrichmentConfig {
   /** Numeric caps keyed by temporary-effect kind. */
   signatureTemporaryEffectCaps: Readonly<Record<string, number>>;
   incidentRiskCaps: IncidentRiskCaps;
+  incidentChancePerBoundary: number;
   corpusBands: EnrichmentCorpusBands;
 }
 
@@ -73,13 +74,14 @@ export const DEFAULT_RACE_ENRICHMENT_CONFIG: RaceEnrichmentConfig = Object.freez
   minimumPaceAdvantage: 0.15,
   passingRange: 30,
   signatureThresholds: Object.freeze({
-    "sig-mercer-cornering": 40,
-    "sig-soto-acceleration": 40,
-    "sig-rook-top-speed": 40,
-    "sig-voss-braking": 40,
+    "sig-mercer-cornering": 70,
+    "sig-soto-acceleration": 70,
+    "sig-rook-top-speed": 110,
+    "sig-voss-braking": 80,
   }),
   signatureTemporaryEffectCaps: Object.freeze({ "target-pace": 0.15, "stat-window": 12 }),
-  incidentRiskCaps: Object.freeze({ maxRisk: 1, maxTimeLossSeconds: 3 }),
+  incidentRiskCaps: Object.freeze({ maxRisk: 1, maxTimeLossSeconds: 8 }),
+  incidentChancePerBoundary: 0.08,
   corpusBands: Object.freeze({
     postOpeningEventRateMin: 0.5,
     emphasisRateMax: 1 / 3,
@@ -198,6 +200,11 @@ export function validateRaceEnrichmentConfig(input: unknown): EnrichmentConfigVa
     pushViolation(violations, "incidentRiskCaps.maxRisk", "out-of-range", "maxRisk must be within [0,1]");
   } else if (typeof ic.maxTimeLossSeconds !== "number" || !Number.isFinite(ic.maxTimeLossSeconds) || ic.maxTimeLossSeconds <= 0) {
     pushViolation(violations, "incidentRiskCaps.maxTimeLossSeconds", "not-positive-finite", "maxTimeLossSeconds must be finite > 0");
+  }
+
+  if (typeof c.incidentChancePerBoundary !== "number" || !Number.isFinite(c.incidentChancePerBoundary)
+    || c.incidentChancePerBoundary < 0 || c.incidentChancePerBoundary > 1) {
+    pushViolation(violations, "incidentChancePerBoundary", "out-of-range", "incidentChancePerBoundary must be within [0,1]");
   }
 
   const cb = c.corpusBands;

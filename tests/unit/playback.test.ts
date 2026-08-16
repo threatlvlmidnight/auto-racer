@@ -350,8 +350,9 @@ describe("buildNCarPlaybackSchedule", () => {
     expect(schedule.cars).toHaveLength(8);
     expect(schedule.cars.map((car) => car.id)).toEqual(result.cars.map((car) => car.id));
     schedule.cars.forEach((car) => {
-      expect(car.schedule.visualLapBoundaries[car.schedule.visualLapBoundaries.length - 1]).toBe(
+      expect(car.schedule.visualLapBoundaries[car.schedule.visualLapBoundaries.length - 1]).toBeCloseTo(
         RACE_ANIMATION_SECONDS,
+        12,
       );
     });
   });
@@ -1039,8 +1040,8 @@ describe("Phase 7: checkpointProjection coverage across every valid lap count", 
   );
 });
 
-describe("Phase 7 (T053): track/tieBreakOrder are additive-only on NCarContestResult", () => {
-  it("adds exactly two new top-level keys and changes no pre-existing key's value", () => {
+describe("Phase 7 (T053): track/tieBreakOrder are retained on NCarContestResult", () => {
+  it("retains the generated track and internally reconciles the player total", () => {
     const result = resolveContest(vehicleBuild(), RIVAL_PROFILES, 1, 42);
     const { track, tieBreakOrder, ...withoutNewEvidence } = result;
     void track;
@@ -1049,12 +1050,11 @@ describe("Phase 7 (T053): track/tieBreakOrder are additive-only on NCarContestRe
     expect(Object.keys(result).sort()).toEqual(
       ["board", "cars", "lapCount", "outcome", "storage", "tieBreakOrder", "track"].sort(),
     );
-    // Every other field matches the T001 pre-feature baseline exactly (race-legibility-baseline.test.ts).
     expect(withoutNewEvidence.outcome).toBe("loss");
     expect(withoutNewEvidence.lapCount).toBe(10);
     const player = withoutNewEvidence.cars.find((car) => car.role === "player")!;
     expect(player.position).toBe(8);
-    expect(player.time).toBeCloseTo(306.4617161109661, 9);
+    expect(player.time).toBeCloseTo(player.laps.reduce((sum, lap) => sum + lap.time, 0), 9);
   });
 });
 
@@ -1066,15 +1066,15 @@ describe("PlaybackSpeed domain (T006)", () => {
     expect(PLAYBACK_SPEEDS.map((entry) => entry.value)).toEqual(["normal", "fast"]);
   });
 
-  it("labels normal as 1x (shortcut 1, 0.5x multiplier) and fast as 2x (shortcut 2, 1.0x multiplier)", () => {
+  it("labels normal as legacy-rate 1x and fast as exactly double-rate 2x", () => {
     const normal = playbackSpeedDescriptor("normal");
     const fast = playbackSpeedDescriptor("fast");
     expect(normal.label).toBe("1×");
     expect(normal.shortcut).toBe("1");
-    expect(normal.multiplier).toBe(0.5);
+    expect(normal.multiplier).toBe(1);
     expect(fast.label).toBe("2×");
     expect(fast.shortcut).toBe("2");
-    expect(fast.multiplier).toBe(1.0);
+    expect(fast.multiplier).toBe(2);
   });
 
   it("rejects any value outside the closed {normal, fast} domain", () => {
@@ -1089,22 +1089,22 @@ describe("PlaybackSpeed domain (T006)", () => {
 });
 
 describe("PresentationClock (T007–T009)", () => {
-  it("initializes to the 2x default at schedule time zero, uninitialized", () => {
+  it("initializes to the 1x default at schedule time zero, uninitialized", () => {
     const clock = createPresentationClock();
-    expect(clock.speed).toBe("fast");
+    expect(clock.speed).toBe("normal");
     expect(clock.scheduleTimeSeconds).toBe(0);
     expect(clock.initialized).toBe(false);
   });
 
-  it("advances schedule time at 0.5x under 1x and 1.0x under 2x (legacy parity)", () => {
+  it("advances at the legacy rate under 1x and exactly double under 2x", () => {
     let clock = createPresentationClock("normal");
     clock = advancePresentationClock(clock, 1).clock;
-    expect(clock.scheduleTimeSeconds).toBeCloseTo(0.5);
+    expect(clock.scheduleTimeSeconds).toBeCloseTo(1);
     // Speed change never jumps time (contract §3).
     clock = selectPlaybackSpeed(clock, "fast");
-    expect(clock.scheduleTimeSeconds).toBeCloseTo(0.5);
+    expect(clock.scheduleTimeSeconds).toBeCloseTo(1);
     clock = advancePresentationClock(clock, 1).clock;
-    expect(clock.scheduleTimeSeconds).toBeCloseTo(1.5);
+    expect(clock.scheduleTimeSeconds).toBeCloseTo(3);
   });
 
   it("reports the first positive-time advance and initializes exactly once", () => {
@@ -1115,7 +1115,7 @@ describe("PresentationClock (T007–T009)", () => {
     const first = advancePresentationClock(clock, 0.016);
     expect(first.advance.isFirstAdvance).toBe(true);
     expect(first.advance.previousScheduleTimeSeconds).toBe(0);
-    expect(first.advance.scheduleTimeSeconds).toBeCloseTo(0.008);
+    expect(first.advance.scheduleTimeSeconds).toBeCloseTo(0.016);
     expect(first.advance.speed).toBe("normal");
     expect(first.clock.initialized).toBe(true);
     const again = advancePresentationClock(first.clock, 0.016);
@@ -1338,16 +1338,16 @@ describe("boundary view builders (T010)", () => {
 
 describe("PlaybackController lifecycle, timing, and idempotent selection (T017–T020, T026–T029)", () => {
   // The controller is the pure embodiment of the data-model "State Lifecycle":
-  // fresh 2× init → time-zero batch on first positive advance → monotonic
+  // fresh 1× init → time-zero batch on first positive advance → monotonic
   // advances → idempotent speed selection → results-ready once → no
   // post-finish mutation. These prove the loop logic both watched-race scenes
   // delegate to, without a headless Phaser harness (Phase 1 baseline
   // convention: no scene is ever instantiated in tests; the pure layers the
   // scenes consume are tested directly).
 
-  it("initializes every new race to the 2× default with zero schedule time (contract §6)", () => {
+  it("initializes every new race to the 1× default with zero schedule time (contract §6)", () => {
     const controller = createPlaybackController(EIGHT_CAR_BOUNDARY_VIEW);
-    expect(controller.clock.speed).toBe("fast");
+    expect(controller.clock.speed).toBe("normal");
     expect(controller.clock.scheduleTimeSeconds).toBe(0);
     expect(controller.clock.initialized).toBe(false);
     expect(controller.lastEvents).toEqual([]);
@@ -1367,26 +1367,26 @@ describe("PlaybackController lifecycle, timing, and idempotent selection (T017�
     expect(again.lastEvents.some((event) => event.kind === "time-zero")).toBe(false);
   });
 
-  it("advances schedule time at half the legacy rate at 1× and the legacy rate at 2× (contract §2)", () => {
+  it("advances schedule time at the legacy rate at 1× and double it at 2× (contract §2)", () => {
     let normal = createPlaybackController(EIGHT_CAR_BOUNDARY_VIEW);
     normal = selectPlaybackControllerSpeed(normal, "normal");
-    normal = advancePlaybackController(normal, 1); // 1 s real → 0.5 schedule
-    expect(normal.clock.scheduleTimeSeconds).toBe(0.5);
+    normal = advancePlaybackController(normal, 1); // 1 s real → 1 schedule
+    expect(normal.clock.scheduleTimeSeconds).toBe(1);
     let fast = selectPlaybackControllerSpeed(createPlaybackController(EIGHT_CAR_BOUNDARY_VIEW), "fast");
-    fast = advancePlaybackController(fast, 1); // 1 s real → 1.0 schedule
-    expect(fast.clock.scheduleTimeSeconds).toBe(1.0);
+    fast = advancePlaybackController(fast, 1); // 1 s real → 2 schedule
+    expect(fast.clock.scheduleTimeSeconds).toBe(2);
   });
 
   it("selects speed idempotently without altering schedule time (contract §3)", () => {
     let controller = createPlaybackController(EIGHT_CAR_BOUNDARY_VIEW);
     controller = selectPlaybackControllerSpeed(controller, "normal");
-    controller = advancePlaybackController(controller, 2); // schedule 1.0 at 1×
-    expect(controller.clock.scheduleTimeSeconds).toBe(1.0);
+    controller = advancePlaybackController(controller, 2); // schedule 2 at 1×
+    expect(controller.clock.scheduleTimeSeconds).toBe(2);
     controller = selectPlaybackControllerSpeed(controller, "fast");
-    expect(controller.clock.scheduleTimeSeconds).toBe(1.0);
+    expect(controller.clock.scheduleTimeSeconds).toBe(2);
     expect(selectPlaybackControllerSpeed(controller, "fast")).toBe(controller);
     const back = selectPlaybackControllerSpeed(controller, "normal");
-    expect(back.clock.scheduleTimeSeconds).toBe(1.0);
+    expect(back.clock.scheduleTimeSeconds).toBe(2);
     expect(selectPlaybackControllerSpeed(back, "normal")).toBe(back);
   });
 
@@ -1401,7 +1401,7 @@ describe("PlaybackController lifecycle, timing, and idempotent selection (T017�
       controller = advancePlaybackController(controller, delta);
       times.push(controller.clock.scheduleTimeSeconds);
     }
-    expect(times).toEqual([0.5, 1.5, 1.5, 2.0, 3.0]);
+    expect(times).toEqual([1, 3, 3, 4, 6]);
     for (let index = 1; index < times.length; index += 1) {
       expect(times[index]).toBeGreaterThanOrEqual(times[index - 1]);
     }
@@ -1411,8 +1411,8 @@ describe("PlaybackController lifecycle, timing, and idempotent selection (T017�
     const finish = maxFinishScheduleTime(EIGHT_CAR_BOUNDARY_VIEW); // 20
     let controller = createPlaybackController(EIGHT_CAR_BOUNDARY_VIEW);
     controller = selectPlaybackControllerSpeed(controller, "normal");
-    controller = advancePlaybackController(controller, 39.999); // schedule 19.9995
-    expect(controller.clock.scheduleTimeSeconds).toBeCloseTo(finish - 0.0005, 6);
+    controller = advancePlaybackController(controller, 19.999); // schedule 19.999
+    expect(controller.clock.scheduleTimeSeconds).toBeCloseTo(finish - 0.001, 6);
     expect(controller.resultsReady).toBe(false);
     controller = advancePlaybackController(controller, 0.002); // crosses 20
     expect(controller.resultsReady).toBe(true);

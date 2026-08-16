@@ -340,7 +340,7 @@ export function evaluateBoundary(
         orderSeq: seq,
         actorId: targetId,
         targetId: attacker.id,
-        emphasis: "compact",
+        emphasis: attacker.id === "player" && phase === "final-push" && attacker.position === 2 ? "full" : "compact",
         before: { position: ahead.position, time: ahead.cumulativeTime },
         composure: {
           before: defenderLedger.remaining,
@@ -439,6 +439,20 @@ export interface EnrichmentOutput {
   eligibility: readonly SignatureEligibility[];
 }
 
+/** Shared pre-race and resolver eligibility authority. */
+export function signatureEligibilityFor(
+  participantId: string,
+  identity: DriverRaceIdentity,
+  resolvedStats: Readonly<Partial<Record<StatTarget, number>>>,
+  contributingSources: readonly string[],
+  config: RaceEnrichmentConfig,
+): SignatureEligibility {
+  const sig = identity.signature;
+  const threshold = config.signatureThresholds[sig.thresholdKey] ?? 0;
+  const committedValue = resolvedStats[sig.statTarget] ?? 0;
+  return { participantId, signatureId: sig.id, stat: sig.statTarget, committedValue, threshold, contributingSources, eligible: committedValue >= threshold };
+}
+
 /** Which shared phase a signature's authored context maps into (research Decision 4). */
 const CONTEXT_PHASE: Readonly<Record<SignatureContext, RacePhase>> = Object.freeze({
   "final-push": "final-push",
@@ -466,20 +480,8 @@ export function resolveEnrichment(input: EnrichmentInput): EnrichmentOutput {
     cars.map((car) => [car.id, passivePaceFraction(car.identity.passive.modifier.magnitude)]),
   );
 
-  const eligibility: SignatureEligibility[] = cars.map((car) => {
-    const sig = car.identity.signature;
-    const threshold = config.signatureThresholds[sig.thresholdKey] ?? 0;
-    const committedValue = car.resolvedStats[sig.statTarget] ?? 0;
-    return {
-      participantId: car.id,
-      signatureId: sig.id,
-      stat: sig.statTarget,
-      committedValue,
-      threshold,
-      contributingSources: car.contributingSources,
-      eligible: committedValue >= threshold,
-    };
-  });
+  const eligibility: SignatureEligibility[] = cars.map((car) =>
+    signatureEligibilityFor(car.id, car.identity, car.resolvedStats, car.contributingSources, config));
   const eligibleById = new Map(eligibility.map((entry) => [entry.participantId, entry.eligible]));
 
   const ledgers = new Map<string, ComposureLedger>(
@@ -541,7 +543,7 @@ export function resolveEnrichment(input: EnrichmentInput): EnrichmentOutput {
         boundaryId,
         orderSeq: seq,
         actorId: car.id,
-        emphasis: "full",
+        emphasis: car.id === "player" && sig.context === "final-push" ? "full" : "compact",
         before: { position: positionOf.get(car.id)!, time: cumulativeTime.get(car.id)! },
         composure: { before: ledger.remaining, spent: config.signatureActivationCost, after: after.remaining },
         temporaryEffect: { stat: sig.temporaryEffect.stat, delta: cap, startLap, endLap },
@@ -573,6 +575,7 @@ export function resolveEnrichment(input: EnrichmentInput): EnrichmentOutput {
           car.id,
           lap,
           config.incidentRiskCaps.maxTimeLossSeconds,
+          config.incidentChancePerBoundary,
         );
         if (!roll.incident) continue;
         seq += 1;
@@ -585,7 +588,7 @@ export function resolveEnrichment(input: EnrichmentInput): EnrichmentOutput {
           boundaryId,
           orderSeq: seq,
           actorId: car.id,
-          emphasis: "compact",
+          emphasis: car.id === "player" && risk.band === "elevated" && phase === "final-push" ? "full" : "compact",
           before: { position: positionOf.get(car.id)!, time: cumulativeTime.get(car.id)! },
           incident: { timeLossSeconds: roll.timeLossSeconds, riskBand: risk.band },
           triggerRef: `incident:${car.id}`,
@@ -693,15 +696,16 @@ export function resolveIncidentDecision(
   carId: string,
   lap: number,
   maxTimeLossSeconds: number,
+  chancePerBoundary = INCIDENT_GATE_BYTE / 256,
 ): IncidentDecision {
   const h = fnv1a(`${String(incidentSeed)}::${carId}::${String(lap)}`);
   const gate = (h >>> 8) & 0xff;
-  if (gate >= INCIDENT_GATE_BYTE) return { incident: false, timeLossSeconds: 0 };
+  const gateByte = Math.floor(Math.max(0, Math.min(1, chancePerBoundary)) * 256);
+  if (gate >= gateByte) return { incident: false, timeLossSeconds: 0 };
   const fraction = ((h & 0xff) % 100) / 100;
   const max = Number.isFinite(maxTimeLossSeconds) ? Math.max(0, maxTimeLossSeconds) : 0;
   return { incident: true, timeLossSeconds: fraction * max };
 }
 
-/** Rough per-race incident frequency (≈ 6% of car/lap rolls, tunable). */
+/** Legacy direct-call default; production passes the centralized config lever. */
 const INCIDENT_GATE_BYTE = 16;
-

@@ -15,6 +15,7 @@ import { chooseEncounter } from "../../src/simulation/encounters";
 import { completeNonPvpEncounter } from "../../src/simulation/run";
 import { EXCLUSIVE_ITEMS } from "../../src/content/items";
 import type { ItemDefinition } from "../../src/simulation/types";
+import { trackCenterline } from "../../src/simulation/tracks";
 
 function itemById(id: string): ItemDefinition {
   const item = Object.values(EXCLUSIVE_ITEMS).flat().find((candidate) => candidate.id === id);
@@ -189,11 +190,11 @@ describe("raceSetupPresentation: unavailable/legacy build edge case", () => {
 });
 
 describe("trackPreviewPoints: smoothed track preview shape", () => {
-  it("produces subdivisionsPerSegment points per original track point", () => {
+  it("produces subdivisionsPerSegment points per retained centerline point", () => {
     const input = inputFor();
     const points = trackPreviewPoints(input.track, { scale: 1, offsetX: 0, offsetY: 0, subdivisionsPerSegment: 6 });
 
-    expect(points).toHaveLength(input.track.points.length * 6);
+    expect(points).toHaveLength(trackCenterline(input.track).length * 6);
   });
 
   it("passes exactly through every original (scaled/offset) point at each segment's start", () => {
@@ -201,7 +202,7 @@ describe("trackPreviewPoints: smoothed track preview shape", () => {
     const subdivisions = 8;
     const points = trackPreviewPoints(input.track, { scale: 0.5, offsetX: 10, offsetY: 20, subdivisionsPerSegment: subdivisions });
 
-    input.track.points.forEach((original, index) => {
+    trackCenterline(input.track).forEach((original, index) => {
       const expected = { x: original.x * 0.5 + 10, y: original.y * 0.5 + 20 };
       const actual = points[index * subdivisions];
       expect(actual.x).toBeCloseTo(expected.x, 9);
@@ -213,7 +214,7 @@ describe("trackPreviewPoints: smoothed track preview shape", () => {
     const input = inputFor();
     const points = trackPreviewPoints(input.track, { scale: 1, offsetX: 0, offsetY: 0 });
 
-    expect(points.length).toBeGreaterThan(input.track.points.length * 5);
+    expect(points.length).toBeGreaterThan(trackCenterline(input.track).length * 5);
   });
 
   it("is pure and deterministic", () => {

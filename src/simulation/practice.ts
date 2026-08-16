@@ -2,6 +2,12 @@ import { SAMPLE_GHOST } from "../content/sample-data";
 import { resolveContest } from "./contest";
 import { buildPlaybackSchedule, type PlaybackSchedule } from "./playback";
 import { installedItems, storedItems } from "./slots";
+import { identityForEntrant, generatedRivalIdentity } from "../content/driverRaceIdentities";
+import { vehicleById } from "../content/entrants";
+import { DEFAULT_RACE_ENRICHMENT_CONFIG } from "./enrichmentConfig";
+import { resolveEnrichment } from "./raceEnrichment";
+import { brakingProfile } from "./tracks";
+import { resolveCurrentBuildPhysicalStats } from "./laps";
 import type { Run } from "./run";
 import type { Track } from "./tracks";
 import type {
@@ -384,7 +390,7 @@ export function resolvePractice(session: PracticeSession): PracticeSession {
   // through the same lap-stat fold as scored contests. Every other origin
   // keeps the exact pre-028 generic (no-track) resolution.
   const setupSnapshot = session.returnContext.originState.setupSnapshot;
-  const contest = setupSnapshot
+  const baseContest = setupSnapshot
     ? resolveContest(
       session.snapshot.build as Build,
       TEST_DAY_CONFIG.rival as SampleGhost,
@@ -397,6 +403,14 @@ export function resolvePractice(session: PracticeSession): PracticeSession {
       TEST_DAY_CONFIG.rival as SampleGhost,
       TEST_DAY_CONFIG.lapCount,
     );
+  const contest = setupSnapshot
+    ? enrichPracticeContest(
+      baseContest,
+      session.snapshot.build as Build,
+      setupSnapshot.track as Track,
+      session.runId,
+    )
+    : baseContest;
   const playback = buildPlaybackSchedule(contest);
   const reconciliation = reconcilePracticeResult(contest);
   if (!reconciliation.valid) {
@@ -425,6 +439,63 @@ export function resolvePractice(session: PracticeSession): PracticeSession {
   activeSessions.set(session.runId, completed);
   recordCompletedPracticeSession(completed);
   return completed;
+}
+
+function enrichPracticeContest(contest: ContestResult, build: Build, track: Track, runId: string): ContestResult {
+  const entrantId = vehicleById(build.vehicleId)?.entrantId;
+  const playerIdentity = entrantId ? identityForEntrant(entrantId) : undefined;
+  if (!playerIdentity) return contest;
+  const rivalIdentity = generatedRivalIdentity(fnv1a32(runId), 0);
+  const config = DEFAULT_RACE_ENRICHMENT_CONFIG;
+  const enrichment = resolveEnrichment({
+    config,
+    lapCount: contest.lapCount,
+    seed: fnv1a32(runId),
+    rosterOrder: ["player", "test-day-rival"],
+    brakingDemand: brakingProfile(track).brakingDemand,
+    cars: [
+      {
+        id: "player",
+        identity: playerIdentity,
+        baseLapTimes: contest.laps.map((lap) => lap.playerLapTime),
+        resolvedStats: resolveCurrentBuildPhysicalStats(build).stats,
+        contributingSources: installedItems(build).filter((item): item is NonNullable<typeof item> => item !== null).map((item) => item.id),
+      },
+      {
+        id: "test-day-rival",
+        identity: rivalIdentity,
+        baseLapTimes: contest.laps.map((lap) => lap.ghostLapTime),
+        resolvedStats: {},
+        contributingSources: [],
+      },
+    ],
+  });
+  const player = enrichment.cars.find((car) => car.id === "player")!;
+  const rival = enrichment.cars.find((car) => car.id === "test-day-rival")!;
+  const laps = contest.laps.map((lap, index) => ({
+    ...lap,
+    playerLapTime: player.enrichedLaps[index].enrichedTime,
+    ghostLapTime: rival.enrichedLaps[index].enrichedTime,
+  }));
+  const playerTime = laps.reduce((sum, lap) => sum + lap.playerLapTime, 0);
+  const ghostTime = laps.reduce((sum, lap) => sum + lap.ghostLapTime, 0);
+  const gap = playerTime - ghostTime;
+  return {
+    ...contest,
+    laps,
+    playerTime,
+    ghostTime,
+    gap,
+    outcome: gap < 0 ? "win" : gap > 0 ? "loss" : "tie",
+    enrichment: {
+      configVersion: enrichment.configVersion,
+      phaseSchedule: enrichment.phaseSchedule,
+      events: enrichment.events,
+      incidentsEnabled: enrichment.incidentsEnabled,
+      eligibility: enrichment.eligibility,
+      ledgers: Object.fromEntries(enrichment.cars.map((car) => [car.id, car.composureLedger])),
+    },
+  };
 }
 
 export function cancelPracticeSession(session: PracticeSession): PracticeSession {
@@ -471,6 +542,10 @@ export function reconcilePracticeResult(contest: ContestResult): ReconciliationR
   const expectedOutcome = contest.gap < 0 ? "win" : contest.gap > 0 ? "loss" : "tie";
   checks.push(check("outcome", expectedOutcome, contest.outcome));
   contest.laps.forEach((lap) => {
+    if (contest.enrichment) {
+      checks.push(check(`lap-${lap.lap}-enriched-finite`, 1, Number.isFinite(lap.playerLapTime) && Number.isFinite(lap.ghostLapTime) ? 1 : 0));
+      return;
+    }
     const evidence = lap.contributions ?? [];
     if (evidence.length === 0) return;
     const representative = evidence[0];
@@ -493,6 +568,15 @@ export function reconcilePracticeResult(contest: ContestResult): ReconciliationR
     ));
   });
   return { valid: checks.every(({ valid }) => valid), checks };
+}
+
+function fnv1a32(value: string): number {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
 }
 
 export function toPracticeComparisonProjection(

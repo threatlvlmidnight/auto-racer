@@ -260,9 +260,10 @@ describe("trackSummaryPresentation (T041)", () => {
     expect(presentation.status).toBe("available");
     if (presentation.status !== "available") throw new Error("unreachable");
     expect(presentation.summary.trackId).toBe(SIX_CORNER_TRACK.id);
-    expect(presentation.summary.cornerCount).toBe(6);
+    const expectedCorners = SIX_CORNER_TRACK.segments.filter((segment) => segment.kind === "corner").length;
+    expect(presentation.summary.cornerCount).toBe(expectedCorners);
     expect(presentation.headline).toContain(SIX_CORNER_TRACK.name);
-    expect(presentation.segmentLine).toContain("6 corner");
+    expect(presentation.segmentLine).toContain(`${expectedCorners} corner`);
     expect(presentation.capabilityLines).toHaveLength(4);
   });
 
@@ -325,14 +326,14 @@ describe("buildTrackFitPresentation", () => {
       vehicle: 58,
     });
     expect(presentation.axes.find((axis) => axis.key === "acceleration")).toMatchObject({
-      demand: 60,
+      demand: Math.round(100 * SIX_CORNER_TRACK.segments.filter((segment) => segment.kind === "corner").length / 10),
       vehicle: 44,
     });
     expect(presentation.axes.find((axis) => axis.key === "brakingPower")?.demand)
       .toBe(SIX_CORNER_TRACK.characteristics.brakingDemand);
     expect(presentation.axes.find((axis) => axis.key === "corneringSpeed")?.demand)
       .toBe(SIX_CORNER_TRACK.characteristics.corneringDemand);
-    expect(presentation.factsLine).toContain("6 CORNERS");
+    expect(presentation.factsLine).toContain(`${SIX_CORNER_TRACK.segments.filter((segment) => segment.kind === "corner").length} CORNERS`);
   });
 
   it("labels missing final-lap physics instead of inventing vehicle values", () => {

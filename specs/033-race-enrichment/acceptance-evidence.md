@@ -301,3 +301,86 @@ scenes, the US6 circuit-grammar rewrite, and the T085/T087 tuning pass (see
 HANDOFF). The scene briefing/risk-rendering tasks `T039`/`T040`/`T051` likewise
 remain open.
 
+## Final implementation closeout — T028, T039–T093
+
+Run date: 2026-08-15. This section supersedes the earlier “pending” snapshots
+without deleting their historical measurements.
+
+### Delivered authority and presentation
+
+- Scored races and Test Day now use the same enriched resolver, committed
+  setups, generated-rival identities, retained events, validated track, and
+  immutable lap evidence. Run history retains `RaceEnrichmentReplayEvidence`;
+  settlement still consumes the already-resolved result.
+- Pre-race and Test Day briefings render phase rules, passive/signature identity,
+  exact current/threshold/source progress, Composure, qualitative incident risk,
+  and a legal safer adjustment without revealing the outcome.
+- Playback defaults to the new `1x` (the legacy watch rate); new `2x` is twice
+  that rate. Retained enrichment boundaries are consumed exactly once across
+  small/large frames. Pause, Skip, reduced-motion projection, Results summaries,
+  and complete inspector entries are presentation-only.
+- Semantic engine/UI audio is synthesized locally with Web Audio. One engine
+  loop owns the lifecycle; mute, blocked contexts, visibility changes, Skip,
+  finish, and shutdown stop cleanly. `audio-asset-manifest.md` records the
+  intentional asset-free provenance and silent fallback.
+- Track generation uses a deterministic bounded-attempt circuit grammar with
+  6–10 corners, mixed turn directions, sampled centerlines, retained feature
+  spans/braking zones, and validation metadata. The 240-track corpus is closed,
+  in bounds, non-self-intersecting, positively braked, deeply repeatable, and
+  exceeds the 90% unique-shape gate.
+
+### Centralized tuning and measured corpus — T085/T087
+
+Only `RACE_ENRICHMENT_CONFIG` defaults were tuned: signature thresholds are
+Mercer `70`, Soto `70`, Rook `110`, and Voss `80`; incident loss is capped at
+`8 s`; and `incidentChancePerBoundary = 0.08`. The representative 150-race
+corpus now measures:
+
+| Gate | Target | Final |
+|---|---:|---:|
+| post-Opening consequential event rate | ≥ 0.50 | **1.000** |
+| full-emphasis race rate | ≤ 0.333 | **0.020** |
+| initial-winner change rate | 0.10–0.25 | **0.100** |
+| separated stronger-build dominance | preserve | **PASS** |
+
+### Browser and accessibility QA — T091
+
+An in-app browser run exercised entrant selection, World Tour navigation,
+reward/pre-race flow, identity and risk briefing, Test Day playback/Skip, and
+the retained unscored Results inspector. This pass exposed and fixed an
+`undefined`-property recovery serialization failure; the replay then completed
+to Results. The remaining combinations (all entrant identities, both rates,
+reduced motion, incident toggle isolation, missing/blocked audio, and lifecycle
+cleanup) are deterministic automated matrix cases in the Feature 033 unit,
+integration, and regression suites.
+
+Canvas measurements at every required host viewport showed no document
+overflow:
+
+| Host viewport | Rendered canvas | Overflow |
+|---|---|---|
+| 1920×1080 | 1920×1080 at (0,0) | none |
+| 1366×768 | 1365.3×768, horizontally centered | none |
+| 1024×768 | 1024×576, vertically centered | none |
+| 800×450 | 800×450 at (0,0) | none |
+
+### Final automated gates — T088–T090
+
+- Authority boundary tests prohibit simulation imports of Phaser, Web Audio,
+  live RNG, and scene-side reconstruction; presentation consumes retained
+  evidence only.
+- `npm test`: **101 files / 1698 tests passed**.
+- `npm run lint`: exit 0.
+- `npm run build`: exit 0 (`vite build` + `tsc --noEmit`). Vite retains the
+  repository's existing >500 kB bundle-size advisory; there is no build error.
+
+### Constitution and boundary reconciliation — T092/T093
+
+The `plan.md` Constitution Check is PASS after delivery: resolution remains
+precomputed and deterministic; rules are shared/fair; evidence is legible;
+spectacle is retained-event-driven; Test Day has parity; results are async-safe;
+and one validated centerline drives physics and presentation. Feature 034 may
+consume the retained event contract without recomputing it, while Feature 035
+remains presentation-only. Stable event IDs deliberately remain the future
+picture-in-picture cutscene hook. Background music, adaptive score, voice-over,
+and bespoke vocals remain deferred in `specs/DEFERRED.md`.

@@ -2,31 +2,31 @@
 
 exports[`baseline: Balanced/no-setup outputs before feature 028 migration > pins simulatePlayerLaps for a held-item build with all-zero setupDeltas explicitly passed 1`] = `
 [
-  27.588661715443802,
-  27.588661715443802,
-  27.588661715443802,
-  27.588661715443802,
-  27.588661715443802,
-  27.588661715443802,
-  27.588661715443802,
-  27.588661715443802,
-  27.588661715443802,
-  27.588661715443802,
+  56.680783178843036,
+  56.680783178843036,
+  56.680783178843036,
+  56.680783178843036,
+  56.680783178843036,
+  56.680783178843036,
+  56.680783178843036,
+  56.680783178843036,
+  56.680783178843036,
+  56.680783178843036,
 ]
 `;
 
 exports[`baseline: Balanced/no-setup outputs before feature 028 migration > pins simulatePlayerLaps for an empty build with a track (no setupDeltas) 1`] = `
 [
-  27.90680548473969,
-  27.90680548473969,
-  27.90680548473969,
-  27.90680548473969,
-  27.90680548473969,
-  27.90680548473969,
-  27.90680548473969,
-  27.90680548473969,
-  27.90680548473969,
-  27.90680548473969,
+  57.06745791755593,
+  57.06745791755593,
+  57.06745791755593,
+  57.06745791755593,
+  57.06745791755593,
+  57.06745791755593,
+  57.06745791755593,
+  57.06745791755593,
+  57.06745791755593,
+  57.06745791755593,
 ]
 `;
 
@@ -39,7 +39,7 @@ exports[`baseline: Balanced/no-setup outputs before feature 028 migration > pins
 }
 `;
 
-exports[`baseline: Balanced/no-setup outputs before feature 028 migration > pins the N-car resolveContest result for an empty build with no setup argument 1`] = `306.4617161109661`;
+exports[`baseline: Balanced/no-setup outputs before feature 028 migration > pins the N-car resolveContest result for an empty build with no setup argument 1`] = `636.8052967314661`;
 
 exports[`baseline: Balanced/no-setup outputs before feature 028 migration > pins the N-car resolveContest result for an empty build with no setup argument 2`] = `8`;
 

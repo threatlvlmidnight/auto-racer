@@ -28,6 +28,7 @@ import { buildTrackFitPresentation } from "./trackSummaryPresentation";
 import { createBuildTrackFitPanel } from "./trackFitVisuals";
 import { regionDefinition } from "../content/regions";
 import { classifyScalingItem } from "../simulation/buffs";
+import { enrichmentResultsSummary } from "./raceEnrichmentPresentation";
 
 const STANDINGS_ROW_HEIGHT = 13;
 
@@ -86,6 +87,7 @@ export class ResultScene extends Phaser.Scene {
       fontSize: "11px", fontFamily: UI_FONT, fontStyle: "bold", color: "#ffd447",
     }).setOrigin(0.5);
     this.renderSetupEvidence(width);
+    this.renderEnrichmentEvidence(width);
 
     createDemoButton(this, width / 2, 402, "CONTINUE CHAMPIONSHIP", () => {
       const run = continueRunFromResult(this.run, this.encounterId, this.result);
@@ -182,6 +184,21 @@ export class ResultScene extends Phaser.Scene {
     this.add.text(width * 0.76, 246, carSetupLines(player).join("\n"), {
       fontSize: "10px", fontFamily: UI_FONT, color: "#ffd447", lineSpacing: 3,
     }).setOrigin(0.5, 0);
+  }
+
+  /** Feature 033: Results consumes retained events, never reruns enrichment. */
+  private renderEnrichmentEvidence(width: number): void {
+    const enriched = this.result as import("../simulation/types").EnrichedContestResult;
+    if (!enriched.events) return;
+    const summary = enrichmentResultsSummary(enriched.events);
+    const lines = [
+      summary.decisive ? `RACE MOMENT · ${summary.decisive.text}` : "RACE MOMENTS · None recorded",
+      ...summary.events.slice(0, 3).map((event) => `• ${event.text}`),
+    ];
+    this.add.text(width * 0.76, 72, lines.join("\n"), {
+      fontSize: "8px", fontFamily: UI_FONT, color: "#cddbd2",
+      wordWrap: { width: width * 0.38 }, lineSpacing: 2,
+    }).setOrigin(0.5, 0).setDepth(25);
   }
 
   private renderStandings(centerX: number, startY: number): void {

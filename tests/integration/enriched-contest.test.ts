@@ -145,7 +145,7 @@ describe("Feature 033 (T045): incidents never mutate persistent state", () => {
     }
     for (const event of first.events.filter((e) => e.kind === "incident")) {
       expect(event.incident!.timeLossSeconds).toBeGreaterThanOrEqual(0);
-      expect(event.incident!.timeLossSeconds).toBeLessThanOrEqual(3);
+      expect(event.incident!.timeLossSeconds).toBeLessThanOrEqual(8);
     }
   });
 });

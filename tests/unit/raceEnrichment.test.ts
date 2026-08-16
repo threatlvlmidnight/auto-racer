@@ -437,12 +437,14 @@ describe("Feature 033 (T030/T031): signature eligibility edges and origin agnost
   }
 
   it("treats exact threshold equality as eligible", () => {
-    expect(elig(40).eligible).toBe(true);
-    expect(elig(40).threshold).toBe(40);
-    expect(elig(40).committedValue).toBe(40);
+    const threshold = DEFAULT_RACE_ENRICHMENT_CONFIG.signatureThresholds[mercer.signature.thresholdKey];
+    expect(elig(threshold).eligible).toBe(true);
+    expect(elig(threshold).threshold).toBe(threshold);
+    expect(elig(threshold).committedValue).toBe(threshold);
   });
   it("marks a value just below threshold ineligible (display rounding cannot qualify)", () => {
-    expect(elig(39.9999999).eligible).toBe(false);
+    const threshold = DEFAULT_RACE_ENRICHMENT_CONFIG.signatureThresholds[mercer.signature.thresholdKey];
+    expect(elig(threshold - Number.EPSILON * threshold).eligible).toBe(false);
   });
   it("marks non-finite committed values ineligible", () => {
     expect(elig(Number.NaN).eligible).toBe(false);
@@ -454,7 +456,7 @@ describe("Feature 033 (T030/T031): signature eligibility edges and origin agnost
   });
 
   it("origin does not participate: eligibility depends only on the resolved own-stat vs threshold", () => {
-    // Mercer gates cornering (threshold 40); Soto gates acceleration (40).
+    // Equal own-stat at each identity's configured threshold is origin-agnostic.
     const mercer = DRIVER_RACE_IDENTITIES[0];
     const soto = DRIVER_RACE_IDENTITIES[1];
     const make = (identity: typeof mercer, resolvedStats: Record<string, number>) =>
@@ -462,12 +464,13 @@ describe("Feature 033 (T030/T031): signature eligibility edges and origin agnost
         config: DEFAULT_RACE_ENRICHMENT_CONFIG, lapCount: 8, seed: 2, rosterOrder: ["a"],
         cars: [{ id: "a", identity, baseLapTimes: base.map((l) => l.time), resolvedStats, contributingSources: [] }],
       }).eligibility[0];
-    // Equal own-stat at their own threshold => equal eligibility (true) regardless of identity/origin.
-    expect(make(mercer, { corneringSpeed: 40 }).eligible).toBe(true);
-    expect(make(soto, { acceleration: 40 }).eligible).toBe(true);
+    const mercerThreshold = DEFAULT_RACE_ENRICHMENT_CONFIG.signatureThresholds[mercer.signature.thresholdKey];
+    const sotoThreshold = DEFAULT_RACE_ENRICHMENT_CONFIG.signatureThresholds[soto.signature.thresholdKey];
+    expect(make(mercer, { corneringSpeed: mercerThreshold }).eligible).toBe(true);
+    expect(make(soto, { acceleration: sotoThreshold }).eligible).toBe(true);
     // Below their own threshold => both ineligible.
-    expect(make(mercer, { corneringSpeed: 39 }).eligible).toBe(false);
-    expect(make(soto, { acceleration: 39 }).eligible).toBe(false);
+    expect(make(mercer, { corneringSpeed: mercerThreshold - 1 }).eligible).toBe(false);
+    expect(make(soto, { acceleration: sotoThreshold - 1 }).eligible).toBe(false);
   });
 });
 
@@ -494,7 +497,7 @@ describe("Feature 033 (T032): passives, activation, and budget", () => {
       lapCount: 8,
       seed: 4,
       rosterOrder: ["a"],
-      cars: [{ id: "a", identity: DRIVER_RACE_IDENTITIES[0], baseLapTimes: Array.from({ length: 8 }, (_, i) => ({ time: 20 + i })).map((l) => l.time), resolvedStats: { corneringSpeed: 60 }, contributingSources: [], }],
+      cars: [{ id: "a", identity: DRIVER_RACE_IDENTITIES[0], baseLapTimes: Array.from({ length: 8 }, (_, i) => ({ time: 20 + i })).map((l) => l.time), resolvedStats: { corneringSpeed: 80 }, contributingSources: [], }],
     });
     const openingActivations = output.events.filter((e) => e.kind === "signature-activation" && e.phase === "opening");
     expect(openingActivations).toHaveLength(0);
@@ -506,7 +509,7 @@ describe("Feature 033 (T032): passives, activation, and budget", () => {
       lapCount: 8,
       seed: 5,
       rosterOrder: ["a"],
-      cars: [{ id: "a", identity: DRIVER_RACE_IDENTITIES[0], baseLapTimes: Array.from({ length: 8 }, (_, i) => ({ time: 20 + i })).map((l) => l.time), resolvedStats: { corneringSpeed: 60 }, contributingSources: [], }],
+      cars: [{ id: "a", identity: DRIVER_RACE_IDENTITIES[0], baseLapTimes: Array.from({ length: 8 }, (_, i) => ({ time: 20 + i })).map((l) => l.time), resolvedStats: { corneringSpeed: 80 }, contributingSources: [], }],
     });
     const activation = output.events.find((e) => e.kind === "signature-activation");
     expect(activation).toBeDefined();

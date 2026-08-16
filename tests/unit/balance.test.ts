@@ -7,6 +7,10 @@ import {
   STOCK_VEHICLE_BASELINE,
   representativeBalanceFixture,
 } from "../fixtures/balance-fixtures";
+import {
+  marginalSpreadExceedsTenPercent,
+  marginalSpreadMultiplier,
+} from "../../src/simulation/statNormalization";
 
 describe("Feature 032 deterministic balance harness", () => {
   it("keeps Nell and the stock vehicle immutable controls", () => {
@@ -34,3 +38,13 @@ describe("Feature 032 deterministic balance harness", () => {
     expect(new Set(first.map((entry) => entry.baselineVehicleId))).toEqual(new Set([STOCK_VEHICLE_BASELINE.id]));
   });
 });
+
+describe("Feature 034 balanced reference-track 10% acceptance gate (T016, SC-013)", () => {
+  it("keeps the one-point marginal stat spread within 10%", () => {
+    const spread = marginalSpreadMultiplier();
+    expect(spread).toBeGreaterThan(0);
+    expect(spread).toBeLessThanOrEqual(1.1);
+    expect(marginalSpreadExceedsTenPercent()).toBe(false);
+  });
+});
+

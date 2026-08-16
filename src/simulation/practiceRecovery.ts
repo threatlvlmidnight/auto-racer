@@ -85,7 +85,12 @@ export function writePracticeRecovery(
   storage: PracticeRecoveryStorage | null = defaultRecoveryStorage(),
 ): void {
   if (!storage) return;
-  const canonicalPayload = canonicalizeRecoveryPayload(payload);
+  // Match the storage medium's JSON semantics: optional object properties
+  // with value `undefined` are omitted before strict canonicalization. This
+  // keeps integrity checks strict while allowing typed optional evidence such
+  // as track feature metadata and setup focus state.
+  const serializablePayload = JSON.parse(JSON.stringify(payload)) as PracticeRecoveryPayload;
+  const canonicalPayload = canonicalizeRecoveryPayload(serializablePayload);
   const record = {
     version: PRACTICE_RECOVERY_VERSION,
     payload: canonicalPayload,

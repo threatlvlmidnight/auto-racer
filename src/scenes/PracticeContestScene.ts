@@ -36,6 +36,7 @@ import { createItemCard, createItemInspector } from "./itemVisuals";
 import { resolvedItemEvidence, unresolvedPhysicalEvidence } from "./itemPresentation";
 import type { OfferedItem } from "../simulation/types";
 import { configureHiDpiScene, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "./layout";
+import { createAudioState, emitCue, isBrowserAudioMuted, setAudioMuted, setBrowserAudioMuted, startBrowserEngine, startEngine, stopBrowserEngine, stopEngine, unlockAudio, unlockBrowserAudio, type AudioState } from "./audioPresentation";
 import { recordedLapVehicleStatModel } from "./vehicleStatPresentation";
 import { createVehicleStatPanel } from "./vehicleStatVisuals";
 
@@ -58,6 +59,13 @@ export class PracticeContestScene extends Phaser.Scene {
   private focusRing?: PracticeFocusHandle;
   private selectedItem?: { item: OfferedItem; tier: 1 | 2 | 3 };
   private itemInspector?: Phaser.GameObjects.Container;
+  private audioState: AudioState = createAudioState();
+  private readonly handleVisibility = (): void => {
+    if (document.hidden) {
+      this.audioState = stopEngine(this.audioState);
+      stopBrowserEngine();
+    }
+  };
 
   constructor() {
     super("PracticeContestScene");
@@ -71,22 +79,43 @@ export class PracticeContestScene extends Phaser.Scene {
     }
     this.run = data.run;
     this.session = data.session;
-    // 030-race-playback-controls: fresh 2× clock per race; 1× remains selectable.
+    // Feature 033: fresh legacy-rate 1× clock per race; 2× remains selectable.
     // Guard above proves data.session.result exists; the class-field mutation
     // defeats TS narrowing, so the non-null assertion mirrors render()'s usage.
     const result = this.session!.result!;
     const boundaryView = twoCarBoundaryView(result.playback, result.contest);
     this.playbackController = createPlaybackController(boundaryView);
     this.controlPlan = freshPlaybackControlPlan();
+    this.audioState = setAudioMuted(this.audioState, isBrowserAudioMuted());
     this.render();
+    const mute = this.add.text(LOGICAL_WIDTH - 42, 22, isBrowserAudioMuted() ? "SOUND OFF" : "SOUND ON", {
+      fontSize: "10px", fontFamily: UI_FONT, fontStyle: "bold", color: "#9eb5c9",
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(95);
+    mute.on("pointerdown", () => {
+      const muted = !isBrowserAudioMuted();
+      setBrowserAudioMuted(muted);
+      this.audioState = setAudioMuted(this.audioState, muted);
+      mute.setText(muted ? "SOUND OFF" : "SOUND ON");
+    });
+    this.input.once("pointerdown", () => {
+      unlockBrowserAudio();
+      this.audioState = unlockAudio(this.audioState);
+      const speed = this.playbackController?.clock.speed ?? "normal";
+      this.audioState = startEngine(this.audioState, speed);
+      startBrowserEngine(speed);
+    });
     this.input.keyboard?.on("keydown-SPACE", this.togglePause, this);
     // 030-race-playback-controls (T040): keys 1/2 replace the legacy F cycle.
     this.input.keyboard?.on("keydown-ONE", this.selectNormalSpeed, this);
     this.input.keyboard?.on("keydown-TWO", this.selectFastSpeed, this);
     this.input.keyboard?.on("keydown-S", this.skip, this);
     this.input.keyboard?.on("keydown-ESC", this.cancel, this);
+    document.addEventListener("visibilitychange", this.handleVisibility);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.audioState = stopEngine(this.audioState);
+      stopBrowserEngine();
       this.input.keyboard?.off("keydown-SPACE", this.togglePause, this);
+      document.removeEventListener("visibilitychange", this.handleVisibility);
       this.input.keyboard?.off("keydown-ONE", this.selectNormalSpeed, this);
       this.input.keyboard?.off("keydown-TWO", this.selectFastSpeed, this);
       this.input.keyboard?.off("keydown-S", this.skip, this);
@@ -178,7 +207,7 @@ export class PracticeContestScene extends Phaser.Scene {
         this.showItem(item, tier, Math.max(1, this.lastLap + 1));
       });
     });
-    this.statusText = this.add.text(width / 2, height - 116, "PLAYING · 2×", {
+    this.statusText = this.add.text(width / 2, height - 116, "PLAYING · 1×", {
       fontFamily: UI_FONT,
       fontSize: "14px",
       color: "#9eb5c9",
@@ -225,6 +254,13 @@ export class PracticeContestScene extends Phaser.Scene {
 
   private togglePause(): void {
     this.paused = !this.paused;
+    if (this.paused) {
+      this.audioState = stopEngine(this.audioState);
+      stopBrowserEngine();
+    } else if (this.playbackController) {
+      this.audioState = startEngine(this.audioState, this.playbackController.clock.speed);
+      startBrowserEngine(this.playbackController.clock.speed);
+    }
     this.updateStatusText();
   }
 
@@ -236,6 +272,9 @@ export class PracticeContestScene extends Phaser.Scene {
   private selectSpeed(speed: PlaybackSpeed): void {
     if (!this.playbackController) return;
     this.playbackController = selectPlaybackControllerSpeed(this.playbackController, speed);
+    this.audioState = startEngine(this.audioState, speed);
+    startBrowserEngine(speed);
+    this.audioState = emitCue(this.audioState, "ui-select");
     this.controlPlan = selectPlaybackControl(this.controlPlan, speed);
     this.updateStatusText();
     this.controlPlan.controls.forEach((control) => {
@@ -260,6 +299,8 @@ export class PracticeContestScene extends Phaser.Scene {
     // 030-race-playback-controls (T019): Skip targets the finite finish
     // boundary, never Infinity (contract §7).
     this.playbackController = skipPlaybackController(this.playbackController);
+    this.audioState = stopEngine(this.audioState);
+    stopBrowserEngine();
     if (this.playbackController.resultsReady) this.finish();
   }
 
@@ -271,6 +312,8 @@ export class PracticeContestScene extends Phaser.Scene {
   }
 
   private finish(): void {
+    this.audioState = stopEngine(this.audioState);
+    stopBrowserEngine();
     const session = this.session;
     this.session = undefined;
     this.playbackController = undefined;

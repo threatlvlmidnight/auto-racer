@@ -27,6 +27,12 @@ import {
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
 import { regionDefinition } from "../content/regions";
 import { createRuntimeTextControl } from "./uiChrome";
+import { identityForEntrant } from "../content/driverRaceIdentities";
+import { DEFAULT_RACE_ENRICHMENT_CONFIG } from "../simulation/enrichmentConfig";
+import { signatureEligibilityFor } from "../simulation/raceEnrichment";
+import { resolveCurrentBuildPhysicalStats } from "../simulation/laps";
+import { installedItems } from "../simulation/slots";
+import { buildIncidentRiskModel, driverBriefing } from "./raceEnrichmentPresentation";
 
 const CONTROL_TOP_Y = 216;
 // Tight enough that Driver Aggression plus the natural maximum of four
@@ -197,6 +203,7 @@ export class PreRaceScene extends Phaser.Scene {
     this.renderVehicle(model);
     this.renderTrack(model);
     this.renderStats(model);
+    this.renderEnrichmentBriefing();
     const positionButtons = this.renderControls(model);
 
     const backButton = createDemoButton(this, 125, 422, "BACK", () => this.back(), true, { fontSize: PRACTICE_CONTROL_FONT_SIZE });
@@ -216,6 +223,31 @@ export class PreRaceScene extends Phaser.Scene {
     this.track(inventoryButton);
 
     this.focusRing = applyPracticeFocusRing(this, [...positionButtons, inventoryButton, backButton, testDayButton, startButton]);
+  }
+
+  /** Feature 033 briefing uses committed build and retained track evidence only. */
+  private renderEnrichmentBriefing(): void {
+    const identity = identityForEntrant(this.setupInput.run.identity.entrantId);
+    if (!identity) return;
+    const config = DEFAULT_RACE_ENRICHMENT_CONFIG;
+    const stats = resolveCurrentBuildPhysicalStats(this.setupInput.build).stats;
+    const sources = installedItems(this.setupInput.build)
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .map((item) => item.id);
+    const eligibility = signatureEligibilityFor("player", identity, stats, sources, config);
+    const brief = driverBriefing({
+      identity, eligibility,
+      signatureThreshold: eligibility.threshold,
+      signatureComposureCost: config.signatureActivationCost,
+      initialComposure: config.initialComposure,
+    });
+    const risk = buildIncidentRiskModel(stats, (this.setupInput.track.characteristics.brakingDemand ?? 0) / 100, config);
+    this.track(this.add.text(20, 344, [
+      `${brief.passive.name} · ${brief.passive.description}`,
+      `${brief.signature.name}: ${brief.signature.currentValue}/${brief.signature.threshold} ${brief.signature.eligible ? "READY" : "BUILD TOWARD"} · Composure ${brief.initialComposure}`,
+      `RISK ${risk.band}: ${risk.sources.map((source) => source.label).join(", ")}`,
+      risk.saferSetupAlternatives.length ? `Safer: ${risk.saferSetupAlternatives.join(" · ")}` : "Safer: balanced setup",
+    ].join("\n"), { fontSize: "8px", fontFamily: UI_FONT, color: "#cddbd2", wordWrap: { width: 540 } }));
   }
 
   private renderVehicle(model: RaceSetupSceneModel): void {

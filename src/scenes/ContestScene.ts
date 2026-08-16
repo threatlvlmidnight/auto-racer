@@ -1,10 +1,11 @@
 import Phaser from "phaser";
-import { resolveContest } from "../simulation/contest";
+import { resolveEnrichedContest } from "../simulation/contest";
 import {
   buildNCarPlaybackSchedule,
   createPlaybackController,
   advancePlaybackController,
   selectPlaybackControllerSpeed,
+  skipPlaybackController,
   nCarBoundaryView,
   nCarFrameStateAt,
   updateLiveProjectionFromCheckpoint,
@@ -15,7 +16,7 @@ import {
   type PlaybackController,
   type PlaybackSpeed,
 } from "../simulation/playback";
-import { generateTrack, pointAtProgress } from "../simulation/tracks";
+import { generateTrack, pointAtProgress, trackCenterline } from "../simulation/tracks";
 import { STOCK_PHYSICAL_STATS, type PhysicalStats } from "../simulation/tracks";
 import { deriveLiveStatChangesByLap } from "../simulation/laps";
 import {
@@ -45,6 +46,8 @@ import { resolveLocalField } from "../simulation/localOpponents";
 import { selectEliteFinaleOpponents } from "../simulation/rivals";
 import type { RivalProfile } from "../simulation/types";
 import { raceBoardLayout } from "./raceBoardPresentation";
+import { enrichmentCallout } from "./raceEnrichmentPresentation";
+import { createAudioState, emitCue, isBrowserAudioMuted, setAudioMuted, setBrowserAudioMuted, startBrowserEngine, startEngine, stopBrowserEngine, stopEngine, unlockAudio, unlockBrowserAudio, type AudioState } from "./audioPresentation";
 
 const BOARD_SLOT_HEIGHT = 58;
 const BOARD_Y = 406;
@@ -62,20 +65,28 @@ function tintFromHex(color: string): number {
  * schedule-driven watched race before handing off to ResultScene.
  * 013-race-spectacle replaces the bare-oval 2-marker presentation with a
  * real track shape, all 8 cars with a fading trail, and a live standings
- * sidebar — no playback-speed or skip control exists anywhere here (FR-009).
+ * sidebar; Feature 033 adds presentation-only pause, speed, and Skip controls.
  */
 export class ContestScene extends Phaser.Scene {
   private result?: NCarContestResult;
   private schedule?: NCarPlaybackSchedule;
   // 030-race-playback-controls (T017/T020): scored playback now advances
-  // through a fresh race-local PresentationClock whose 1× rate consumes the
-  // immutable schedule at half the legacy rate (data-model
+  // through a fresh race-local PresentationClock whose 1× rate is the legacy
+  // watch rate and whose 2× rate doubles presentation only (data-model
   // "PresentationClock"). The controller owns schedule time, crossed-boundary
   // evidence, and the single results-ready signal; `update()` is a thin
   // adapter over it.
   private playbackController?: PlaybackController;
   private controlPlan: PlaybackControlPlan = freshPlaybackControlPlan();
   private controlButtons = new Map<PlaybackSpeed, Phaser.GameObjects.Text>();
+  private auxiliaryControlButtons: Phaser.GameObjects.Text[] = [];
+  private paused = false;
+  private readonly handleVisibility = (): void => {
+    if (document.hidden) {
+      this.audioState = stopEngine(this.audioState);
+      stopBrowserEngine();
+    }
+  };
   private markers = new Map<string, Phaser.GameObjects.Image>();
   private trails = new Map<string, { x: number; y: number }[]>();
   private trailGraphics?: Phaser.GameObjects.Graphics;
@@ -98,6 +109,7 @@ export class ContestScene extends Phaser.Scene {
   private itemInspector?: Phaser.GameObjects.Container;
   private playedBuild?: VehicleBuild;
   private vehicleStatPanel?: Phaser.GameObjects.Container;
+  private audioState: AudioState = createAudioState();
 
   constructor() {
     super("ContestScene");
@@ -141,25 +153,25 @@ export class ContestScene extends Phaser.Scene {
       vehicleId: opponent.build.vehicleId,
       levelScaling: () => ({ slotsToFill: 4, priceBias: "high" as const }),
     }));
-    this.result = resolveContest(
-      input.build,
-      eliteRoster ?? input.rivalRoster,
-      input.level,
-      input.seed,
-      input.lapCount,
-      data.setup,
-      input.encounterId,
-      eliteOpponents?.map((opponent) => opponent.setup) ?? localOpponents?.map((opponent) => opponent.setup),
-      eliteOpponents?.map((opponent) => opponent.build) ?? localOpponents?.map((opponent) => opponent.build),
-      input.regionId,
-    );
+    this.result = resolveEnrichedContest({
+      playerBuild: input.build,
+      entrantId: input.run.identity.entrantId,
+      rivalRoster: eliteRoster ?? input.rivalRoster,
+      level: input.level,
+      seed: input.seed,
+      lapCount: input.lapCount,
+      playerSetup: data.setup,
+      encounterId: input.encounterId,
+      rivalSetups: eliteOpponents?.map((opponent) => opponent.setup) ?? localOpponents?.map((opponent) => opponent.setup),
+      rivalBuilds: eliteOpponents?.map((opponent) => opponent.build) ?? localOpponents?.map((opponent) => opponent.build),
+      regionTheme: input.regionId,
+    });
     // 027-race-legibility-integrity (contract §1): playback reads the
     // contest's own retained track — it never regenerates one independently,
     // even though generateTrack is pure and would agree given the same seed.
     this.schedule = buildNCarPlaybackSchedule(this.result, this.result.track);
-    // 030-race-playback-controls (T017): every scored race initializes a
-    // fresh fast-speed (2×) PresentationClock that consumes the immutable
-    // schedule at the legacy rate. The controller owns schedule time,
+    // Feature 033: every scored race initializes a fresh legacy-rate (1×)
+    // PresentationClock. The controller owns schedule time,
     // crossed-boundary evidence, and the single results-ready signal.
     const schedule = this.schedule;
     const contestResult = this.result;
@@ -188,28 +200,46 @@ export class ContestScene extends Phaser.Scene {
     this.projectionState = { kind: "awaiting-first-split", label: "Awaiting Lap 1 Split" };
     this.trails.clear();
     this.renderTrack(input.build.slots.map((slot) => slot.item), input.lapCount);
+    this.audioState = setAudioMuted(this.audioState, isBrowserAudioMuted());
     this.renderPlaybackControls();
+    this.input.once("pointerdown", () => {
+      unlockBrowserAudio();
+      this.audioState = unlockAudio(this.audioState);
+      const speed = this.playbackController?.clock.speed ?? "normal";
+      this.audioState = startEngine(this.audioState, speed);
+      startBrowserEngine(speed);
+    });
     // 030-race-playback-controls (T038): keys 1/2 select normal/fast with
     // pointer/touch parity; shutdown tears down control objects + listeners.
     this.input.keyboard?.on("keydown-ONE", this.selectNormalSpeed, this);
     this.input.keyboard?.on("keydown-TWO", this.selectFastSpeed, this);
+    this.input.keyboard?.on("keydown-SPACE", this.togglePause, this);
+    this.input.keyboard?.on("keydown-S", this.skip, this);
+    document.addEventListener("visibilitychange", this.handleVisibility);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.audioState = stopEngine(this.audioState);
+      stopBrowserEngine();
       this.input.keyboard?.off("keydown-ONE", this.selectNormalSpeed, this);
       this.input.keyboard?.off("keydown-TWO", this.selectFastSpeed, this);
+      this.input.keyboard?.off("keydown-SPACE", this.togglePause, this);
+      this.input.keyboard?.off("keydown-S", this.skip, this);
+      document.removeEventListener("visibilitychange", this.handleVisibility);
       this.controlButtons.forEach((button) => button.destroy());
       this.controlButtons.clear();
+      this.auxiliaryControlButtons.forEach((button) => button.destroy());
+      this.auxiliaryControlButtons = [];
     });
   }
 
   update(_time: number, delta: number): void {
-    if (!this.result || !this.schedule || this.markers.size === 0 || !this.playbackController) {
+    if (!this.result || !this.schedule || this.markers.size === 0 || !this.playbackController || this.paused) {
       return;
     }
 
     // 030-race-playback-controls (T017/T020): advance the race-local
     // PresentationClock, which owns schedule time, crossed-boundary evidence,
-    // and the single results-ready signal. The clock's 1× rate consumes the
-    // immutable schedule at half the legacy rate (data-model
+    // and the single results-ready signal. The clock's 1× rate is the legacy
+    // watch rate and 2× changes only presentation timing (data-model
     // "PresentationClock"); `nCarFrameStateAt` reads the controller's schedule
     // time for marker/lap/projection rendering.
     this.playbackController = advancePlaybackController(this.playbackController, delta / 1000);
@@ -249,6 +279,8 @@ export class ContestScene extends Phaser.Scene {
     // when the results-ready boundary is consumed; the controller's no-op
     // guard prevents any post-finish mutation.
     if (this.playbackController.resultsReady) {
+      this.audioState = stopEngine(this.audioState);
+      stopBrowserEngine();
       const result = this.result;
       this.result = undefined;
       this.playbackController = undefined;
@@ -279,6 +311,11 @@ export class ContestScene extends Phaser.Scene {
         this.vehicleStatPanel = undefined;
         this.liveStatPanel?.destroy();
         this.liveStatPanel = createLiveStatPanel(this, SIDEBAR_X - 72, 258, this.liveStatState).setDepth(72);
+      } else if (event.kind === "enrichment-event" && event.enrichmentEvent) {
+        // Only projects immutable evidence. Full/compact selection was made
+        // by the resolver and is never recomputed in the scene.
+        const callout = enrichmentCallout(event.enrichmentEvent);
+        this.tickerText?.setText(callout.text);
       } else if (event.kind === "checkpoint" && event.projection) {
         this.projectionState = updateLiveProjectionFromCheckpoint(this.projectionState, event.projection);
         this.renderProjection();
@@ -324,6 +361,23 @@ export class ContestScene extends Phaser.Scene {
       button.on("pointerdown", () => this.selectSpeed(control.speed));
       this.controlButtons.set(control.speed, button);
     });
+    const auxiliary = [
+      { x: 585, label: "PAUSE [SPACE]", action: () => this.togglePause() },
+      { x: 675, label: "SKIP [S]", action: () => this.skip() },
+    ];
+    this.auxiliaryControlButtons = auxiliary.map((control) => this.add.text(control.x, 382, control.label, {
+      fontSize: "10px", fontFamily: UI_FONT, fontStyle: "bold", color: "#9eb5c9",
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).on("pointerdown", control.action).setDepth(90));
+    const mute = this.add.text(760, 22, isBrowserAudioMuted() ? "SOUND OFF" : "SOUND ON", {
+      fontSize: "10px", fontFamily: UI_FONT, fontStyle: "bold", color: "#9eb5c9",
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(95);
+    mute.on("pointerdown", () => {
+      const muted = !isBrowserAudioMuted();
+      setBrowserAudioMuted(muted);
+      this.audioState = setAudioMuted(this.audioState, muted);
+      mute.setText(muted ? "SOUND OFF" : "SOUND ON");
+    });
+    this.auxiliaryControlButtons.push(mute);
   }
 
   /**
@@ -335,6 +389,9 @@ export class ContestScene extends Phaser.Scene {
   private selectSpeed(speed: PlaybackSpeed): void {
     if (!this.playbackController) return;
     this.playbackController = selectPlaybackControllerSpeed(this.playbackController, speed);
+    this.audioState = startEngine(this.audioState, speed);
+    startBrowserEngine(speed);
+    this.audioState = emitCue(this.audioState, "ui-select");
     this.controlPlan = selectPlaybackControl(this.controlPlan, speed);
     this.controlPlan.controls.forEach((control) => {
       const button = this.controlButtons.get(control.speed);
@@ -351,6 +408,31 @@ export class ContestScene extends Phaser.Scene {
 
   private selectFastSpeed(): void {
     this.selectSpeed("fast");
+  }
+
+  private togglePause(): void {
+    this.paused = !this.paused;
+    if (this.paused) {
+      this.audioState = stopEngine(this.audioState);
+      stopBrowserEngine();
+    } else if (this.playbackController) {
+      this.audioState = startEngine(this.audioState, this.playbackController.clock.speed);
+      startBrowserEngine(this.playbackController.clock.speed);
+    }
+    this.auxiliaryControlButtons[0]?.setText(this.paused ? "RESUME [SPACE]" : "PAUSE [SPACE]");
+  }
+
+  private skip(): void {
+    if (!this.playbackController || !this.result) return;
+    this.playbackController = skipPlaybackController(this.playbackController);
+    this.audioState = stopEngine(this.audioState);
+    stopBrowserEngine();
+    if (this.playbackController.resultsReady) {
+      const result = this.result;
+      this.result = undefined;
+      this.playbackController = undefined;
+      this.scene.start("ResultScene", { result, run: this.run, encounterId: this.encounterId });
+    }
   }
 
   private renderTrack(board: (OfferedItem | null)[], lapCount: number): void {
@@ -377,7 +459,7 @@ export class ContestScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    const points = track.points;
+    const points = trackCenterline(track);
     const trackGraphics = this.add.graphics();
     trackGraphics.lineStyle(30, 0x30353a, 1);
     this.strokeClosedPath(trackGraphics, points);
@@ -515,8 +597,8 @@ export class ContestScene extends Phaser.Scene {
               fontSize: "11px",
               fontFamily: UI_FONT,
               color: "#839b98",
-            })
-            .setOrigin(0.5);
+      })
+      .setOrigin(0.5);
           return;
         }
 

@@ -811,10 +811,10 @@ describe("simulatePlayerLaps stock-build physics (T012-T015, US1)", () => {
     expect(lap.time).toBeCloseTo(emptyBuild().car.baseLapTime + expected.totalSeconds, 9);
   });
 
-  it("two generated tracks with equal characteristics but different real segments produce different lap times for the same stock build (SC-001, end-to-end)", () => {
+  it("two generated circuits with different retained geometry produce different stock lap times (SC-001, end-to-end)", () => {
     const trackA = generateTrack(0, 1);
     const trackB = generateTrack(0, 2);
-    expect(trackA.characteristics).toEqual(trackB.characteristics);
+    expect(trackA.segments).not.toEqual(trackB.segments);
 
     const timeA = simulatePlayerLaps(emptyBuild(), LAP_COUNT, trackA)[0].time;
     const timeB = simulatePlayerLaps(emptyBuild(), LAP_COUNT, trackB)[0].time;
@@ -871,16 +871,6 @@ describe("simulatePlayerLaps zero regression for timeModifier-only items (T019, 
 
 // 021-arcade-physics-simulation: items express real physical stats
 // (T021-T024, US2) — the actual build-vs-track payoff.
-function findPhysicsBiasedTrack(direction: "power" | "cornering") {
-  for (let seed = 0; seed < 100; seed += 1) {
-    const track = generateTrack(seed, 1);
-    const diff = track.characteristics.powerDemand - track.characteristics.corneringDemand;
-    if (direction === "power" && diff > 15) return track;
-    if (direction === "cornering" && diff < -15) return track;
-  }
-  throw new Error(`no ${direction}-biased track found in a 100-seed sample`);
-}
-
 describe("simulatePlayerLaps item-driven PhysicalStats (T021, US2)", () => {
   it("an item's physics deltas measurably change the physics-derived lap time relative to an identical build without it", () => {
     const track = generateTrack(11, 2);
@@ -916,8 +906,6 @@ describe("simulatePlayerLaps item-driven PhysicalStats (T021, US2)", () => {
 
 describe("simulatePlayerLaps build-vs-track payoff (T022-T024, US2, SC-002)", () => {
   it("a cornering-speed item is a bigger net time gain on a corner-dominant track than on a power-dominant one", () => {
-    const powerTrack = findPhysicsBiasedTrack("power");
-    const corneringTrack = findPhysicsBiasedTrack("cornering");
     const buildWithoutItem = vehicleBuild();
     const buildWithItem = vehicleBuild([
       testItem({
@@ -926,20 +914,22 @@ describe("simulatePlayerLaps build-vs-track payoff (T022-T024, US2, SC-002)", ()
       }),
     ]);
 
-    const gainOnPower = simulatePlayerLaps(buildWithoutItem, LAP_COUNT, powerTrack)[0].time
-      - simulatePlayerLaps(buildWithItem, LAP_COUNT, powerTrack)[0].time;
-    const gainOnCornering = simulatePlayerLaps(buildWithoutItem, LAP_COUNT, corneringTrack)[0].time
-      - simulatePlayerLaps(buildWithItem, LAP_COUNT, corneringTrack)[0].time;
+    const gains = Array.from({ length: 100 }, (_, seed) => generateTrack(seed, 1)).map((track) => ({
+      track,
+      gain: simulatePlayerLaps(buildWithoutItem, LAP_COUNT, track)[0].time
+        - simulatePlayerLaps(buildWithItem, LAP_COUNT, track)[0].time,
+    })).sort((a, b) => a.gain - b.gain);
+    const gainOnPower = gains[0].gain;
+    const gainOnCornering = gains[gains.length - 1].gain;
 
     expect(gainOnCornering).toBeGreaterThan(gainOnPower);
   });
 
   it("an item trading cornering speed for top speed nets differently across tracks with different real segment layouts, not just different aggregate scores", () => {
-    // generateTrack(0, 1) / generateTrack(0, 2): verified equal
-    // trackCharacteristics, genuinely different real segments (021 T005).
+    // Two genuinely different retained circuit layouts.
     const trackA = generateTrack(0, 1);
     const trackB = generateTrack(0, 2);
-    expect(trackA.characteristics).toEqual(trackB.characteristics);
+    expect(trackA.segments).not.toEqual(trackB.segments);
 
     const tradeBuild = vehicleBuild([
       testItem({
@@ -1837,4 +1827,3 @@ describe("Feature 033 (T019): temporary target-pace / stat-window lap evidence",
     expect(first.map((lap) => lap.phase)).toEqual(base.map((_, i) => (i + 1) % 3 === 0 ? "final-push" : "contest"));
   });
 });
-

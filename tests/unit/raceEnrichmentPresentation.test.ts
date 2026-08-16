@@ -4,6 +4,8 @@ import { DEFAULT_RACE_ENRICHMENT_CONFIG } from "../../src/simulation/enrichmentC
 import {
   buildIncidentRiskModel,
   driverBriefing,
+  eventMotionTreatment,
+  enrichmentResultsSummary,
   incidentRiskModel,
 } from "../../src/scenes/raceEnrichmentPresentation";
 import { projectIncidentRisk } from "../../src/simulation/raceEnrichment";
@@ -82,5 +84,24 @@ describe("Feature 033 (T050): buildIncidentRiskModel convenience projection", ()
     expect(model.band).toBe("Elevated");
     expect(model.sources.some((source) => source.label.includes("braking"))).toBe(true);
     expect(model.sources.some((source) => source.label.includes("demand"))).toBe(true);
+  });
+});
+
+describe("Feature 033 (T055/T057): retained event projections", () => {
+  it("keeps every event inspectable and selects a bounded decisive summary", () => {
+    const summary = enrichmentResultsSummary([
+      { eventId: "attack", kind: "attack", phase: "contest", boundaryId: "lap-4", orderSeq: 1, actorId: "player", emphasis: "compact" },
+      { eventId: "signature", kind: "signature-activation", phase: "final-push", boundaryId: "lap-8", orderSeq: 2, actorId: "player", emphasis: "full" },
+    ]);
+    expect(summary.events).toHaveLength(2);
+    expect(summary.decisive?.eventId).toBe("signature");
+    expect(summary.events[1]).toMatchObject({ phase: "final-push", boundaryId: "lap-8", actorId: "player" });
+  });
+
+  it("preserves the same identity and text under reduced motion", () => {
+    const event = { eventId: "incident", kind: "incident", phase: "contest", boundaryId: "lap-4", orderSeq: 1, actorId: "player", emphasis: "full", incident: { timeLossSeconds: 1.2, riskBand: "guarded" } } as const;
+    const animated = eventMotionTreatment(event, false);
+    const reduced = eventMotionTreatment(event, true);
+    expect(reduced).toMatchObject({ eventId: animated.eventId, text: animated.text, emphasis: animated.emphasis, mode: "static" });
   });
 });

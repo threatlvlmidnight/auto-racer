@@ -4,7 +4,8 @@
 
 **Created**: 2026-08-15
 
-**Status**: Planning complete — ready for implementation
+**Status**: Implementation in progress — deterministic core landed; scene/presentation
+and live-garage migration remain (see `checklists/requirements.md` T077 evidence).
 
 **Input**: Expand between-race choices beyond shops and reward drafts with solo
 Exhibitions, voluntary sacrifices, transformations, upgrades, and build-responsive

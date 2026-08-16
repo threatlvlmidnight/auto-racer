@@ -71,6 +71,16 @@ describe("canonicalizeRecoveryPayload", () => {
   });
 });
 
+describe("writePracticeRecovery JSON boundary", () => {
+  it("omits optional undefined object properties before canonicalization", () => {
+    const storage = createFakeStorage();
+    const payload = buildRecoveryPayload() as PracticeRecoveryPayload & { optional?: unknown };
+    payload.optional = undefined;
+    expect(() => writePracticeRecovery(payload, storage)).not.toThrow();
+    expect(storage.getItem(PRACTICE_RECOVERY_STORAGE_KEY)).toContain(PRACTICE_RECOVERY_VERSION);
+  });
+});
+
 describe("fingerprintRecoveryPayload", () => {
   it("returns a deterministic fnv1a64-v1 fingerprint of 16 lowercase hex characters", () => {
     const fingerprint = fingerprintRecoveryPayload("abc");

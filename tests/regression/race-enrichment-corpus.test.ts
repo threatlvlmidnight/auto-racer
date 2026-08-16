@@ -83,6 +83,31 @@ describe("Feature 033 (T021): bounded enrichment (configurable winner-change)", 
     expect(rate).toBeGreaterThanOrEqual(0);
   });
 
+  it("meets the centralized post-Opening, emphasis, and winner-change bands", () => {
+    const profiles = Object.keys(BASELINE_BUILD_PROFILES) as BaselineBuildProfile[];
+    let races = 0;
+    let postOpening = 0;
+    let fullEmphasis = 0;
+    let winnerChanges = 0;
+    for (const seed of SEEDS) {
+      for (const lapCount of [8, 10, 12, 14, 16]) {
+        for (const profile of profiles) {
+          const baseline = resolveContest(BASELINE_BUILD_PROFILES[profile], racerRivalRoster, ENRICHMENT_LEVEL, seed, lapCount);
+          const enriched = runEnriched(profile, seed, lapCount);
+          races += 1;
+          if (enriched.cars[0].id !== baseline.cars[0].id) winnerChanges += 1;
+          if (enriched.events.some((event) => event.phase !== "opening" && event.kind !== "phase-transition")) postOpening += 1;
+          if (enriched.events.some((event) => event.emphasis === "full")) fullEmphasis += 1;
+        }
+      }
+    }
+    const bands = DEFAULT_RACE_ENRICHMENT_CONFIG.corpusBands;
+    expect(postOpening / races).toBeGreaterThanOrEqual(bands.postOpeningEventRateMin);
+    expect(fullEmphasis / races).toBeLessThanOrEqual(bands.emphasisRateMax);
+    expect(winnerChanges / races).toBeGreaterThanOrEqual(bands.winnerChangeRateMin);
+    expect(winnerChanges / races).toBeLessThanOrEqual(bands.winnerChangeRateMax);
+  });
+
   it("exposes configurable winner-change/resource bands on the accepted config", () => {
     const bands = DEFAULT_RACE_ENRICHMENT_CONFIG.corpusBands;
     expect(bands.postOpeningEventRateMin).toBeGreaterThanOrEqual(0);

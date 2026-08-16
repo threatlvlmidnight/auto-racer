@@ -76,16 +76,16 @@ describe("T043: playback speed never influences simulation/result/settlement aut
     expect(practice).not.toContain("playbackSpeed");
   });
 });
-describe("T044: scenes reject scored Pause/Skip, remembered speed, legacy 4×/F, and overtake dramatization", () => {
+describe("T044/Feature 033: scenes expose scored Pause/Skip while rejecting remembered speed and legacy 4×/F", () => {
   const CONTEST = readSource(join(SCENES_DIR, "ContestScene.ts"));
   const PRACTICE = readSource(join(SCENES_DIR, "PracticeContestScene.ts"));
 
-  it("ContestScene has no pause/skip keyboard handlers (FR-009)", () => {
-    expect(CONTEST).not.toContain("keydown-SPACE");
-    expect(CONTEST).not.toContain("keydown-S");
+  it("ContestScene has explicit pause/skip keyboard handlers", () => {
+    expect(CONTEST).toContain("keydown-SPACE");
+    expect(CONTEST).toContain("keydown-S");
     expect(CONTEST).not.toContain("keydown-F");
-    expect(CONTEST).not.toContain("togglePause");
-    expect(CONTEST).not.toContain("skip()");
+    expect(CONTEST).toContain("togglePause");
+    expect(CONTEST).toContain("skip()");
   });
 
   it("ContestScene has no Infinity skip target", () => {

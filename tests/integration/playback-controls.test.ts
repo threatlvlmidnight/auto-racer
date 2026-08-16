@@ -54,19 +54,19 @@ function runToCompletion(
   return { events, realSeconds };
 }
 
-describe("T014 [US1]: whole-race timing at 1× ≈ 2.00 × legacy duration", () => {
-  it("eight-car race at 1× lasts 2.00 ± 0.05 × the 20 s legacy duration (≈40 s real)", () => {
+describe("T014 [US1]: whole-race timing at 1× matches legacy duration", () => {
+  it("eight-car race at 1× lasts 1.00 ± 0.05 × the 20 s legacy duration", () => {
     const { realSeconds } = runToCompletion(EIGHT_CAR_BOUNDARY_VIEW, 1 / 60, "normal");
     const ratio = realSeconds / LEGACY_WHOLE_RACE_SECONDS;
-    expect(ratio).toBeGreaterThanOrEqual(1.95);
-    expect(ratio).toBeLessThanOrEqual(2.05);
+    expect(ratio).toBeGreaterThanOrEqual(0.95);
+    expect(ratio).toBeLessThanOrEqual(1.05);
   });
 
-  it("two-car (Test Day) race at 1× lasts 2.00 ± 0.05 × the 20 s legacy duration", () => {
+  it("two-car (Test Day) race at 1× matches the legacy duration", () => {
     const { realSeconds } = runToCompletion(TWO_CAR_BOUNDARY_VIEW, 1 / 60, "normal");
     const ratio = realSeconds / LEGACY_WHOLE_RACE_SECONDS;
-    expect(ratio).toBeGreaterThanOrEqual(1.95);
-    expect(ratio).toBeLessThanOrEqual(2.05);
+    expect(ratio).toBeGreaterThanOrEqual(0.95);
+    expect(ratio).toBeLessThanOrEqual(1.05);
   });
 
   it("reaches the identical 20 s finish schedule time at 1× for both fixtures", () => {
@@ -77,11 +77,11 @@ describe("T014 [US1]: whole-race timing at 1× ≈ 2.00 × legacy duration", () 
   });
 });
 
-describe("T015 [US1]: scored-race lifecycle initializes a fresh fast-speed clock", () => {
-  it("every fresh controller starts at 2× (fast) with zero schedule time", () => {
+describe("T015 [US1]: scored-race lifecycle initializes a fresh normal-speed clock", () => {
+  it("every fresh controller starts at 1× (normal) with zero schedule time", () => {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const controller = createPlaybackController(EIGHT_CAR_BOUNDARY_VIEW);
-      expect(controller.clock.speed).toBe("fast");
+      expect(controller.clock.speed).toBe("normal");
       expect(controller.clock.scheduleTimeSeconds).toBe(0);
       expect(controller.clock.initialized).toBe(false);
       expect(controller.resultsReady).toBe(false);
@@ -93,18 +93,18 @@ describe("T015 [US1]: scored-race lifecycle initializes a fresh fast-speed clock
     const first = runToCompletion(EIGHT_CAR_BOUNDARY_VIEW, 0.1, "fast");
     expect(first.events.some((event) => event.kind === "results-ready")).toBe(true);
     const fresh = createPlaybackController(EIGHT_CAR_BOUNDARY_VIEW);
-    expect(fresh.clock.speed).toBe("fast");
+    expect(fresh.clock.speed).toBe("normal");
     expect(fresh.clock.scheduleTimeSeconds).toBe(0);
     expect(fresh.resultsReady).toBe(false);
   });
 });
 
-describe("T016 [US1]: Test Day lifecycle — fresh fast clock, Pause/Skip/Cancel remain available", () => {
-  it("fresh Test Day controller initializes to the same fast-speed clock as scored races", () => {
+describe("T016 [US1]: Test Day lifecycle — fresh normal clock, Pause/Skip/Cancel remain available", () => {
+  it("fresh Test Day controller initializes to the same normal-speed clock as scored races", () => {
     const scored = createPlaybackController(EIGHT_CAR_BOUNDARY_VIEW);
     const testDay = createPlaybackController(TWO_CAR_BOUNDARY_VIEW);
     expect(testDay.clock.speed).toBe(scored.clock.speed);
-    expect(testDay.clock.speed).toBe("fast");
+    expect(testDay.clock.speed).toBe("normal");
     expect(testDay.clock.scheduleTimeSeconds).toBe(0);
   });
 
@@ -128,33 +128,32 @@ describe("T016 [US1]: Test Day lifecycle — fresh fast clock, Pause/Skip/Cancel
   });
 });
 
-describe("T022 [US2]: all-2× ≈ 1.00 × legacy duration; mixed sequences yield calculated remaining duration", () => {
-  it("eight-car race at 2× lasts 1.00 ± 0.05 × the 20 s legacy duration (≈20 s real)", () => {
+describe("T022 [US2]: all-2× halves legacy duration; mixed sequences yield calculated remaining duration", () => {
+  it("eight-car race at 2× lasts 0.50 ± 0.05 × the legacy duration", () => {
     const { realSeconds } = runToCompletion(EIGHT_CAR_BOUNDARY_VIEW, 1 / 60, "fast");
     const ratio = realSeconds / LEGACY_WHOLE_RACE_SECONDS;
-    expect(ratio).toBeGreaterThanOrEqual(0.95);
-    expect(ratio).toBeLessThanOrEqual(1.05);
+    expect(ratio).toBeGreaterThanOrEqual(0.45);
+    expect(ratio).toBeLessThanOrEqual(0.55);
   });
 
-  it("two-car race at 2× lasts 1.00 ± 0.05 × the 20 s legacy duration", () => {
+  it("two-car race at 2× halves the legacy duration", () => {
     const { realSeconds } = runToCompletion(TWO_CAR_BOUNDARY_VIEW, 1 / 60, "fast");
     const ratio = realSeconds / LEGACY_WHOLE_RACE_SECONDS;
-    expect(ratio).toBeGreaterThanOrEqual(0.95);
-    expect(ratio).toBeLessThanOrEqual(1.05);
+    expect(ratio).toBeGreaterThanOrEqual(0.45);
+    expect(ratio).toBeLessThanOrEqual(0.55);
   });
 
   it("a mixed 1×→2× sequence reaches results-ready at the calculated total real duration", () => {
-    // 10 s at 1× → schedule 5.0; remaining schedule 15.0 at 2× (rate 1.0) → 15 s real.
-    // Total = 25 s real = 1.25 × legacy. Verify the controller reaches exactly there.
+    // 10 s at 1× → schedule 10; remaining schedule 10 at 2× → 5 s real.
     let controller = createPlaybackController(EIGHT_CAR_BOUNDARY_VIEW);
     controller = selectPlaybackControllerSpeed(controller, "normal");
-    controller = advancePlaybackController(controller, 10); // schedule 5.0
-    expect(controller.clock.scheduleTimeSeconds).toBe(5.0);
+    controller = advancePlaybackController(controller, 10); // schedule 10
+    expect(controller.clock.scheduleTimeSeconds).toBe(10);
     controller = selectPlaybackControllerSpeed(controller, "fast");
-    const remaining = FINISH_EIGHT - controller.clock.scheduleTimeSeconds; // 15.0
+    const remaining = FINISH_EIGHT - controller.clock.scheduleTimeSeconds;
     const { realSeconds } = runToCompletionAt(controller, EIGHT_CAR_BOUNDARY_VIEW, 1 / 60);
     // realSeconds counts only the fast leg; total = 10 + realSeconds.
-    expect(10 + realSeconds).toBeCloseTo(10 + remaining, 1);
+    expect(10 + realSeconds).toBeCloseTo(10 + remaining / 2, 1);
   });
 });
 
@@ -194,7 +193,7 @@ describe("T023 [US2]: rapid/final-moment switching — no restart, rewind, jump,
   it("a final-moment switch exactly at the finish boundary does not duplicate results-ready", () => {
     let controller = createPlaybackController(EIGHT_CAR_BOUNDARY_VIEW);
     controller = selectPlaybackControllerSpeed(controller, "normal");
-    controller = advancePlaybackController(controller, 39.8); // schedule 19.9 at 1×
+    controller = advancePlaybackController(controller, 19.8); // schedule 19.8 at 1×
     expect(controller.resultsReady).toBe(false);
     controller = selectPlaybackControllerSpeed(controller, "fast");
     controller = advancePlaybackController(controller, 0.2); // schedule 20.1

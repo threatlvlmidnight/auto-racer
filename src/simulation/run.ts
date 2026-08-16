@@ -333,6 +333,7 @@ export interface RunHistoryEntry {
     playerTime: number;
     ghostTime: number;
     gap: number;
+    enrichment?: import("./types").RaceEnrichmentReplayEvidence;
   };
   sponsorOutcome?: SponsorContract;
 }
@@ -846,6 +847,7 @@ export function completePvpEncounter(
       playerTime: result.playerTime,
       ghostTime: result.ghostTime,
       gap: result.gap,
+      enrichment: result.enrichment,
     },
     sponsorOutcome,
   };

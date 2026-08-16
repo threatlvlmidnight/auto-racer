@@ -573,6 +573,8 @@ export interface ContestResult {
   playerPosition?: number;
   /** Stable entrant/profile IDs in final order when resolved from an N-car field. */
   finishingOrder?: readonly string[];
+  /** Immutable Feature 033 authority retained when an N-car race is settled. */
+  enrichment?: RaceEnrichmentReplayEvidence;
 }
 
 // --- Feature 012: multi-ghost contest --------------------------------------
@@ -1137,3 +1139,164 @@ export interface EnrichedContestResult extends NCarContestResult {
   driverIdentities: Readonly<Record<string, DriverRaceIdentity>>;
   eligibility: readonly SignatureEligibility[];
 }
+
+/**
+ * The compact enrichment evidence that survives the legacy settlement bridge.
+ * It contains resolved facts only: replay/presentation must consume these
+ * values and never resolve another enrichment pass from a stored run.
+ */
+export interface RaceEnrichmentReplayEvidence {
+  configVersion: string;
+  phaseSchedule: RacePhaseSchedule;
+  events: readonly EnrichmentEvent[];
+  incidentsEnabled: boolean;
+  eligibility: readonly SignatureEligibility[];
+  ledgers: Readonly<Record<string, ComposureLedger>>;
+}
+
+// --- Feature 034: item instances, modifications, canonical stats -----------
+// These additions are deliberately additive: they introduce the stable
+// instance/identity layer and canonical-stat boundary that the feature's
+// deterministic modules operate on without disturbing the existing
+// ItemDefinition-based build that feature 010–033 still consume. The
+// whole-repo migration of garage/draft/build/run to instances is scoped to a
+// later phase (034 tasks.md Phase 4).
+
+export type ItemTier = 1 | 2 | 3;
+
+/** The four player-facing canonical physical stats (034 spec FR-050). */
+export type CanonicalStatTarget = "acceleration" | "topSpeed" | "brakingPower" | "corneringSpeed";
+
+/** Canonical player-facing stat points; 1 point of each ~ comparable value (FR-051). */
+export interface CanonicalPhysicalStats {
+  acceleration: number;
+  topSpeed: number;
+  brakingPower: number;
+  corneringSpeed: number;
+}
+
+/** A Workshop Modification attached to one exact held ItemInstance (034 data-model). */
+export interface WorkshopModificationStatGraft {
+  kind: "stat-graft";
+  modificationId: string;
+  sourceEncounterId: string;
+  appliedAtStage: number;
+  presentationKey: string;
+  /** The canonical physical stat a tier-1 source item contributes to the graft source. */
+  sourceStat: CanonicalStatTarget;
+  /** The canonical physical stat the graft adds points to. */
+  targetStat: CanonicalStatTarget;
+}
+
+export interface WorkshopModificationTwinTuned {
+  kind: "twin-tuned";
+  modificationId: string;
+  sourceEncounterId: string;
+  appliedAtStage: number;
+  presentationKey: string;
+}
+
+export interface WorkshopModificationGuarded {
+  kind: "guarded";
+  modificationId: string;
+  sourceEncounterId: string;
+  appliedAtStage: number;
+  presentationKey: string;
+}
+
+export interface WorkshopModificationAdaptedMount {
+  kind: "adapted-mount";
+  modificationId: string;
+  sourceEncounterId: string;
+  appliedAtStage: number;
+  presentationKey: string;
+}
+
+export type WorkshopModification =
+  | WorkshopModificationStatGraft
+  | WorkshopModificationTwinTuned
+  | WorkshopModificationGuarded
+  | WorkshopModificationAdaptedMount;
+
+export type InstanceProvenance = "draft" | "encounter" | "tag-specialist" | "exhibition";
+
+/**
+ * A stable run-scoped held item identity (034 data-model). The catalog
+ * ItemDefinition (looked up by definitionId) stays immutable; all mutations,
+ * moves, tiering, modifications, and Scrutineering bonuses operate on the
+ * instance and never on the shared definition.
+ */
+export interface ItemInstance {
+  instanceId: string;
+  definitionId: string;
+  tier: ItemTier;
+  modification: WorkshopModification | null;
+  /** Cumulative Scrutineering beneficial-race bonus, capped at 25 (034 FR-042). */
+  scrutineeringBonusPercent: number;
+  provenance: InstanceProvenance;
+}
+
+/** Instance-based slot state for the feature 034 build layer. */
+export interface InstanceSlotState {
+  slotId: string;
+  slotType: SlotType;
+  instance: ItemInstance | null;
+}
+
+/** Instance-based storage position for the feature 034 build layer. */
+export interface InstanceStoredPosition {
+  index: number;
+  instance: ItemInstance | null;
+}
+
+/** The feature 034 instance-bound build used by the deterministic modules. */
+export interface InstanceBuild {
+  vehicleId: VehicleId;
+  car: SpecCar;
+  slots: InstanceSlotState[];
+  storage: InstanceStoredPosition[];
+}
+
+export type EncounterFamily =
+  | "acquisition"
+  | "modification"
+  | "sacrifice"
+  | "transformation"
+  | "upgrade"
+  | "exchange"
+  | "exhibition"
+  | "economy";
+
+/** The seven Feature 034 encounter types plus the retained legacy four. */
+export type EncounterType =
+  | "parts-supplier"
+  | "reward-draft"
+  | "cross-pollination"
+  | "sponsor-meeting"
+  | "exhibition-trial"
+  | "scrutineering"
+  | "factory-development"
+  | "upgrade-workshop"
+  | "privateer-exchange"
+  | "experimental-rebuild"
+  | "tag-specialist";
+
+/** One authored variant of an encounter type (034 T024/T052 volume gate). */
+export interface EncounterVariant {
+  variantId: string;
+  type: EncounterType;
+  /** "early" | "mid" | "late" route position for coverage checks. */
+  routePosition: "early" | "mid" | "late";
+  title: string;
+  description: string;
+  /** Whether the variant supports an entrant-specific recommendation line. */
+  supportsEntrantLine: boolean;
+}
+
+export const CANONICAL_STAT_TARGETS: readonly CanonicalStatTarget[] = [
+  "acceleration",
+  "topSpeed",
+  "brakingPower",
+  "corneringSpeed",
+];
+

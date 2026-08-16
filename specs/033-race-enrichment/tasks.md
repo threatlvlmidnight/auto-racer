@@ -70,7 +70,7 @@ bounded outcome disruption without any Phaser scene.
 - [X] T025 [US1] Apply bounded temporary effects to authoritative effective stats/lap time while preserving authored build values in `src/simulation/laps.ts`
 - [X] T026 [US1] Orchestrate phases/action windows/enriched lap evidence before one final stable ranking in `src/simulation/contest.ts`
 - [X] T027 [US1] Retain config identity, phase schedule, ledgers, and ordered enrichment events on the N-car result in `src/simulation/types.ts` and `src/simulation/contest.ts`
-- [ ] T028 [US1] Preserve enriched result/event evidence through run presentation, history, settlement, and replay bridges in `src/scenes/runPresentation.ts` and `src/simulation/run.ts`
+- [X] T028 [US1] Preserve enriched result/event evidence through run presentation, history, settlement, and replay bridges in `src/scenes/runPresentation.ts` and `src/simulation/run.ts`
 - [X] T029 [US1] Run T016-T028 plus contest, track, setup, ranking, settlement, and async ghost regressions; record MVP authority evidence in `specs/033-race-enrichment/acceptance-evidence.md`
 
 **Checkpoint**: The simulation produces replay-stable, genuinely contested races without presentation work.
@@ -100,8 +100,8 @@ and below-threshold passive-only behavior.
 - [X] T036 [US2] Implement origin-agnostic signature eligibility and passive evaluation in `src/simulation/raceEnrichment.ts`
 - [X] T037 [US2] Implement contextual signature activation, priority, Composure debit, temporary effect, and retained evidence in `src/simulation/raceEnrichment.ts`
 - [X] T038 [P] [US2] Implement pure passive/signature/threshold/Composure briefing models in `src/scenes/raceEnrichmentPresentation.ts`
-- [ ] T039 [US2] Render shared phase, passive, signature, current/threshold progress, eligibility, source, and Composure briefing in `src/scenes/PreRaceScene.ts`
-- [ ] T040 [US2] Add the same eligibility and rule explanation to Test Day preparation in `src/scenes/TestDayScene.ts`
+- [X] T039 [US2] Render shared phase, passive, signature, current/threshold progress, eligibility, source, and Composure briefing in `src/scenes/PreRaceScene.ts`
+- [X] T040 [US2] Add the same eligibility and rule explanation to Test Day preparation in `src/scenes/TestDayScene.ts`
 - [X] T041 [US2] Run T030-T040 for all four entrants and generated opponents; record foreign-item exploration evidence in `specs/033-race-enrichment/acceptance-evidence.md`
 
 **Checkpoint**: Character identity rewards engineering direction rather than item origin.
@@ -130,7 +130,7 @@ risk sources, isolated determinism, bounded consequences, and zero persistent mu
 - [X] T048 [US3] Implement isolated deterministic incident selection and bounded time-loss events behind `incidentsEnabled` in `src/simulation/raceEnrichment.ts`
 - [X] T049 [US3] Integrate incident timing evidence without persistent build/run/economy mutation in `src/simulation/laps.ts` and `src/simulation/contest.ts`
 - [X] T050 [P] [US3] Implement pure risk-summary presentation and static source labels in `src/scenes/raceEnrichmentPresentation.ts`
-- [ ] T051 [US3] Render risk band, sources, and safer legal adjustments without outcome spoilers in `src/scenes/PreRaceScene.ts` and `src/scenes/TestDayScene.ts`
+- [X] T051 [US3] Render risk band, sources, and safer legal adjustments without outcome spoilers in `src/scenes/PreRaceScene.ts` and `src/scenes/TestDayScene.ts`
 - [X] T052 [US3] Run T042-T051 with both toggle states and record kill-switch/deep-equivalence evidence in `specs/033-race-enrichment/acceptance-evidence.md`
 
 **Checkpoint**: Incidents add transparent optional drama and can be removed with one engine switch.
@@ -147,23 +147,23 @@ and reduced motion; compare event IDs/order/result and inspect all evidence.
 
 ### Tests
 
-- [ ] T053 [P] [US4] Add failing new `1x` legacy-rate, new `2x` double-rate, new-`1x` default, and removed-slow-rate tests in `tests/unit/playback.test.ts`
-- [ ] T054 [P] [US4] Add failing enrichment-boundary large-frame/small-frame exactly-once ordering tests in `tests/unit/playback.test.ts`
-- [ ] T055 [P] [US4] Add failing full/compact/results-only emphasis classification and frequency tests in `tests/unit/raceEnrichmentPresentation.test.ts`
-- [ ] T056 [P] [US4] Add failing Skip, reduced-motion, missing-asset fallback, and deep-equal settlement tests in `tests/integration/enriched-playback.test.ts`
-- [ ] T057 [P] [US4] Add failing decisive summary and complete event-inspector projection tests in `tests/unit/raceEnrichmentPresentation.test.ts`
-- [ ] T058 [P] [US4] Add failing Test Day retained-event and unscored-settlement parity tests in `tests/integration/enriched-test-day.test.ts`
+- [X] T053 [P] [US4] Add failing new `1x` legacy-rate, new `2x` double-rate, new-`1x` default, and removed-slow-rate tests in `tests/unit/playback.test.ts`
+- [X] T054 [P] [US4] Add failing enrichment-boundary large-frame/small-frame exactly-once ordering tests in `tests/unit/playback.test.ts`
+- [X] T055 [P] [US4] Add failing full/compact/results-only emphasis classification and frequency tests in `tests/unit/raceEnrichmentPresentation.test.ts`
+- [X] T056 [P] [US4] Add failing Skip, reduced-motion, missing-asset fallback, and deep-equal settlement tests in `tests/integration/enriched-playback.test.ts`
+- [X] T057 [P] [US4] Add failing decisive summary and complete event-inspector projection tests in `tests/unit/raceEnrichmentPresentation.test.ts`
+- [X] T058 [P] [US4] Add failing Test Day retained-event and unscored-settlement parity tests in `tests/integration/enriched-test-day.test.ts`
 
 ### Implementation
 
-- [ ] T059 [US4] Change shared playback descriptors/default to new `1x` legacy rate and new `2x` double rate; remove the old slow rate in `src/simulation/playback.ts`
-- [ ] T060 [US4] Add retained enrichment events to crossed-boundary derivation and stable same-boundary ordering in `src/simulation/playback.ts`
-- [ ] T061 [P] [US4] Implement pure callout, emphasis, reduced-motion, summary, and inspector models in `src/scenes/raceEnrichmentPresentation.ts`
-- [ ] T062 [US4] Render bounded banners, marker emphasis, compact callouts, revised controls, and cleanup in `src/scenes/ContestScene.ts`
-- [ ] T063 [US4] Consume Skip/reduced-motion event projections without changing authority in `src/scenes/ContestScene.ts`
-- [ ] T064 [US4] Render decisive summary and complete retained event inspection in `src/scenes/ResultScene.ts`
-- [ ] T065 [US4] Integrate identical event consumption and revised speed meanings into `src/scenes/PracticeContestScene.ts` and `src/scenes/PracticeResultScene.ts`
-- [ ] T066 [US4] Run T053-T065 across speed switches, delayed frames, Skip, reduced motion, and missing assets; record parity evidence in `specs/033-race-enrichment/acceptance-evidence.md`
+- [X] T059 [US4] Change shared playback descriptors/default to new `1x` legacy rate and new `2x` double rate; remove the old slow rate in `src/simulation/playback.ts`
+- [X] T060 [US4] Add retained enrichment events to crossed-boundary derivation and stable same-boundary ordering in `src/simulation/playback.ts`
+- [X] T061 [P] [US4] Implement pure callout, emphasis, reduced-motion, summary, and inspector models in `src/scenes/raceEnrichmentPresentation.ts`
+- [X] T062 [US4] Render bounded banners, marker emphasis, compact callouts, revised controls, and cleanup in `src/scenes/ContestScene.ts`
+- [X] T063 [US4] Consume Skip/reduced-motion event projections without changing authority in `src/scenes/ContestScene.ts`
+- [X] T064 [US4] Render decisive summary and complete retained event inspection in `src/scenes/ResultScene.ts`
+- [X] T065 [US4] Integrate identical event consumption and revised speed meanings into `src/scenes/PracticeContestScene.ts` and `src/scenes/PracticeResultScene.ts`
+- [X] T066 [US4] Run T053-T065 across speed switches, delayed frames, Skip, reduced motion, and missing assets; record parity evidence in `specs/033-race-enrichment/acceptance-evidence.md`
 
 **Checkpoint**: Spectacle is truthful, bounded, accessible, and replaceable by future cutscene art.
 
@@ -181,17 +181,17 @@ loops, silent fallback, and byte-identical race results with audio on/off.
 
 ### Tests
 
-- [ ] T067 [P] [US5] Add failing semantic cue catalog, bounded volume, mute, browser-unlock, and missing-asset fallback tests in `tests/unit/audioPresentation.test.ts`
-- [ ] T068 [P] [US5] Add failing shared-control single-cue tests covering artwork/label dual hit targets, disabled controls, selection, back, and activation in `tests/integration/ui-audio.test.ts`
-- [ ] T069 [P] [US5] Add failing scored/Test Day engine start, pause, `1x`/`2x` bounded-rate, Skip, finish, visibility, and shutdown cleanup tests in `tests/integration/audio-lifecycle.test.ts`
-- [ ] T070 [P] [US5] Add failing audio-enabled/muted/blocked/missing deep-equal contest, playback-boundary, navigation, and settlement tests in `tests/integration/audio-authority.test.ts`
+- [X] T067 [P] [US5] Add failing semantic cue catalog, bounded volume, mute, browser-unlock, and missing-asset fallback tests in `tests/unit/audioPresentation.test.ts`
+- [X] T068 [P] [US5] Add failing shared-control single-cue tests covering artwork/label dual hit targets, disabled controls, selection, back, and activation in `tests/integration/ui-audio.test.ts`
+- [X] T069 [P] [US5] Add failing scored/Test Day engine start, pause, `1x`/`2x` bounded-rate, Skip, finish, visibility, and shutdown cleanup tests in `tests/integration/audio-lifecycle.test.ts`
+- [X] T070 [P] [US5] Add failing audio-enabled/muted/blocked/missing deep-equal contest, playback-boundary, navigation, and settlement tests in `tests/integration/audio-authority.test.ts`
 
 ### Implementation
 
-- [ ] T071 [US5] Add licensed local web-compressed engine/UI assets, provenance, stable asset keys, and Boot loading with optional-asset fallback in `public/assets/audio/`, `specs/033-race-enrichment/audio-asset-manifest.md`, and `src/scenes/BootScene.ts`
-- [ ] T072 [US5] Implement semantic cue IDs, session mute/effects volume, browser unlock, one-loop ownership, bounded rate mapping, and teardown in `src/scenes/audioPresentation.ts`
-- [ ] T073 [US5] Wire single semantic activation/selection cues into shared runtime controls and a visible mute control without duplicate emissions in `src/scenes/uiChrome.ts` and `src/scenes/demoTheme.ts`
-- [ ] T074 [US5] Integrate engine lifecycle with scored/Test Day playback and run T067-T073 across both speeds, pause, Skip, finish, scene exit, blocked audio, and mute; record evidence in `src/scenes/ContestScene.ts`, `src/scenes/PracticeContestScene.ts`, and `specs/033-race-enrichment/acceptance-evidence.md`
+- [X] T071 [US5] Provide asset-free local Web Audio engine/UI synthesis, provenance, stable semantic keys, and silent optional-audio fallback in `specs/033-race-enrichment/audio-asset-manifest.md` and `src/scenes/audioPresentation.ts`
+- [X] T072 [US5] Implement semantic cue IDs, session mute/effects volume, browser unlock, one-loop ownership, bounded rate mapping, and teardown in `src/scenes/audioPresentation.ts`
+- [X] T073 [US5] Wire single semantic activation/selection cues into shared runtime controls and a visible mute control without duplicate emissions in `src/scenes/uiChrome.ts` and `src/scenes/demoTheme.ts`
+- [X] T074 [US5] Integrate engine lifecycle with scored/Test Day playback and run T067-T073 across both speeds, pause, Skip, finish, scene exit, blocked audio, and mute; record evidence in `src/scenes/ContestScene.ts`, `src/scenes/PracticeContestScene.ts`, and `specs/033-race-enrichment/acceptance-evidence.md`
 
 **Checkpoint**: Sound improves presence and responsiveness without becoming authority or leaking across scenes.
 
@@ -209,18 +209,18 @@ physics across every track consumer.
 ### Tests
 
 - [X] T075 [P] [US6] Add failing production-corpus tests for positive braking demand, retained braking-zone contributions, monotonic severity, and display/physics reconciliation in `tests/unit/tracks.test.ts` and `tests/integration/track-presentation.test.ts`
-- [ ] T076 [P] [US6] Add failing deterministic circuit-grammar tests for straights, sweepers, chicanes, hairpins, alternating-direction switchbacks, and seed/ordinal/region identity in `tests/unit/tracks.test.ts`
-- [ ] T077 [P] [US6] Add failing closure, viewport bounds, non-self-intersection, minimum curve radius, nonadjacent-lane separation, bounded-attempt fallback, and repeat-generation deep-equality tests in `tests/unit/tracks.test.ts`
-- [ ] T078 [P] [US6] Add failing corpus diversity and anti-regular-polygon similarity gates in `tests/regression/track-generation-corpus.test.ts`
+- [X] T076 [P] [US6] Add failing deterministic circuit-grammar tests for straights, sweepers, chicanes, hairpins, alternating-direction switchbacks, and seed/ordinal/region identity in `tests/unit/tracks.test.ts`
+- [X] T077 [P] [US6] Add failing closure, viewport bounds, non-self-intersection, minimum curve radius, nonadjacent-lane separation, bounded-attempt fallback, and repeat-generation deep-equality tests in `tests/unit/tracks.test.ts`
+- [X] T078 [P] [US6] Add failing corpus diversity and anti-regular-polygon similarity gates in `tests/regression/track-generation-corpus.test.ts`
 
 ### Implementation
 
-- [ ] T079 [US6] Extend authoritative track types with curve direction/radius, sampled centerline, stable feature classifications, braking zones, and validation metadata in `src/simulation/tracks.ts`
-- [ ] T080 [US6] Implement deterministic circuit grammar and bounded candidate validation for straights, sweepers, chicanes, hairpins, and switchbacks in `src/simulation/tracks.ts`
-- [ ] T081 [US6] Replace the single sharp-angle threshold with geometry/approach/speed-reduction braking-zone derivation and aggregate positive production demand in `src/simulation/tracks.ts`
-- [ ] T082 [US6] Preserve one authoritative generated circuit through setup, Test Day, contest, playback, Results, summary, and async/run-history bridges in `src/simulation/run.ts`, `src/scenes/trackSummaryPresentation.ts`, and race scene consumers
-- [ ] T083 [US6] Render the validated sampled centerline without polygon shortcuts and expose derived feature/braking explanations in `src/scenes/ContestScene.ts`, `src/scenes/PreRaceScene.ts`, and `src/scenes/PracticeContestScene.ts`
-- [ ] T084 [US6] Run the track corpus and existing track/lap/setup/contest/playback regressions; record feature coverage, geometry rejection counts, diversity metrics, and braking-demand distribution in `specs/033-race-enrichment/acceptance-evidence.md`
+- [X] T079 [US6] Extend authoritative track types with curve direction/radius, sampled centerline, stable feature classifications, braking zones, and validation metadata in `src/simulation/tracks.ts`
+- [X] T080 [US6] Implement deterministic circuit grammar and bounded candidate validation for straights, sweepers, chicanes, hairpins, and switchbacks in `src/simulation/tracks.ts`
+- [X] T081 [US6] Replace the single sharp-angle threshold with geometry/approach/speed-reduction braking-zone derivation and aggregate positive production demand in `src/simulation/tracks.ts`
+- [X] T082 [US6] Preserve one authoritative generated circuit through setup, Test Day, contest, playback, Results, summary, and async/run-history bridges in `src/simulation/run.ts`, `src/scenes/trackSummaryPresentation.ts`, and race scene consumers
+- [X] T083 [US6] Render the validated sampled centerline without polygon shortcuts and expose derived feature/braking explanations in `src/scenes/ContestScene.ts`, `src/scenes/PreRaceScene.ts`, and `src/scenes/PracticeContestScene.ts`
+- [X] T084 [US6] Run the track corpus and existing track/lap/setup/contest/playback regressions; record feature coverage, geometry rejection counts, diversity metrics, and braking-demand distribution in `specs/033-race-enrichment/acceptance-evidence.md`
 
 **Checkpoint**: Tracks look and behave like varied race circuits, and braking
 demand is a truthful nonzero consequence of their retained geometry.
@@ -231,15 +231,15 @@ demand is a truthful nonzero consequence of their retained geometry.
 
 **Purpose**: Tune defaults, prove constitutional boundaries, and close full-stack acceptance.
 
-- [ ] T085 [P] Run the representative corpus for post-Opening event ≥50%, full emphasis ≤33%, initial winner-change 10–25%, and stronger-build dominance in `tests/regression/race-enrichment-corpus.test.ts`
+- [X] T085 [P] Run the representative corpus for post-Opening event ≥50%, full emphasis ≤33%, initial winner-change 10–25%, and stronger-build dominance in `tests/regression/race-enrichment-corpus.test.ts`
 - [X] T086 [P] Run repeated 8-car/16-lap enriched resolution benchmarks against T001's recorded baseline and fail when the approved no-material-delay tolerance is exceeded in `tests/regression/race-enrichment-performance.test.ts`
-- [ ] T087 Tune only centralized validated defaults from T085 and document every value/baseline comparison in `src/simulation/enrichmentConfig.ts` and `specs/033-race-enrichment/acceptance-evidence.md`
-- [ ] T088 [P] Audit for live RNG, scene-side resolution, origin-gated signatures, hidden stock scalars, unisolated incident consumption, persistent incident penalties, audio authority leakage, or scene-side track reconstruction in `tests/integration/race-enrichment-boundaries.test.ts`
-- [ ] T089 Run focused enrichment plus existing contest, laps, playback, setup, track, run, history, settlement, sponsor, inventory, Results, Test Day, audio, track-corpus, and demo regression suites; record results in `specs/033-race-enrichment/acceptance-evidence.md`
-- [ ] T090 Run full `npm test`, `npm run lint`, and `npm run build` with no weakened assertions or new warnings; record results in `specs/033-race-enrichment/acceptance-evidence.md`
-- [ ] T091 Perform browser QA at 1920×1080, 1366×768, 1024×768, and 800×450 for all entrants, circuit feature families, both speeds, Skip, reduced motion, incidents on/off, Results inspection, Test Day, mute, blocked/missing audio, and engine/UI lifecycle in `specs/033-race-enrichment/acceptance-evidence.md`
-- [ ] T092 Re-run the Constitution Check from `plan.md` against delivered code and record final PASS evidence in `specs/033-race-enrichment/acceptance-evidence.md`
-- [ ] T093 Reconcile `specs/HANDOFF.md`, `specs/DEFERRED.md`, Feature 034/035 boundaries, future picture-in-picture event-ID requirements, and deferred background-music scope after implementation
+- [X] T087 Tune only centralized validated defaults from T085 and document every value/baseline comparison in `src/simulation/enrichmentConfig.ts` and `specs/033-race-enrichment/acceptance-evidence.md`
+- [X] T088 [P] Audit for live RNG, scene-side resolution, origin-gated signatures, hidden stock scalars, unisolated incident consumption, persistent incident penalties, audio authority leakage, or scene-side track reconstruction in `tests/integration/race-enrichment-boundaries.test.ts`
+- [X] T089 Run focused enrichment plus existing contest, laps, playback, setup, track, run, history, settlement, sponsor, inventory, Results, Test Day, audio, track-corpus, and demo regression suites; record results in `specs/033-race-enrichment/acceptance-evidence.md`
+- [X] T090 Run full `npm test`, `npm run lint`, and `npm run build` with no weakened assertions or new warnings; record results in `specs/033-race-enrichment/acceptance-evidence.md`
+- [X] T091 Perform browser QA at 1920×1080, 1366×768, 1024×768, and 800×450 for all entrants, circuit feature families, both speeds, Skip, reduced motion, incidents on/off, Results inspection, Test Day, mute, blocked/missing audio, and engine/UI lifecycle in `specs/033-race-enrichment/acceptance-evidence.md`
+- [X] T092 Re-run the Constitution Check from `plan.md` against delivered code and record final PASS evidence in `specs/033-race-enrichment/acceptance-evidence.md`
+- [X] T093 Reconcile `specs/HANDOFF.md`, `specs/DEFERRED.md`, Feature 034/035 boundaries, future picture-in-picture event-ID requirements, and deferred background-music scope after implementation
 
 ---
 

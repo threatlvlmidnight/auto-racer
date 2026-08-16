@@ -55,9 +55,16 @@ order, or settlement. Every boundary is consumed exactly once.
 
 ## 10. Presentation
 
-Full emphasis is limited to player signature activation, decisive player Final
-Push overtake, and player incident. All information remains available in static
-or compact form. Missing optional assets fall back without blocking navigation.
+Within Feature 033's own banner/marker presentation, full emphasis is limited
+to player signature activation, decisive player Final Push overtake, and player
+incident. All information remains available in static or compact form. Missing
+optional assets fall back without blocking navigation.
+
+Feature 036 may consume the same retained evidence for a separate, bounded
+picture-in-picture presentation tier. That tier may select a player-involved
+signature, completed pass, defense, or incident according to its own fixed
+budget and deterministic priority; it does not change this contract's
+`EmphasisClass`, event identity/order, playback time, or settlement.
 
 ## 11. Results and testing
 

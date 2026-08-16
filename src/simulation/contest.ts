@@ -269,6 +269,10 @@ export interface ResolveEnrichedContestInput {
   lapCount?: number;
   regionTheme?: RegionId;
   config?: RaceEnrichmentConfig;
+  playerSetup?: LockedRaceSetup;
+  encounterId?: string;
+  rivalSetups?: readonly LockedRaceSetup[];
+  rivalBuilds?: readonly VehicleBuild[];
 }
 
 interface EnrichedCarMeta {
@@ -280,6 +284,7 @@ interface EnrichedCarMeta {
   baseLaps: PlayerLap[];
   resolvedStats: Readonly<Partial<Record<import("./types").StatTarget, number>>>;
   contributingSources: readonly string[];
+  setup?: LockedRaceSetup;
 }
 
 /**
@@ -326,23 +331,28 @@ export function resolveEnrichedContest(
       name: "Player",
       color: PLAYER_COLOR,
       identity: playerIdentity,
-      baseLaps: simulatePlayerLaps(playerBuild, lapCount, track),
+      baseLaps: simulatePlayerLaps(playerBuild, lapCount, track, input.playerSetup?.totalDelta),
       resolvedStats: resolveCurrentBuildPhysicalStats(playerBuild).stats,
       contributingSources: installedItems(playerBuild)
         .filter((item): item is NonNullable<typeof item> => item !== null)
         .map((item) => item.id),
+      ...(input.playerSetup ? { setup: input.playerSetup } : {}),
     },
     ...rivalRoster.map((profile, rivalIndex) => {
-      const rivalBuild = resolveRivalBuild(profile, level, seed);
+      const rivalBuild = input.rivalBuilds?.[rivalIndex] ?? resolveRivalBuild(profile, level, seed);
+      const rivalSetup = input.rivalSetups?.[rivalIndex] ?? (input.encounterId
+        ? selectGeneratedRivalSetup(rivalBuild, track, { encounterId: input.encounterId, lapCount })
+        : undefined);
       return {
         id: profile.id,
         role: "rival" as const,
         name: profile.name,
         color: profile.color,
         identity: generatedRivalIdentity(seed, rivalIndex),
-        baseLaps: simulatePlayerLaps(rivalBuild, lapCount, track),
+        baseLaps: simulatePlayerLaps(rivalBuild, lapCount, track, rivalSetup?.totalDelta),
         resolvedStats: resolveCurrentBuildPhysicalStats(rivalBuild).stats,
         contributingSources: [],
+        ...(rivalSetup ? { setup: rivalSetup } : {}),
       };
     }),
   ];
@@ -392,6 +402,7 @@ export function resolveEnrichedContest(
     laps: meta.baseLaps,
     position: index + 1,
     gapToLeader: enrichedTotalById.get(meta.id)! - leaderTime,
+    ...(meta.setup ? { setup: meta.setup } : {}),
     driverIdentity: meta.identity,
     composureLedger: ledgerById.get(meta.id)!,
     enrichedLaps: enrichedLapsById.get(meta.id)!,
