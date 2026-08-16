@@ -1,5 +1,17 @@
-import { DEFAULT_RACE_ENRICHMENT_CONFIG, type RacePhaseFractions } from "./enrichmentConfig";
-import type { EnrichmentEventKind, RacePhase, RacePhaseSchedule } from "./types";
+import {
+  DEFAULT_RACE_ENRICHMENT_CONFIG,
+  type RaceEnrichmentConfig,
+  type RacePhaseFractions,
+} from "./enrichmentConfig";
+import type {
+  ComposureLedger,
+  ComposureSpend,
+  DriverRaceIdentity,
+  EnrichmentEvent,
+  EnrichmentEventKind,
+  RacePhase,
+  RacePhaseSchedule,
+} from "./types";
 
 /**
  * Feature 033 (T013): deterministic shared phases, isolated named sub-seeds, and
@@ -122,4 +134,256 @@ export function compareEnrichmentEvents(
   const kindDelta = stableEventKindPriority(a.kind) - stableEventKindPriority(b.kind);
   if (kindDelta !== 0) return kindDelta;
   return (a.orderSeq ?? 0) - (b.orderSeq ?? 0);
+}
+
+// --- Phase 3 US1: immutable Composure ledger (T022) -----------------------
+
+/**
+ * Atomic debit of a finite, race-local Composure budget (contract §5). A spend
+ * is accepted only when *all* of the cost remains; an unaffordable action is
+ * skipped without a partial debit. Ledgers are immutable — every spend returns
+ * a new ledger with the exact `before`/`after` retained as evidence.
+ */
+export class ComposureOverspendError extends RangeError {
+  constructor(
+    public readonly participantId: string,
+    public readonly amountRequested: number,
+    public readonly remaining: number,
+  ) {
+    super(
+      `Composure overspend for ${participantId}: requested ${amountRequested} but only ${remaining} remaining.`,
+    );
+    this.name = "ComposureOverspendError";
+  }
+}
+
+export interface ComposureDebitContext {
+  eventId: string;
+  boundaryId: string;
+  actionKind: string;
+}
+
+/** Open a finite, race-local, non-replenishing budget. */
+export function createComposureLedger(
+  participantId: string,
+  initial: number,
+): ComposureLedger {
+  if (!Number.isFinite(initial) || initial < 0) {
+    throw new RangeError(`Composure initial budget must be a non-negative finite number, got ${String(initial)}`);
+  }
+  return { participantId, initial, remaining: initial, spends: [] };
+}
+
+/** Full cost must remain — never a partial debit (data-model.md ComposureLedger). */
+export function canAffordComposure(
+  ledger: ComposureLedger,
+  amount: number,
+): boolean {
+  return Number.isFinite(amount) && amount >= 0 && ledger.remaining >= amount;
+}
+
+/**
+ * Immutably debit `amount`. Throws `ComposureOverspendError` (without
+ * returning a mutated ledger) when the full cost does not remain.
+ */
+export function debitComposure(
+  ledger: ComposureLedger,
+  amount: number,
+  context: ComposureDebitContext,
+): ComposureLedger {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new RangeError(`Composure debit amount must be a positive finite number, got ${String(amount)}`);
+  }
+  if (!canAffordComposure(ledger, amount)) {
+    throw new ComposureOverspendError(ledger.participantId, amount, ledger.remaining);
+  }
+  const spend: ComposureSpend = {
+    eventId: context.eventId,
+    boundaryId: context.boundaryId,
+    actionKind: context.actionKind,
+    amount,
+    before: ledger.remaining,
+    after: ledger.remaining - amount,
+  };
+  return {
+    participantId: ledger.participantId,
+    initial: ledger.initial,
+    remaining: spend.after,
+    spends: [...ledger.spends, spend],
+  };
+}
+
+// --- Phase 3 US1: authoritative boundary state and passes (T023/T024) -----
+
+/** Pure, immutable car state at one lap/segment boundary (data-model ActionWindow). */
+export interface BoundaryCarState {
+  id: string;
+  identity: DriverRaceIdentity;
+  /** 1-based rank at the boundary by cumulative time (roster order tie-break). */
+  position: number;
+  /** Total authored+enriched time accumulated to reach this boundary. */
+  cumulativeTime: number;
+  /** This car's projected (base) time for the upcoming lap segment. */
+  projectedLapTime: number;
+  composure: ComposureLedger;
+}
+
+export interface BoundaryResolution {
+  boundaryId: string;
+  phase: RacePhase;
+  /** Immutable events for this boundary, in stable kind/roster order. */
+  events: readonly EnrichmentEvent[];
+  /** Cars with updated composure ledgers and (on a completed pass) positions. */
+  cars: readonly BoundaryCarState[];
+}
+
+/** Deterministic coin shared by opposed action outcomes (action-ties stream). */
+function coinFlip(actionTieSeed: number, key: string): boolean {
+  return (fnv1a(`${String(actionTieSeed)}::${key}`) & 1) === 0;
+}
+
+/**
+ * Evaluate one boundary in stable roster order: proximity (directly-ahead car
+ * within `passingRange` seconds), projected pace advantage, atomic Composure
+ * attacks/defenses, and completed passes. Purely deterministic — identical
+ * inputs yield identical events, spends, and swaps (research Decisions 6, 7).
+ */
+export function evaluateBoundary(
+  boundaryId: string,
+  phase: RacePhase,
+  carsInput: readonly BoundaryCarState[],
+  config: RaceEnrichmentConfig,
+  actionTieSeed: number,
+): BoundaryResolution {
+  const cars = carsInput.map((car) => ({ ...car }));
+  const events: EnrichmentEvent[] = [];
+  const orderSeq = new Map<EnrichmentEventKind, number>();
+  let seq = 0;
+  const scope = (kind: EnrichmentEventKind): number => {
+    const next = (orderSeq.get(kind) ?? 0) + 1;
+    orderSeq.set(kind, next);
+    return next;
+  };
+
+  const byPosition = (a: BoundaryCarState, b: BoundaryCarState) =>
+    a.position - b.position;
+
+  for (const attacker of cars) {
+    const sorted = [...cars].sort(byPosition);
+    const ahead = sorted.find((car) => car.position === attacker.position - 1);
+    if (!ahead) continue;
+
+    const distance = attacker.cumulativeTime - ahead.cumulativeTime;
+    if (distance < 0 || distance > config.passingRange) continue;
+
+    const paceAdvantage = ahead.projectedLapTime - attacker.projectedLapTime;
+    const sufficientAdvantage =
+      paceAdvantage >= config.minimumPaceAdvantage * ahead.projectedLapTime;
+    if (!sufficientAdvantage) continue;
+
+    const targetId = ahead.id;
+    if (!canAffordComposure(attacker.composure, config.attackCost)) continue;
+
+    // --- attack (atomic) ---
+    seq += 1;
+    const attackEventId = enrichmentEventId("attack", boundaryId, scope("attack"));
+    const attackerAfter = debitComposure(
+      attacker.composure,
+      config.attackCost,
+      { eventId: attackEventId, boundaryId, actionKind: "attack" },
+    );
+    events.push({
+      eventId: attackEventId,
+      kind: "attack",
+      phase,
+      boundaryId,
+      orderSeq: seq,
+      actorId: attacker.id,
+      targetId,
+      emphasis: "compact",
+      before: { position: attacker.position, time: attacker.cumulativeTime },
+      composure: {
+        before: attacker.composure.remaining,
+        spent: config.attackCost,
+        after: attackerAfter.remaining,
+      },
+      triggerRef: `${boundaryId}:${attacker.id}->${targetId}`,
+    });
+    attacker.composure = attackerAfter;
+
+    // --- defense (atomic, or skipped when unaffordable) ---
+    let defenderLedger = ahead.composure;
+    if (canAffordComposure(defenderLedger, config.defenseCost)) {
+      seq += 1;
+      const defenseEventId = enrichmentEventId("defense", boundaryId, scope("defense"));
+      const defenderAfter = debitComposure(
+        defenderLedger,
+        config.defenseCost,
+        { eventId: defenseEventId, boundaryId, actionKind: "defense" },
+      );
+      events.push({
+        eventId: defenseEventId,
+        kind: "defense",
+        phase,
+        boundaryId,
+        orderSeq: seq,
+        actorId: targetId,
+        targetId: attacker.id,
+        emphasis: "compact",
+        before: { position: ahead.position, time: ahead.cumulativeTime },
+        composure: {
+          before: defenderLedger.remaining,
+          spent: config.defenseCost,
+          after: defenderAfter.remaining,
+        },
+        triggerRef: `${boundaryId}:${targetId}->${attacker.id}`,
+      });
+      defenderLedger = defenderAfter;
+    }
+
+    // --- pass result ---
+    const defended = defenderLedger.spends.length > ahead.composure.spends.length;
+    const completes = defended
+      ? coinFlip(actionTieSeed, `${boundaryId}:${attacker.id}:${targetId}`)
+      : true;
+
+    if (completes) {
+      seq += 1;
+      const eventId = enrichmentEventId("overtake-completed", boundaryId, scope("overtake-completed"));
+      events.push({
+        eventId,
+        kind: "overtake-completed",
+        phase,
+        boundaryId,
+        orderSeq: seq,
+        actorId: attacker.id,
+        targetId,
+        emphasis: "compact",
+        before: { position: attacker.position, time: attacker.cumulativeTime },
+        after: { position: attacker.position - 1, time: attacker.cumulativeTime },
+        triggerRef: `${boundaryId}:${attacker.id}->${targetId}`,
+      });
+      attacker.position -= 1;
+      ahead.position += 1;
+    } else {
+      seq += 1;
+      const eventId = enrichmentEventId("overtake-attempt", boundaryId, scope("overtake-attempt"));
+      events.push({
+        eventId,
+        kind: "overtake-attempt",
+        phase,
+        boundaryId,
+        orderSeq: seq,
+        actorId: attacker.id,
+        targetId,
+        emphasis: "compact",
+        before: { position: attacker.position, time: attacker.cumulativeTime },
+        triggerRef: `${boundaryId}:${attacker.id}->${targetId}`,
+      });
+    }
+    ahead.composure = defenderLedger;
+  }
+
+  events.sort(compareEnrichmentEvents);
+  return { boundaryId, phase, events, cars };
 }

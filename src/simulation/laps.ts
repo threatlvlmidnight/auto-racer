@@ -29,6 +29,7 @@ import {
   type ConditionalPhysicsContribution,
   type ContributionEffectKind,
   type ContributionEvidence,
+  type EnrichedLap,
   type FiredItem,
   type InstallationResolution,
   type ItemPhysicsContribution,
@@ -37,6 +38,7 @@ import {
   type LiveStatChange,
   type OfferedItem,
   type PhysicsCondition,
+  type RacePhase,
   type StatTarget,
   type SynergyResolution,
 } from "./types";
@@ -48,7 +50,6 @@ export interface PlayerLap {
   /** 021-arcade-physics-simulation: present only when simulatePlayerLaps was called with a track. */
   physics?: LapPhysicsEvidence;
 }
-
 interface LocatedItem {
   /** Base item with time-modifier/buff-boost already folded in for a vehicle slot. */
   item: OfferedItem;
@@ -766,4 +767,54 @@ export function deriveLiveStatChangesByLap(
 ): readonly (readonly LiveStatChange[])[] {
   const changes = deriveLiveStatChanges(laps, baselineStats, itemsById);
   return laps.map((_, index) => changes.filter((change) => change.lap === index + 1));
+}
+
+// --- Feature 033 US1 (T025): bounded temporary-effect lap enrichment --------
+
+/**
+ * A retained temporary effect over an explicit lap window (FR-010). It adjusts
+ * target pace (a fraction of the lap time) or a physical-stat window (bounded
+ * seconds), never any authored build value. Numeric bounds/caps are applied by
+ * the caller from configured `signatureTemporaryEffectCaps`.
+ */
+export interface TemporaryLapEffect {
+  kind: "target-pace" | "stat-window";
+  stat?: StatTarget;
+  /** From the configured cap: target-pace fraction (0..1) or stat-window seconds. */
+  magnitude: number;
+  startLap: number;
+  endLap: number;
+}
+
+/**
+ * Enrich authored lap times with the bounded temporary effects active on each
+ * lap. Pure and deterministic — identical inputs yield identical enriched laps.
+ * `baseTime` always retains the authored (pre-enrichment) lap; `enrichedTime`
+ * additionally folds any active window effect and the optional incident time
+ * loss, clamped to the same positive floor as normal resolution.
+ */
+export function enrichLapsWithTemporaryEffects(
+  laps: readonly { time: number }[],
+  phaseForLap: (lap: number) => RacePhase,
+  effects: readonly TemporaryLapEffect[] = [],
+  incidentTimeLossByLap: ReadonlyMap<number, number> = new Map(),
+): EnrichedLap[] {
+  return laps.map((lap, index) => {
+    const lapNumber = index + 1;
+    const baseTime = lap.time;
+    const phase = phaseForLap(lapNumber);
+    let adjustment = 0;
+    for (const effect of effects) {
+      if (lapNumber < effect.startLap || lapNumber > effect.endLap) continue;
+      const magnitude = Number.isFinite(effect.magnitude) ? effect.magnitude : 0;
+      adjustment += effect.kind === "target-pace"
+        // Faster target pace shortens the lap by a bounded fraction.
+        ? -(baseTime * Math.min(Math.max(magnitude, 0), 1))
+        // A stat window shortens the lap by the retained bounded seconds.
+        : -magnitude;
+    }
+    const incidentTimeLoss = incidentTimeLossByLap.get(lapNumber) ?? 0;
+    const enrichedTime = Math.max(MIN_LAP_TIME, baseTime + adjustment + incidentTimeLoss);
+    return { lap: lapNumber, phase, baseTime, enrichedTime, incidentTimeLoss };
+  });
 }

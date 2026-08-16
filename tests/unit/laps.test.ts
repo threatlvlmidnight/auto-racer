@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LEGACY_ITEM_POOL } from "../fixtures/legacy-item-pool";
-import { deriveLiveStatChanges, deriveLiveStatChangesByLap, firesOnLap, simulatePlayerLaps } from "../../src/simulation/laps";
+import { deriveLiveStatChanges, deriveLiveStatChangesByLap, enrichLapsWithTemporaryEffects, firesOnLap, simulatePlayerLaps } from "../../src/simulation/laps";
 import {
   generateTrack,
   matchesPhysicsCondition,
@@ -1763,3 +1763,78 @@ describe("deriveLiveStatChanges (032 FR-001/FR-002)", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
+describe("Feature 033 (T019): temporary target-pace / stat-window lap evidence", () => {
+  // A 10-lap authored race at ~20s/lap.
+  const base = Array.from({ length: 10 }, (_, index) => ({ time: 20 + index }));
+  const phaseForLap = (lap: number) => (lap <= 2 ? "opening" as const : lap <= 7 ? "contest" as const : "final-push" as const);
+
+  it("preserves authored baseTime and reports bounded enrichedTime under a target-pace window", () => {
+    const enriched = enrichLapsWithTemporaryEffects(base, phaseForLap, [
+      { kind: "target-pace", magnitude: 0.1, startLap: 3, endLap: 7 },
+    ]);
+    expect(enriched).toHaveLength(10);
+
+    const lap3 = enriched[2];
+    expect(lap3.baseTime).toBe(22);
+    expect(lap3.enrichedTime).toBeCloseTo(22 * (1 - 0.1)); // 19.8
+    expect(lap3.phase).toBe("contest");
+
+    // Outside the window the authored time is untouched.
+    expect(enriched[0].enrichedTime).toBe(enriched[0].baseTime);
+    expect(enriched[7].enrichedTime).toBe(enriched[7].baseTime);
+    // Window is explicit and retained.
+    expect(lap3.incidentTimeLoss).toBe(0);
+  });
+
+  it("applies a stat-window effect additively within its explicit window", () => {
+    const enriched = enrichLapsWithTemporaryEffects(base, phaseForLap, [
+      { kind: "stat-window", stat: "corneringSpeed", magnitude: 2, startLap: 6, endLap: 10 },
+    ]);
+    expect(enriched[5].enrichedTime).toBeCloseTo(25 - 2);
+    expect(enriched[9].enrichedTime).toBeCloseTo(29 - 2);
+    expect(enriched[4].enrichedTime).toBe(24); // unchanged before window
+  });
+
+  it("combines windows and incident time loss, retaining each contribution", () => {
+    const losses = new Map<number, number>([[4, 1.5]]);
+    const enriched = enrichLapsWithTemporaryEffects(
+      base,
+      phaseForLap,
+      [
+        { kind: "target-pace", magnitude: 0.05, startLap: 3, endLap: 6 },
+        { kind: "stat-window", stat: "acceleration", magnitude: 1, startLap: 5, endLap: 9 },
+      ],
+      losses,
+    );
+    const lap5 = enriched[4];
+    // base 24 - (24*0.05) - 1 = 21.8; no incident on lap 5
+    expect(lap5.enrichedTime).toBeCloseTo(24 - 24 * 0.05 - 1);
+    expect(lap5.incidentTimeLoss).toBe(0);
+    // lap4 has the incident loss AND the still-active target-pace window
+    const lap4 = enriched[3];
+    expect(lap4.enrichedTime).toBeCloseTo(23 * (1 - 0.05) + 1.5);
+    expect(lap4.incidentTimeLoss).toBe(1.5);
+  });
+
+  it("never emits a lap below the positive floor and never mutates the base array", () => {
+    const tiny = [{ time: 0.05 }, { time: 0.05 }];
+    const before = tiny[0].time;
+    enrichLapsWithTemporaryEffects(
+      tiny, () => "opening", [{ kind: "stat-window", magnitude: 10, startLap: 1, endLap: 2 }],
+    );
+    const enriched = enrichLapsWithTemporaryEffects(
+      tiny, () => "opening", [{ kind: "stat-window", magnitude: 999, startLap: 1, endLap: 2 }],
+    );
+    expect(enriched[0].enrichedTime).toBe(MIN_LAP_TIME);
+    expect(tiny[0].time).toBe(before); // authored input untouched
+  });
+
+  it("is deterministic and phase-exact across repeated calls", () => {
+    const phase = (lap: number) => (lap % 3 === 0 ? "final-push" as const : "contest" as const);
+    const first = enrichLapsWithTemporaryEffects(base, phase, [{ kind: "target-pace", magnitude: 0.1, startLap: 4, endLap: 9 }]);
+    const second = enrichLapsWithTemporaryEffects(base, phase, [{ kind: "target-pace", magnitude: 0.1, startLap: 4, endLap: 9 }]);
+    expect(second).toEqual(first);
+    expect(first.map((lap) => lap.phase)).toEqual(base.map((_, i) => (i + 1) % 3 === 0 ? "final-push" : "contest"));
+  });
+});
+
