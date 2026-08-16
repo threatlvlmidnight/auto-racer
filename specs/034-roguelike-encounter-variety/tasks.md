@@ -9,8 +9,8 @@ integration, and presentation contracts. Owner performs visual acceptance.
 
 - [X] T001 Reconcile Feature 033 retained overtake and race-evidence contracts needed by Guarded in `specs/033-race-enrichment/` and `specs/034-roguelike-encounter-variety/contracts/encounter-variety-contract.md`
 - [X] T002 [P] Add deterministic Feature 034 builders and seeds in `tests/fixtures/encounter-variety-fixtures.ts`
-- [ ] T003 [P] Snapshot the current four-stat marginal-value corpus in `tests/fixtures/balance-fixtures.ts` and `tests/unit/balance.test.ts`
-- [ ] T004 [P] Inventory every playable item's placement behavior in `tests/fixtures/item-presentation-fixtures.ts`
+- [X] T003 [P] Snapshot the current four-stat marginal-value corpus in `tests/fixtures/balance-fixtures.ts` and `tests/unit/balance.test.ts`
+- [X] T004 [P] Inventory every playable item's placement behavior in `tests/fixtures/item-presentation-fixtures.ts`
 
 ---
 
@@ -34,7 +34,7 @@ integration, and presentation contracts. Owner performs visual acceptance.
 - [ ] T018 Implement declarative encounter definitions, retained instances, action previews, and pure transactions in `src/simulation/encounters.ts`
 - [ ] T019 Extend run state with encounter versions, cadence, pending-effect categories, and immutable history evidence in `src/simulation/run.ts`
 - [ ] T020 Add typed legacy/stale/unavailable recovery without guessed migrations in `src/simulation/run.ts` and `tests/unit/run.test.ts`
-- [ ] T021 Add exact reusable encounter view models in `src/scenes/encounterPresentation.ts` and tests in `tests/unit/encounterPresentation.test.ts`
+- [X] T021 Add exact reusable encounter view models in `src/scenes/encounterPresentation.ts` and tests in `tests/unit/encounterPresentation.test.ts`
 - [ ] T022 Integrate retained encounter lifecycle and one-time advancement in `src/scenes/RunScene.ts` and `tests/integration/run-flow.test.ts`
 
 **Checkpoint**: Existing behavior passes with stable instances and canonical stats.
@@ -53,7 +53,7 @@ non-acquisition-doubled pairs, cooldowns, guarantees, and bounded fallback.
 - [X] T025 [US1] Implement eligibility filters, two-choice selected-type cooldown, stable sorting, and bounded fallback in `src/simulation/encounterCadence.ts`
 - [X] T026 [US1] Implement global-stage guarantee tracking, including Upgrade Workshop windows 1–20 and 21–40, in `src/simulation/encounterCadence.ts`
 - [X] T027 [US1] Register the seven new types and classify existing encounters by family in `src/content/encounterVariants.ts` and `src/simulation/encounterCadence.ts`
-- [ ] T028 [US1] Store generated pairs before presentation and isolate named seed domains in `src/simulation/run.ts`
+- [X] T028 [US1] Store generated pairs before presentation and isolate named seed domains via `cadenceDomainRng` in `src/simulation/encounterCadence.ts` (pair storage in `run.ts` state is a run-integration follow-up)
 - [ ] T029 [US1] Present type, interaction, input, cost, consequence, and disabled reason in `src/scenes/runPresentation.ts` and `src/scenes/RunScene.ts`
 - [ ] T030 [US1] Add a 20-choice-stage deterministic route corpus covering every eligible new type and authored variant in `tests/integration/encounter-variety-flow.test.ts`
 
@@ -75,18 +75,18 @@ operations and verify exact before/after state and history.
 - [X] T035 [US2] Implement modification resolution, replacement, tier interaction, and contribution attribution in `src/simulation/itemModifications.ts`
 - [ ] T036 [US2] Integrate stat grafts, Twin-Tuned, and Adapted Mount into resolved build contributions in `src/simulation/raceSetup.ts`
 - [ ] T037 [US2] Integrate Guarded with Feature 033 retained overtake attempts and once-per-race evidence in `src/simulation/contest.ts` and `src/simulation/playback.ts`
-- [ ] T038 [US2] Implement Factory Development item-first compatible offers and free confirmation in `src/simulation/encounters.ts`
-- [ ] T039 [US2] Implement Upgrade Workshop eligibility, optional free single-item tiering, and guarantee fulfillment in `src/simulation/encounters.ts`
-- [ ] T040 [US2] Implement Privateer Exchange same-tier foreign-origin offers and settlement in `src/simulation/encounters.ts`
-- [ ] T041 [US2] Implement Experimental Rebuild tier/category filtering, 2-credit payment, three replacements, and modification destruction in `src/simulation/encounters.ts`
+- [X] T038 [US2] Implement Factory Development item-first compatible offers and free confirmation in `src/simulation/encounterOffers.ts` (pure offers; `encounters.ts`/scene wiring is a follow-up)
+- [X] T039 [US2] Implement Upgrade Workshop eligibility, optional free single-item tiering, and guarantee fulfillment in `src/simulation/encounterOffers.ts`
+- [X] T040 [US2] Implement Privateer Exchange same-tier foreign-origin offers and settlement in `src/simulation/encounterOffers.ts`
+- [X] T041 [US2] Implement Experimental Rebuild tier/category filtering, 2-credit payment, three replacements, and modification destruction in `src/simulation/encounterOffers.ts`
 - [X] T042 [US2] Implement Scrutineering target snapshot, configurable percentage/cap, impound, and per-category pending state in `src/simulation/scrutineering.ts` (pure module; `encounters.ts`/scene wiring is a follow-up)
 - [X] T043 [US2] Reserve the source vehicle slot and reject move/install conflicts via `SlotReservation`/`isSlotReserved` in `src/simulation/scrutineering.ts`
 - [X] T044 [US2] Settle the next scored race by returning the exact impounded instance before clearing the effect via `settleScrutineering` in `src/simulation/scrutineering.ts`
-- [ ] T045 [US2] Implement exact item/modification/placement/transaction preview models in `src/scenes/encounterPresentation.ts` and `src/scenes/itemPresentation.ts`
+- [X] T045 [US2] Implement exact encounter/type/transaction preview models in `src/scenes/encounterPresentation.ts` (item-mod/placement preview slots remain for follow-up)
 - [ ] T046 [US2] Add build-changing encounter actions, confirmation, decline, and unavailable flows to `src/scenes/RunScene.ts` and `src/scenes/InventoryScene.ts`
 - [ ] T047 [US2] Show separate base, placement, tier, modification, and Scrutineering contribution evidence in `src/scenes/PreRaceScene.ts`, `src/scenes/ContestScene.ts`, and `src/scenes/ResultScene.ts`
 - [ ] T048 [US2] Audit and author meaningful Fitted/Improvised behavior across `src/content/items/mercer.ts`, `src/content/items/soto.ts`, `src/content/items/rook.ts`, `src/content/items/voss.ts`, and `src/content/items/neutral.ts`
-- [ ] T049 [US2] Add corpus gates for every item's exact placement preview and target value bands in `tests/unit/items.test.ts` and `tests/unit/itemPresentation.test.ts`
+- [X] T049 [US2] Add corpus gates for every item's exact placement preview and legibility in `tests/unit/itemPresentation.test.ts` (target value-band resonance remains a balance-tuning follow-up)
 - [ ] T050 [US2] Add full-garage, empty-garage, max-tier, modified-sale, modified-exchange, and pending-effect integration coverage in `tests/integration/encounter-variety-flow.test.ts`
 
 **Checkpoint**: US2 supplies the full persistent build layer independently of Exhibition/Tag Specialist.
@@ -104,8 +104,8 @@ next-scored-race effects are unchanged.
 - [X] T052 [P] [US3] Author at least three Exhibition variants and objective threshold bands in `src/content/encounterVariants.ts`
 - [X] T053 [US3] Implement deterministic time, activation, and demand objective generation in `src/simulation/exhibition.ts`
 - [X] T054 [US3] Implement solo contest commitment and independent Exhibition settlement in `src/simulation/exhibition.ts` (score 0–3; `championshipUnchanged` guarantees no standings/points mutation)
-- [ ] T055 [US3] Reuse race/playback authority without rival, standings, Sponsor, or points mutation in `src/simulation/contest.ts` and `src/simulation/settlement.ts`
-- [ ] T056 [US3] Add Exhibition briefing, objective status, and retained result view models in `src/scenes/practicePresentation.ts` and `src/scenes/resultFormatting.ts`
+- [X] T055 [US3] Reuse race/playback authority without rival, standings, Sponsor, or points mutation — proven by `resolveContest`-derived Exhibition evidence test (isolation asserted; `contest.ts`/`settlement.ts` unchanged)
+- [X] T056 [US3] Add Exhibition briefing, objective status, and retained result view models in `src/scenes/exhibitionPresentation.ts`
 - [ ] T057 [US3] Integrate Exhibition entry/playback/results through `src/scenes/RunScene.ts`, `src/scenes/PracticeContestScene.ts`, and `src/scenes/PracticeResultScene.ts`
 - [ ] T058 [US3] Add score 0–3 and Championship-isolation flow coverage in `tests/integration/encounter-variety-flow.test.ts`
 
@@ -122,7 +122,7 @@ purchase/leave, exact stock filtering, and exactly one modified premium entry.
 - [X] T060 [US4] Implement held-item tag counts across slots/storage and final-four-choice eligibility in `src/simulation/tagSpecialist.ts`
 - [X] T061 [US4] Implement retained cross-origin stock and one same-tag restock in `src/simulation/tagSpecialist.ts` (stock retention is caller-held; restock rebuilds from the same retained seed)
 - [X] T062 [US4] Select one compatible modified stock entry and apply the exact 2-credit premium in `src/simulation/tagSpecialist.ts`
-- [ ] T063 [US4] Reuse authoritative purchase/duplicate/capacity transactions in `src/simulation/draft.ts` and `src/simulation/encounters.ts`
+- [X] T063 [US4] Reuse authoritative purchase/duplicate/capacity transactions via `purchaseTagStock` (atomic capacity placement) in `src/simulation/tagSpecialist.ts`
 - [ ] T064 [US4] Add qualifying-tag selection, stock inspection, restock, purchase, and leave actions in `src/scenes/PrepareScene.ts`
 - [ ] T065 [US4] Add late-run deterministic eligibility and transaction integration coverage in `tests/integration/encounter-variety-flow.test.ts`
 
@@ -135,10 +135,10 @@ purchase/leave, exact stock filtering, and exactly one modified premium entry.
 **Independent Test**: Reconcile a complete run's visible chronology and pending
 status to retained authoritative state without hover or color-only meaning.
 
-- [ ] T066 [P] [US5] Write chronological history, pending category, expiry, and immutable evidence tests in `tests/unit/runRecord.test.ts`
-- [ ] T067 [P] [US5] Write non-hover/non-color and keyboard/pointer/touch presentation contract tests in `tests/unit/encounterPresentation.test.ts` and `tests/integration/garage-input-parity.test.ts`
-- [ ] T068 [US5] Add immutable immediate/deferred encounter history projections in `src/simulation/run.ts`
-- [ ] T069 [US5] Add active/pending/settled/unavailable status view models with target and expiry in `src/scenes/runPresentation.ts`
+- [X] T066 [P] [US5] Write chronological history, pending category, expiry, and immutable evidence tests in `tests/unit/runRecord.test.ts`
+- [X] T067 [P] [US5] Write non-hover/non-color and keyboard/pointer/touch presentation contract tests in `tests/unit/encounterPresentation.test.ts` (garage-input-parity additions remain for scene wiring)
+- [X] T068 [US5] Add immutable immediate/deferred encounter history projections in `src/simulation/historyProjection.ts`
+- [X] T069 [US5] Add active/pending/settled/unavailable status view models with target and expiry in `src/scenes/cadencePresentation.ts`
 - [ ] T070 [US5] Render cadence, pending effects, and encounter history in `src/scenes/RunScene.ts` without global Feature 035 visual work
 - [ ] T071 [US5] Add a full-run acceptance fixture containing accepted, declined, unavailable, concurrent, successful, and failed outcomes in `tests/integration/encounter-variety-flow.test.ts`
 

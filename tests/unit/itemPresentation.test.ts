@@ -220,3 +220,15 @@ describe("Feature 034 placement-behavior inventory (T004/FR-040)", () => {
   });
 });
 
+
+describe("Feature 034 per-item placement-preview corpus gate (T049)", () => {
+  it("every playable item carries a legible, non-placeholder Fitted/Improvised preview", () => {
+    const inventory = placementBehaviorInventory();
+    inventory.forEach((entry) => {
+      expect(entry.fittedDescription.length, `${entry.itemId} fitted`).toBeGreaterThan(0);
+      expect(entry.improvisedDescription.length, `${entry.itemId} improvised`).toBeGreaterThan(0);
+      expect(entry.fittedDescription).not.toMatch(/TODO|TBD|placeholder|FIXME/i);
+      expect(entry.improvisedDescription).not.toMatch(/TODO|TBD|placeholder|FIXME/i);
+    });
+  });
+});

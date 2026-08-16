@@ -1,3 +1,4 @@
+import { upgradeWorkshopFree } from "../../src/simulation/encounterOffers";
 import { describe, expect, it } from "vitest";
 import {
   applyAtomic,
@@ -118,6 +119,28 @@ describe("applyAtomic — atomic rollback (T033/SC-003)", () => {
     });
     expect(result.kind).toBe("failure");
     expect(original.slots[0].instance).not.toBeNull();
+  });
+});
+
+describe("T017 — stale-preview / idempotency boundary readiness", () => {
+  it("a confirmation against a stale state is rejected and the original build survives", () => {
+    const live = instanceBuild([{ id: "a", tier: 1 }]);
+    const instanceId = live.slots[0].instance!.instanceId;
+    // Stale: the source instance no longer exists in the surviving state.
+    const stale = instanceBuild([]);
+    const result = upgradeWorkshopFree(stale, instanceId);
+    expect(result.kind).toBe("failure");
+    if (result.kind === "failure") expect(result.code).toBe("missing-instance");
+    // The live run (the authoritative state) is untouched and still valid.
+    expect(live.slots[0].instance).not.toBeNull();
+  });
+
+  it("replaying the same pure transaction is idempotent (byte-identical result)", () => {
+    const build = instanceBuild([{ id: "x", tier: 1 }]);
+    const id = build.slots[0].instance!.instanceId;
+    const first = upgradeWorkshopFree(build, id);
+    const second = upgradeWorkshopFree(build, id);
+    expect(second).toEqual(first);
   });
 });
 
