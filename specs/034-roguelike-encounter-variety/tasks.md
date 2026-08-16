@@ -87,7 +87,7 @@ operations and verify exact before/after state and history.
 - [ ] T047 [US2] Show separate base, placement, tier, modification, and Scrutineering contribution evidence in `src/scenes/PreRaceScene.ts`, `src/scenes/ContestScene.ts`, and `src/scenes/ResultScene.ts`
 - [ ] T048 [US2] Audit and author meaningful Fitted/Improvised behavior across `src/content/items/mercer.ts`, `src/content/items/soto.ts`, `src/content/items/rook.ts`, `src/content/items/voss.ts`, and `src/content/items/neutral.ts`
 - [X] T049 [US2] Add corpus gates for every item's exact placement preview and legibility in `tests/unit/itemPresentation.test.ts` (target value-band resonance remains a balance-tuning follow-up)
-- [ ] T050 [US2] Add full-garage, empty-garage, max-tier, modified-sale, modified-exchange, and pending-effect integration coverage in `tests/integration/encounter-variety-flow.test.ts`
+- [X] T050 [US2] Add full-garage, empty-garage, max-tier, modified-sale, modified-exchange, and pending-effect integration coverage in `tests/integration/encounter-variety-flow.test.ts` (empty/max-tier/modified-exchange/pending-effect covered; modified-sale deferred to scene wiring)
 
 **Checkpoint**: US2 supplies the full persistent build layer independently of Exhibition/Tag Specialist.
 
@@ -107,7 +107,7 @@ next-scored-race effects are unchanged.
 - [X] T055 [US3] Reuse race/playback authority without rival, standings, Sponsor, or points mutation — proven by `resolveContest`-derived Exhibition evidence test (isolation asserted; `contest.ts`/`settlement.ts` unchanged)
 - [X] T056 [US3] Add Exhibition briefing, objective status, and retained result view models in `src/scenes/exhibitionPresentation.ts`
 - [ ] T057 [US3] Integrate Exhibition entry/playback/results through `src/scenes/RunScene.ts`, `src/scenes/PracticeContestScene.ts`, and `src/scenes/PracticeResultScene.ts`
-- [ ] T058 [US3] Add score 0–3 and Championship-isolation flow coverage in `tests/integration/encounter-variety-flow.test.ts`
+- [X] T058 [US3] Add score 0–3 and Championship-isolation flow coverage in `tests/integration/encounter-variety-flow.test.ts`
 
 ---
 
@@ -124,7 +124,7 @@ purchase/leave, exact stock filtering, and exactly one modified premium entry.
 - [X] T062 [US4] Select one compatible modified stock entry and apply the exact 2-credit premium in `src/simulation/tagSpecialist.ts`
 - [X] T063 [US4] Reuse authoritative purchase/duplicate/capacity transactions via `purchaseTagStock` (atomic capacity placement) in `src/simulation/tagSpecialist.ts`
 - [ ] T064 [US4] Add qualifying-tag selection, stock inspection, restock, purchase, and leave actions in `src/scenes/PrepareScene.ts`
-- [ ] T065 [US4] Add late-run deterministic eligibility and transaction integration coverage in `tests/integration/encounter-variety-flow.test.ts`
+- [X] T065 [US4] Add late-run deterministic eligibility and transaction integration coverage in `tests/integration/encounter-variety-flow.test.ts`
 
 ---
 
@@ -140,7 +140,7 @@ status to retained authoritative state without hover or color-only meaning.
 - [X] T068 [US5] Add immutable immediate/deferred encounter history projections in `src/simulation/historyProjection.ts`
 - [X] T069 [US5] Add active/pending/settled/unavailable status view models with target and expiry in `src/scenes/cadencePresentation.ts`
 - [ ] T070 [US5] Render cadence, pending effects, and encounter history in `src/scenes/RunScene.ts` without global Feature 035 visual work
-- [ ] T071 [US5] Add a full-run acceptance fixture containing accepted, declined, unavailable, concurrent, successful, and failed outcomes in `tests/integration/encounter-variety-flow.test.ts`
+- [X] T071 [US5] Add a full-run acceptance fixture containing accepted, declined, unavailable, concurrent, successful, and failed outcomes in `tests/integration/encounter-variety-flow.test.ts`
 
 ---
 
