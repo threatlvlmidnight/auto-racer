@@ -248,6 +248,42 @@ Run date: 2026-08-15.
 | presentation tests added | 5 in `raceEnrichmentPresentation.test.ts` |
 
 ### Flagged US2/US3 items
+## Phase 9 — Corpus tuning and gates (measured to date)
+
+Run date: 2026-08-15.
+
+### T085 — Tuning-band measurement (defaults do NOT yet meet all targets)
+
+Measured over 5 seeds × 5 lap counts × 6 profiles with the **enriched** resolver
+(default config, incidents enabled):
+
+| Band | Target | Measured | Status |
+|---|---|---|---|
+| post-Opening consequential event rate | ≥ 0.50 | **1.000** | ✅ PASS |
+| full-emphasis race rate | ≤ 1/3 | **1.000** | ❌ needs tuning (signature events classed `full`) |
+| winner-change rate vs baseline | 0.10–0.25 | **0.007** | ❌ needs tuning (default passing rarely flips the winner) |
+| separated-build preservation | strong ahead of weak | 5/5 seeds | ✅ PASS |
+
+`T087` (tuning only centralized validated defaults) is therefore **pending**:
+narrowing `full` emphasis to player signatures only (FR-022) and easing
+attack/incident cadence toward the winner-change band.
+
+### T086 — Enriched 8-car / 16-lap resolution timing
+
+- Budget (T001 baseline): `BASELINE_NO_MATERIAL_DELAY_TOLERANCE_MS = 250`.
+- Measured enriched mean **2.70 ms**, median **2.05 ms**, max **7.85 ms**
+  (5 seeds × 3 warm runs) — ~93× under budget, ~2.8× the pre-enrichment median.
+- Regression `race-enrichment-performance.test.ts` (T086) keeps this gate.
+
+### T090 — Full gates
+`npm test` **93 files / 1672 tests** passing, `npm run lint` exit 0,
+`npm run build` exit 0. No assertions were weakened.
+
+### T092 / T093 — Finalization status (pending completion)
+The Constitution Check and HANDOFF/DEFERRED/034/035-bounds reconciliation
+(T092/T093) are **not yet run** — they are gated on the un-implemented US4/US5/US6
+scenes and the T085/T087 tuning pass (see HANDOFF).
+
 `T039`/`T040`/`T051` (PreRaceScene/TestDayScene briefing + risk rendering) and
 the manual portions of `T041`/`T052` require Phaser scene wiring/manual QA — see
 HANDOFF.
