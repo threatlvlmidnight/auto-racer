@@ -30,15 +30,15 @@ isolated seed derivation, and stable ordering required by every story.
 
 **Critical**: Blocks all user-story implementation.
 
-- [ ] T007 [P] Add failing validation/default/injection tests for every centralized tuning lever and toggle in `tests/unit/enrichmentConfig.test.ts`
-- [ ] T008 [P] Add failing exact phase-coverage fixtures pinning 8=`2/4/2`, 10=`2/5/3`, 12=`3/6/3`, 14=`3/7/4`, 16=`4/8/4`, plus valid one-lap test behavior in `tests/unit/raceEnrichment.test.ts`
-- [ ] T009 [P] Add failing named-sub-seed stability and incident-toggle isolation tests in `tests/unit/raceEnrichment.test.ts`
-- [ ] T010 [P] Add failing driver catalog completeness, equal-schema, and no-stock-scalar tests in `tests/unit/driverRaceIdentities.test.ts`
-- [ ] T011 Define RacePhase, identity, eligibility, ledger, action-window, enrichment-event, risk, and enriched-result types in `src/simulation/types.ts`
-- [ ] T012 Implement immutable defaults and strict `RaceEnrichmentConfig` validation in `src/simulation/enrichmentConfig.ts`
-- [ ] T013 Implement deterministic phase schedules, named sub-seed derivation, event IDs, and stable event-kind/roster ordering in `src/simulation/raceEnrichment.ts`
-- [ ] T014 Implement all four entrant identity definitions and generated-opponent schema in `src/content/driverRaceIdentities.ts`
-- [ ] T015 Run T007-T014 and record exact default config/version and phase fixtures in `specs/033-race-enrichment/acceptance-evidence.md`
+- [X] T007 [P] Add failing validation/default/injection tests for every centralized tuning lever and toggle in `tests/unit/enrichmentConfig.test.ts`
+- [X] T008 [P] Add failing exact phase-coverage fixtures pinning 8=`2/4/2`, 10=`2/5/3`, 12=`3/6/3`, 14=`3/7/4`, 16=`4/8/4`, plus valid one-lap test behavior in `tests/unit/raceEnrichment.test.ts`
+- [X] T009 [P] Add failing named-sub-seed stability and incident-toggle isolation tests in `tests/unit/raceEnrichment.test.ts`
+- [X] T010 [P] Add failing driver catalog completeness, equal-schema, and no-stock-scalar tests in `tests/unit/driverRaceIdentities.test.ts`
+- [X] T011 Define RacePhase, identity, eligibility, ledger, action-window, enrichment-event, risk, and enriched-result types in `src/simulation/types.ts`
+- [X] T012 Implement immutable defaults and strict `RaceEnrichmentConfig` validation in `src/simulation/enrichmentConfig.ts`
+- [X] T013 Implement deterministic phase schedules, named sub-seed derivation, event IDs, and stable event-kind/roster ordering in `src/simulation/raceEnrichment.ts`
+- [X] T014 Implement all four entrant identity definitions and generated-opponent schema in `src/content/driverRaceIdentities.ts`
+- [X] T015 Run T007-T014 and record exact default config/version and phase fixtures in `specs/033-race-enrichment/acceptance-evidence.md`
 
 **Checkpoint**: Framework-free inputs, content, configuration, and ordering are stable.
 

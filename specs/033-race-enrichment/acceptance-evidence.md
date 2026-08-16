@@ -99,3 +99,44 @@ enrichment edits were made: `src/simulation/{types,laps,contest,playback}.ts` an
 of enrichment state (verified by T003 assertions). All Phase 1 additions are new
 test/fixture files only — no Feature 032 surface has been edited yet, so the
 reconciliation is satisfied and the enrichment foundation can proceed additively.
+
+## Phase 2 — Foundational authority and configuration (T007–T015)
+
+Run date: 2026-08-15. Strictly test-first: failing tests (T007–T010) were written
+and confirmed RED (target modules absent) before any implementation, then
+T011–T014 made them GREEN.
+
+Verification: `npx tsc --noEmit` exit 0; the Phase 2 suites pass — enabled by
+`enrichmentConfig.test.ts` (23), `raceEnrichment.test.ts` (13),
+`driverRaceIdentities.test.ts` (5) = **41 tests GREEN** (3 files).
+
+### T015 — Exact default config (version) and phase fixtures
+
+**Config identity**: `RACE_ENRICHMENT_CONFIG_VERSION = "race-enrichment-v1"`.
+
+| Lever | Default |
+|---|---|
+| `enabled` / `incidentsEnabled` | `true` / `true` |
+| `phaseFractions` | opening `0.25`, contest `0.5`, finalPush `0.25` |
+| `initialComposure` | `6` |
+| `attackCost` / `defenseCost` / `signatureActivationCost` | `2` / `2` / `3` |
+| `passingRange` / `minimumPaceAdvantage` | `30` / `0.15` |
+| `signatureThresholds` (4 keys) | `40` each |
+| `signatureTemporaryEffectCaps` | target-pace `0.15`, stat-window `12` |
+| `incidentRiskCaps` | maxRisk `1`, maxTimeLossSeconds `3` |
+| `corpusBands` | post-Opening `>=0.5`, emphasis `<=1/3`, winner-change `0.10–0.25` |
+
+**Phase fixtures** (exact `computePhaseSchedule` counts, verified O(n)):
+
+| Laps | Opening | Contest | Final Push |
+|---:|---:|---:|---:|
+| 8 | 2 | 4 | 2 |
+| 10 | 2 | 5 | 3 |
+| 12 | 3 | 6 | 3 |
+| 14 | 3 | 7 | 4 |
+| 16 | 4 | 8 | 4 |
+
+**Isolation**: toggling `incidentsEnabled` adds/removes exactly the `incidents`
+named seed stream; base streams (`opponent-setup`, `action-ties`) are unchanged;
+a disabled master switch consumes no streams. Named sub-seeds are stable across
+calls (deterministic FNV-1a) and distinct per stream/seed.

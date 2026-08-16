@@ -931,3 +931,208 @@ export interface ScoredRaceRecordProjection {
   losses: number;
   entries: readonly ScoredRaceRecordEntry[];
 }
+// --- Feature 033: race enrichment -----------------------------------------
+
+/**
+ * A lodestone race phase shared by every participant (033 data-model.md). Closed
+ * value; no car can move a boundary for itself.
+ */
+export type RacePhase = "opening" | "contest" | "final-push";
+
+export interface RacePhaseCounts {
+  opening: number;
+  contest: number;
+  finalPush: number;
+}
+
+/** An inclusive lap range; `end < start` represents an empty phase. */
+export interface LapRange {
+  start: number;
+  end: number;
+}
+
+/** Immutable phase schedule over a single race (data-model.md RacePhaseSchedule). */
+export interface RacePhaseSchedule {
+  lapCount: number;
+  opening: LapRange;
+  contest: LapRange;
+  finalPush: LapRange;
+  counts: RacePhaseCounts;
+}
+
+/** Canonical player-signature resolved-stat threshold keys (config + content share this). */
+export const RACE_ENRICHMENT_THRESHOLD_KEYS = Object.freeze([
+  "sig-mercer-cornering",
+  "sig-soto-acceleration",
+  "sig-rook-top-speed",
+  "sig-voss-braking",
+] as const);
+
+/** A passive tendency applies below and above any active threshold. */
+export type DriverPassiveCondition = "always";
+
+export interface DriverPassiveModifier {
+  stat: StatTarget;
+  /** Identity-authored bounded modifier; never a hidden stock scalar. */
+  magnitude: number;
+}
+
+export interface DriverPassive {
+  name: string;
+  description: string;
+  condition: DriverPassiveCondition;
+  modifier: DriverPassiveModifier;
+}
+
+/** Authored activation context for a named signature (research Decision 4). */
+export type SignatureContext = "final-push" | "contested" | "corner-exit";
+
+/** A signature's temporary, retained effect kind (data-model enrichment events). */
+export type TemporaryEffectKind = "target-pace" | "stat-window";
+
+export interface SignatureTemporaryEffect {
+  stat: StatTarget;
+  kind: TemporaryEffectKind;
+}
+
+export interface DriverSignature {
+  id: string;
+  name: string;
+  statTarget: StatTarget;
+  /** Key into `RaceEnrichmentConfig.signatureThresholds` (config, not content). */
+  thresholdKey: string;
+  context: SignatureContext;
+  /** Key into config action costs (config, not content). */
+  composureCostKey: string;
+  /** Stable priority: lower resolves earlier. */
+  priority: number;
+  /** Structural descriptor only; the numeric cap lives in config. */
+  temporaryEffect: SignatureTemporaryEffect;
+}
+
+/** A player entrant identity or a deterministically generated rival identity. */
+export interface DriverRaceIdentity {
+  id: string;
+  displayName: string;
+  /** Presentation-only origin provenance; never grants mechanical advantage. */
+  origin: Origin;
+  passive: DriverPassive;
+  signature: DriverSignature;
+}
+
+/** Closed enrichment event kinds with the data-model stable ordering. */
+export type EnrichmentEventKind =
+  | "phase-transition"
+  | "signature-activation"
+  | "incident"
+  | "attack"
+  | "defense"
+  | "overtake-attempt"
+  | "overtake-completed";
+
+export type EmphasisClass = "full" | "compact" | "results-only";
+
+/** One atomic Composure debit (data-model.md ComposureSpend). */
+export interface ComposureSpend {
+  eventId: string;
+  boundaryId: string;
+  actionKind: string;
+  amount: number;
+  before: number;
+  after: number;
+}
+
+/** Finite, race-local, non-replenishing Composure budget. */
+export interface ComposureLedger {
+  participantId: string;
+  initial: number;
+  remaining: number;
+  spends: readonly ComposureSpend[];
+}
+
+export interface SignatureEligibility {
+  participantId: string;
+  signatureId: string;
+  stat: StatTarget;
+  committedValue: number;
+  threshold: number;
+  /** Legal contributing item/setup sources (origin-agnostic). */
+  contributingSources: readonly string[];
+  eligible: boolean;
+}
+
+/** One deterministic, race-local candidate at an action boundary. */
+export interface ActionCandidate {
+  participantId: string;
+  distance: number;
+  paceAdvantagePerLap: number;
+}
+
+/** A pure action-selection input, never retained UI state. */
+export interface ActionWindow {
+  boundaryId: string;
+  phase: RacePhase;
+  actorId: string;
+  actorPosition: number;
+  actorCumulativeTime: number;
+  candidates: readonly ActionCandidate[];
+}
+
+export type IncidentRiskBand = "low" | "guarded" | "elevated";
+
+export interface IncidentRiskSource {
+  label: string;
+  signedContribution: number;
+}
+
+/** Pre-race projection; never reveals the committed incident outcome. */
+export interface IncidentRiskSummary {
+  band: IncidentRiskBand;
+  sources: readonly IncidentRiskSource[];
+  saferSetupAlternatives: readonly string[];
+  revealsOutcome: false;
+}
+
+/** Immutable retained evidence for one consequential event. */
+export interface EnrichmentEvent {
+  eventId: string;
+  kind: EnrichmentEventKind;
+  phase: RacePhase;
+  boundaryId: string;
+  orderSeq: number;
+  actorId: string;
+  targetId?: string;
+  emphasis: EmphasisClass;
+  before?: { position: number; time: number };
+  after?: { position: number; time: number };
+  composure?: { before: number; spent: number; after: number };
+  temporaryEffect?: { stat: StatTarget; delta: number; startLap: number; endLap: number };
+  incident?: { timeLossSeconds: number; riskBand: IncidentRiskBand };
+  triggerRef?: string;
+}
+
+/** Per-lap temporary/incident-adjusted timing evidence for a car. */
+export interface EnrichedLap {
+  lap: number;
+  phase: RacePhase;
+  baseTime: number;
+  enrichedTime: number;
+  incidentTimeLoss: number;
+}
+
+/** Reserved enriched per-car result contract (populated from Phase 3 onward). */
+export interface EnrichedCarResult extends CarResult {
+  driverIdentity: DriverRaceIdentity;
+  composureLedger: ComposureLedger;
+  enrichedLaps: readonly EnrichedLap[];
+}
+
+/** Reserved enriched contest result contract (populated from Phase 3 onward). */
+export interface EnrichedContestResult extends NCarContestResult {
+  configVersion: string;
+  phaseSchedule: RacePhaseSchedule;
+  events: readonly EnrichmentEvent[];
+  incidentsEnabled: boolean;
+  driverIdentities: Readonly<Record<string, DriverRaceIdentity>>;
+  eligibility: readonly SignatureEligibility[];
+}
