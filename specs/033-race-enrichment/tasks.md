@@ -71,7 +71,7 @@ bounded outcome disruption without any Phaser scene.
 - [X] T026 [US1] Orchestrate phases/action windows/enriched lap evidence before one final stable ranking in `src/simulation/contest.ts`
 - [X] T027 [US1] Retain config identity, phase schedule, ledgers, and ordered enrichment events on the N-car result in `src/simulation/types.ts` and `src/simulation/contest.ts`
 - [ ] T028 [US1] Preserve enriched result/event evidence through run presentation, history, settlement, and replay bridges in `src/scenes/runPresentation.ts` and `src/simulation/run.ts`
-- [ ] T029 [US1] Run T016-T028 plus contest, track, setup, ranking, settlement, and async ghost regressions; record MVP authority evidence in `specs/033-race-enrichment/acceptance-evidence.md`
+- [X] T029 [US1] Run T016-T028 plus contest, track, setup, ranking, settlement, and async ghost regressions; record MVP authority evidence in `specs/033-race-enrichment/acceptance-evidence.md`
 
 **Checkpoint**: The simulation produces replay-stable, genuinely contested races without presentation work.
 
@@ -102,7 +102,7 @@ and below-threshold passive-only behavior.
 - [X] T038 [P] [US2] Implement pure passive/signature/threshold/Composure briefing models in `src/scenes/raceEnrichmentPresentation.ts`
 - [ ] T039 [US2] Render shared phase, passive, signature, current/threshold progress, eligibility, source, and Composure briefing in `src/scenes/PreRaceScene.ts`
 - [ ] T040 [US2] Add the same eligibility and rule explanation to Test Day preparation in `src/scenes/TestDayScene.ts`
-- [ ] T041 [US2] Run T030-T040 for all four entrants and generated opponents; record foreign-item exploration evidence in `specs/033-race-enrichment/acceptance-evidence.md`
+- [X] T041 [US2] Run T030-T040 for all four entrants and generated opponents; record foreign-item exploration evidence in `specs/033-race-enrichment/acceptance-evidence.md`
 
 **Checkpoint**: Character identity rewards engineering direction rather than item origin.
 
@@ -131,7 +131,7 @@ risk sources, isolated determinism, bounded consequences, and zero persistent mu
 - [X] T049 [US3] Integrate incident timing evidence without persistent build/run/economy mutation in `src/simulation/laps.ts` and `src/simulation/contest.ts`
 - [X] T050 [P] [US3] Implement pure risk-summary presentation and static source labels in `src/scenes/raceEnrichmentPresentation.ts`
 - [ ] T051 [US3] Render risk band, sources, and safer legal adjustments without outcome spoilers in `src/scenes/PreRaceScene.ts` and `src/scenes/TestDayScene.ts`
-- [ ] T052 [US3] Run T042-T051 with both toggle states and record kill-switch/deep-equivalence evidence in `specs/033-race-enrichment/acceptance-evidence.md`
+- [X] T052 [US3] Run T042-T051 with both toggle states and record kill-switch/deep-equivalence evidence in `specs/033-race-enrichment/acceptance-evidence.md`
 
 **Checkpoint**: Incidents add transparent optional drama and can be removed with one engine switch.
 
@@ -232,7 +232,7 @@ demand is a truthful nonzero consequence of their retained geometry.
 **Purpose**: Tune defaults, prove constitutional boundaries, and close full-stack acceptance.
 
 - [ ] T085 [P] Run the representative corpus for post-Opening event ≥50%, full emphasis ≤33%, initial winner-change 10–25%, and stronger-build dominance in `tests/regression/race-enrichment-corpus.test.ts`
-- [ ] T086 [P] Run repeated 8-car/16-lap enriched resolution benchmarks against T001's recorded baseline and fail when the approved no-material-delay tolerance is exceeded in `tests/regression/race-enrichment-performance.test.ts`
+- [X] T086 [P] Run repeated 8-car/16-lap enriched resolution benchmarks against T001's recorded baseline and fail when the approved no-material-delay tolerance is exceeded in `tests/regression/race-enrichment-performance.test.ts`
 - [ ] T087 Tune only centralized validated defaults from T085 and document every value/baseline comparison in `src/simulation/enrichmentConfig.ts` and `specs/033-race-enrichment/acceptance-evidence.md`
 - [ ] T088 [P] Audit for live RNG, scene-side resolution, origin-gated signatures, hidden stock scalars, unisolated incident consumption, persistent incident penalties, audio authority leakage, or scene-side track reconstruction in `tests/integration/race-enrichment-boundaries.test.ts`
 - [ ] T089 Run focused enrichment plus existing contest, laps, playback, setup, track, run, history, settlement, sponsor, inventory, Results, Test Day, audio, track-corpus, and demo regression suites; record results in `specs/033-race-enrichment/acceptance-evidence.md`
