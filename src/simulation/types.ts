@@ -1129,6 +1129,7 @@ export interface EnrichedCarResult extends CarResult {
 
 /** Reserved enriched contest result contract (populated from Phase 3 onward). */
 export interface EnrichedContestResult extends NCarContestResult {
+  cars: EnrichedCarResult[];
   configVersion: string;
   phaseSchedule: RacePhaseSchedule;
   events: readonly EnrichmentEvent[];

@@ -14,11 +14,12 @@ import {
   deriveNamedSubSeed,
   evaluateBoundary,
   racePhaseForLap,
+  resolveEnrichment,
   stableEventKindPriority,
   type BoundaryCarState,
 } from "../../src/simulation/raceEnrichment";
 import { generatedRivalIdentity } from "../../src/content/driverRaceIdentities";
-import type { DriverRaceIdentity } from "../../src/simulation/types";
+import type { DriverRaceIdentity, StatTarget } from "../../src/simulation/types";
 import { ENRICHMENT_LAP_COUNTS } from "../fixtures/race-enrichment-fixtures";
 
 /**
@@ -351,6 +352,67 @@ describe("Feature 033 (T018): simultaneous-event priority, tie order, double-spe
     const c1 = result.cars.find((car) => car.id === "c1")!;
     expect(c2.position).toBe(2);
     expect(c1.position).toBe(1);
+  });
+});
+
+describe("Feature 033 (T026): single authoritative enrichment pass", () => {
+  // Cover every physical stat so either generated rival identity is eligible.
+  const eligibleStats = {
+    acceleration: 400,
+    topSpeed: 400,
+    brakingPower: 400,
+    corneringSpeed: 400,
+  };
+  const base = Array.from({ length: 12 }, (_, i) => ({ time: 20 + i }));
+
+  function run(seed: number, resolvedStats: Partial<Record<StatTarget, number>>) {
+    const idA = generatedRivalIdentity(3, 0);
+    const idB = generatedRivalIdentity(3, 1);
+    return resolveEnrichment({
+      config: DEFAULT_RACE_ENRICHMENT_CONFIG,
+      lapCount: 12,
+      seed,
+      rosterOrder: ["a", "b"],
+      cars: [
+        { id: "a", identity: idA, baseLapTimes: base.map((l) => l.time), resolvedStats, contributingSources: [] },
+        { id: "b", identity: idB, baseLapTimes: base.map((l) => l.time), resolvedStats, contributingSources: [] },
+      ],
+    });
+  }
+
+  it("assigns every lap to a phase and emits one phase-transition per phase", () => {
+    const output = run(1, {});
+    expect(output.phaseSchedule.counts).toMatchObject({ opening: 3, contest: 6, finalPush: 3 });
+    const transitions = output.events.filter((event) => event.kind === "phase-transition");
+    expect(transitions).toHaveLength(3);
+    for (const car of output.cars) expect(car.enrichedLaps).toHaveLength(12);
+  });
+
+  it("acts deterministically and retains a composure ledger per car", () => {
+    const first = run(42, {});
+    const second = run(42, {});
+    expect(second.events).toEqual(first.events);
+    expect(second.cars).toEqual(first.cars);
+    expect(first.cars.every((car) => car.composureLedger.spends.length >= 0)).toBe(true);
+  });
+
+  it("marks builds below threshold ineligible and does not charge them for a signature", () => {
+    const output = run(7, {});
+    expect(output.eligibility.every((entry) => entry.eligible === false)).toBe(true);
+    const player = output.cars[0];
+    expect(player.composureLedger.remaining).toBe(DEFAULT_RACE_ENRICHMENT_CONFIG.initialComposure);
+  });
+
+  it("activates eligible contextual signatures and folds a bounded window into enriched laps", () => {
+    const output = run(7, eligibleStats);
+    const activations = output.events.filter((event) => event.kind === "signature-activation");
+    expect(activations.length).toBeGreaterThan(0);
+    const actor = activations[0].actorId;
+    const car = output.cars.find((entry) => entry.id === actor)!;
+    const startLap = activations[0].temporaryEffect?.startLap ?? 1;
+    const enrichedLap = car.enrichedLaps[startLap - 1];
+    // Active window improves target pace, so enriched < authored for that lap.
+    expect(enrichedLap.enrichedTime).toBeLessThan(enrichedLap.baseTime);
   });
 });
 

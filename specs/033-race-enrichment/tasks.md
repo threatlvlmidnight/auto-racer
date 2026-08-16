@@ -59,8 +59,8 @@ bounded outcome disruption without any Phaser scene.
 - [X] T017 [P] [US1] Add failing proximity, pace-advantage, context, attack, defense, attempt, and completed-pass tests in `tests/unit/raceEnrichment.test.ts`
 - [X] T018 [P] [US1] Add failing simultaneous-event priority, roster tie-order, and double-spend prevention tests in `tests/unit/raceEnrichment.test.ts`
 - [X] T019 [P] [US1] Add failing temporary target-pace/stat-window and enriched lap-time evidence tests in `tests/unit/laps.test.ts`
-- [ ] T020 [P] [US1] Add failing repeat-resolution deep-equality and no-playback-RNG tests in `tests/integration/enriched-contest.test.ts`
-- [ ] T021 [P] [US1] Add failing clearly-separated-build preservation and configurable winner-change-band corpus tests in `tests/regression/race-enrichment-corpus.test.ts`
+- [X] T020 [P] [US1] Add failing repeat-resolution deep-equality and no-playback-RNG tests in `tests/integration/enriched-contest.test.ts`
+- [X] T021 [P] [US1] Add failing clearly-separated-build preservation and configurable winner-change-band corpus tests in `tests/regression/race-enrichment-corpus.test.ts`
 
 ### Implementation
 
@@ -68,8 +68,8 @@ bounded outcome disruption without any Phaser scene.
 - [X] T023 [US1] Implement authoritative cumulative boundary state, proximity, pace advantage, and candidate selection in `src/simulation/raceEnrichment.ts`
 - [X] T024 [US1] Implement deterministic attack, defense, attempt, completed-overtake, and before/after event evidence in `src/simulation/raceEnrichment.ts`
 - [X] T025 [US1] Apply bounded temporary effects to authoritative effective stats/lap time while preserving authored build values in `src/simulation/laps.ts`
-- [ ] T026 [US1] Orchestrate phases/action windows/enriched lap evidence before one final stable ranking in `src/simulation/contest.ts`
-- [ ] T027 [US1] Retain config identity, phase schedule, ledgers, and ordered enrichment events on the N-car result in `src/simulation/types.ts` and `src/simulation/contest.ts`
+- [X] T026 [US1] Orchestrate phases/action windows/enriched lap evidence before one final stable ranking in `src/simulation/contest.ts`
+- [X] T027 [US1] Retain config identity, phase schedule, ledgers, and ordered enrichment events on the N-car result in `src/simulation/types.ts` and `src/simulation/contest.ts`
 - [ ] T028 [US1] Preserve enriched result/event evidence through run presentation, history, settlement, and replay bridges in `src/scenes/runPresentation.ts` and `src/simulation/run.ts`
 - [ ] T029 [US1] Run T016-T028 plus contest, track, setup, ranking, settlement, and async ghost regressions; record MVP authority evidence in `specs/033-race-enrichment/acceptance-evidence.md`
 

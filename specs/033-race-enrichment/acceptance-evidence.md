@@ -136,7 +136,66 @@ Verification: `npx tsc --noEmit` exit 0; the Phase 2 suites pass — enabled by
 | 14 | 3 | 7 | 4 |
 | 16 | 4 | 8 | 4 |
 
-**Isolation**: toggling `incidentsEnabled` adds/removes exactly the `incidents`
-named seed stream; base streams (`opponent-setup`, `action-ties`) are unchanged;
-a disabled master switch consumes no streams. Named sub-seeds are stable across
-calls (deterministic FNV-1a) and distinct per stream/seed.
+**Isolation**: toggling `incidentsEnabled` adds/removes exactly the `incidents` named seed stream; base streams (`opponent-setup`, `action-ties`) are unchanged; a disabled master switch consumes no streams. Named sub-seeds are stable across calls (deterministic FNV-1a) and distinct per stream/seed.
+
+## Phase 3 — US1 MVP authority (T016–T029)
+
+Run date: 2026-08-15. Basis commit `d6d64ac` onwards. Strictly test-first; the pure
+reducer and enriched resolver were verified GREEN before any milestone commit.
+
+### T016–T018 / T022–T024 — Pure Composure reducer and boundary evaluation
+
+- `createComposureLedger` / `canAffordComposure` / `debitComposure` (+
+  `ComposureOverspendError`): finite, race-local, non-replenishing budgets;
+  every debit is atomic, immutable, and evidenced with `before`/`after` — an
+  unaffordable action throws without a partial debit.
+- `evaluateBoundary`: processes each car once in stable roster order; a legal
+  pass window requires directly-ahead proximity within `passingRange` (30 s)
+  and a projected pace advantage ≥ `minimumPaceAdvantage` (0.15) × the
+  defender's lap. Attack/defense come from the same ledger and never overspend
+  (FR-012). An unaffordable attacker is skipped with no partial debit (contract
+  §5). A defender-paid pass resolves an isolated `action-ties` coin; an
+  un-defended attack completes. Completed passes retain before/after position;
+  an attempt never presents before/after (FR-011). Events sort by documented
+  kind priority, then roster/sequence (contract §8).
+
+### T019 / T025 — Bounded temporary-effect lap enrichment
+
+- `enrichLapsWithTemporaryEffects` (laps.ts) folds `target-pace` (bounded
+  fraction) and `stat-window` (bounded seconds) windows over explicit lap
+  ranges onto authored `baseTime`, clamped to the positive `MIN_LAP_TIME`
+  floor. Authored build values are never mutated (FR-010). Now accepts a
+  `lapNumberBase` so per-boundary calls keep the correct 1-indexed lap context.
+
+### T020 / T026 / T027 — One authoritative enriched resolution pass
+
+- `resolveEnrichment` (raceEnrichment.ts) walks every lap boundary, emits one
+  `phase-transition` per phase, activates eligible contextual signatures once
+  (spending Composure, folding a bounded temporary window), evaluates
+  Composure-backed attack/defense windows, and returns immutable events + final
+  ledgers + enriched lap evidence. Purely deterministic — equal input → equal
+  events/laps/ledgers (contract §2/§3/§8).
+- `resolveEnrichedContest` (contest.ts, NEW — the legacy resolver is untouched
+  so T003 pre-enrichment baseline pins stay byte-identical) computes base laps,
+  resolves origin-agnostic signature eligibility, runs the single enrichment
+  pass, then ranks **exactly once** from the retained enriched totals. Returns
+  `EnrichedContestResult` with `configVersion`, `phaseSchedule`, `events`,
+  `incidentsEnabled`, `driverIdentities`, and `eligibility` retained (T027).
+
+### T021 / T029 — Regression corpus and gates
+
+| Metric | Measured |
+|---|---|
+| Separated-build preservation (strong vs weak, same field) | `strongBetterRate = 1.000` across seeds; strongWins `5` ≥ weakWins `4` |
+| Winner-change rate (enriched vs baseline winner) | `0.022` (2.2%) — bounded, below the chaotic threshold; full 10–25% band tuning is T085 |
+| Repeat-identity | `100%` deep-equal over seeds × lap counts × profiles |
+| Full 8-car unique-position field | verified at 8/10/12/14/16 laps |
+
+**Total suite after US1**: 91 files / **1639 tests** passing, lint exit 0,
+`tsc --noEmit` exit 0, production `vite build` exit 0.
+
+### Remaining US1 item (flagged)
+
+`T028` (running `src/scenes/runPresentation.ts` / `src/simulation/run.ts`
+through the enriched resolver) and `T029`'s manual browser/viewport evidence are
+the presentation/bridge follow-ons — see HANDOFF.

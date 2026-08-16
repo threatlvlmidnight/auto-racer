@@ -7,11 +7,19 @@ import type {
   ComposureLedger,
   ComposureSpend,
   DriverRaceIdentity,
+  EnrichedLap,
   EnrichmentEvent,
   EnrichmentEventKind,
   RacePhase,
   RacePhaseSchedule,
+  SignatureContext,
+  SignatureEligibility,
+  StatTarget,
 } from "./types";
+import {
+  enrichLapsWithTemporaryEffects,
+  type TemporaryLapEffect,
+} from "./laps";
 
 /**
  * Feature 033 (T013): deterministic shared phases, isolated named sub-seeds, and
@@ -386,4 +394,189 @@ export function evaluateBoundary(
 
   events.sort(compareEnrichmentEvents);
   return { boundaryId, phase, events, cars };
+}
+// --- Phase 3 US1 (T023/T026): one authoritative enrichment pass -----------
+
+/** Authored per-car enrichment input; the committed contest identity (contract §2). */
+export interface EnrichmentCarInput {
+  id: string;
+  identity: DriverRaceIdentity;
+  /** Authored base lap times from the deterministic lap simulation. */
+  baseLapTimes: readonly number[];
+  /** Resolved physical stat values (origin-agnostic), keyed by StatTarget. */
+  resolvedStats: Readonly<Partial<Record<StatTarget, number>>>;
+  /** Legal contributing item/setup sources for eligibility attribution. */
+  contributingSources: readonly string[];
+}
+
+export interface EnrichmentInput {
+  config: RaceEnrichmentConfig;
+  lapCount: number;
+  seed: number;
+  /** Stable tie-break order (player first, then rivals in catalog order). */
+  rosterOrder: readonly string[];
+  cars: readonly EnrichmentCarInput[];
+}
+
+export interface EnrichmentCarOutput {
+  id: string;
+  composureLedger: ComposureLedger;
+  enrichedLaps: readonly EnrichedLap[];
+}
+
+export interface EnrichmentOutput {
+  configVersion: string;
+  incidentsEnabled: boolean;
+  phaseSchedule: RacePhaseSchedule;
+  cars: readonly EnrichmentCarOutput[];
+  /** Ordered by authoritative boundary; each boundary internally kind-ordered. */
+  events: readonly EnrichmentEvent[];
+  eligibility: readonly SignatureEligibility[];
+}
+
+/** Which shared phase a signature's authored context maps into (research Decision 4). */
+const CONTEXT_PHASE: Readonly<Record<SignatureContext, RacePhase>> = Object.freeze({
+  "final-push": "final-push",
+  contested: "contest",
+  "corner-exit": "contest",
+});
+
+/**
+ * The single authoritative enrichment pass (T023/T026). Walks every lap
+ * boundary, activates contextual signatures, evaluates Composure-backed
+ * attack/defense windows, folds bounded temporary effects into enriched lap
+ * evidence, and returns immutable events + final ledgers. Purely deterministic
+ * (contract §2/§3/§5/§8). Callers rank exactly once from the returned enriched
+ * totals.
+ */
+export function resolveEnrichment(input: EnrichmentInput): EnrichmentOutput {
+  const { config, lapCount, seed, rosterOrder, cars } = input;
+  const schedule = computePhaseSchedule(lapCount, config.phaseFractions);
+  const actionTieSeed = deriveNamedSubSeed(seed, "action-ties");
+
+  const eligibility: SignatureEligibility[] = cars.map((car) => {
+    const sig = car.identity.signature;
+    const threshold = config.signatureThresholds[sig.thresholdKey] ?? 0;
+    const committedValue = car.resolvedStats[sig.statTarget] ?? 0;
+    return {
+      participantId: car.id,
+      signatureId: sig.id,
+      stat: sig.statTarget,
+      committedValue,
+      threshold,
+      contributingSources: car.contributingSources,
+      eligible: committedValue >= threshold,
+    };
+  });
+  const eligibleById = new Map(eligibility.map((entry) => [entry.participantId, entry.eligible]));
+
+  const ledgers = new Map<string, ComposureLedger>(
+    cars.map((car) => [car.id, createComposureLedger(car.id, config.initialComposure)]),
+  );
+  let positionOf = new Map<string, number>(rosterOrder.map((id, index) => [id, index + 1]));
+  const cumulativeTime = new Map<string, number>(cars.map((car) => [car.id, 0]));
+  const enrichedLapsByCar = new Map<string, EnrichedLap[]>(cars.map((car) => [car.id, []]));
+  const activated = new Set<string>();
+  const events: EnrichmentEvent[] = [];
+  for (let lap = 1; lap <= lapCount; lap += 1) {
+    const phase = racePhaseForLap(schedule, lap);
+    const boundaryId = `lap-${lap}`;
+    const boundaryEvents: EnrichmentEvent[] = [];
+    let seq = 0;
+
+    const prevPhase = lap === 1 ? null : racePhaseForLap(schedule, lap - 1);
+    if (prevPhase === null || prevPhase !== phase) {
+      seq += 1;
+      boundaryEvents.push({
+        eventId: enrichmentEventId("phase-transition", boundaryId, seq),
+        kind: "phase-transition",
+        phase,
+        boundaryId,
+        orderSeq: seq,
+        actorId: "race",
+        emphasis: "results-only",
+        triggerRef: phase,
+      });
+    }
+
+    const activeEffects: TemporaryLapEffect[] = [];
+    for (const car of cars) {
+      const sig = car.identity.signature;
+      const contextPhase = CONTEXT_PHASE[sig.context];
+      if (contextPhase !== phase) continue;
+      if (!eligibleById.get(car.id) || activated.has(car.id)) continue;
+      const ledger = ledgers.get(car.id)!;
+      if (!canAffordComposure(ledger, config.signatureActivationCost)) continue;
+      seq += 1;
+      const eventId = enrichmentEventId("signature-activation", boundaryId, seq);
+      const cap = config.signatureTemporaryEffectCaps[sig.temporaryEffect.kind] ?? 0;
+      const startLap = lap;
+      const endLap = phase === "final-push" ? lapCount : schedule[phase].end;
+      const after = debitComposure(ledger, config.signatureActivationCost, {
+        eventId,
+        boundaryId,
+        actionKind: "signature",
+      });
+      boundaryEvents.push({
+        eventId,
+        kind: "signature-activation",
+        phase,
+        boundaryId,
+        orderSeq: seq,
+        actorId: car.id,
+        emphasis: "full",
+        before: { position: positionOf.get(car.id)!, time: cumulativeTime.get(car.id)! },
+        composure: { before: ledger.remaining, spent: config.signatureActivationCost, after: after.remaining },
+        temporaryEffect: { stat: sig.temporaryEffect.stat, delta: cap, startLap, endLap },
+        triggerRef: sig.id,
+      });
+      activated.add(car.id);
+      ledgers.set(car.id, after);
+      activeEffects.push({ kind: sig.temporaryEffect.kind, stat: sig.temporaryEffect.stat, magnitude: cap, startLap, endLap });
+    }
+
+    const boundaryCars: BoundaryCarState[] = cars.map((car) => ({
+      id: car.id,
+      identity: car.identity,
+      position: positionOf.get(car.id)!,
+      cumulativeTime: cumulativeTime.get(car.id)!,
+      projectedLapTime: car.baseLapTimes[lap - 1],
+      composure: ledgers.get(car.id)!,
+    }));
+    const boundary = evaluateBoundary(boundaryId, phase, boundaryCars, config, actionTieSeed);
+    for (const event of boundary.events) boundaryEvents.push(event);
+    for (const car of boundary.cars) ledgers.set(car.id, car.composure);
+
+    boundaryEvents.sort(
+      (a, b) => stableEventKindPriority(a.kind) - stableEventKindPriority(b.kind)
+        || a.orderSeq - b.orderSeq,
+    );
+    events.push(...boundaryEvents);
+
+    for (const car of cars) {
+      const base = [{ time: car.baseLapTimes[lap - 1] }];
+      const [enriched] = enrichLapsWithTemporaryEffects(base, () => phase, activeEffects, new Map(), lap);
+      enrichedLapsByCar.get(car.id)!.push(enriched);
+      cumulativeTime.set(car.id, cumulativeTime.get(car.id)! + enriched.enrichedTime);
+    }
+
+    const nextOrder = [...cars].sort(
+      (a, b) => cumulativeTime.get(a.id)! - cumulativeTime.get(b.id)!
+        || rosterOrder.indexOf(a.id) - rosterOrder.indexOf(b.id),
+    );
+    positionOf = new Map(nextOrder.map((car, index) => [car.id, index + 1]));
+  }
+
+  return {
+    configVersion: config.version,
+    incidentsEnabled: config.incidentsEnabled,
+    phaseSchedule: schedule,
+    cars: cars.map((car) => ({
+      id: car.id,
+      composureLedger: ledgers.get(car.id)!,
+      enrichedLaps: enrichedLapsByCar.get(car.id)!,
+    })),
+    events,
+    eligibility,
+  };
 }

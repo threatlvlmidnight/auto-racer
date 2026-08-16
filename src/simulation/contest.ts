@@ -1,5 +1,15 @@
-import { simulatePlayerLaps } from "./laps";
+import { simulatePlayerLaps, resolveCurrentBuildPhysicalStats, type PlayerLap } from "./laps";
 import { resolveRivalBuild, selectGeneratedRivalSetup } from "./rivals";
+import {
+  DEFAULT_RACE_ENRICHMENT_CONFIG,
+  type RaceEnrichmentConfig,
+} from "./enrichmentConfig";
+import {
+  DRIVER_RACE_IDENTITIES,
+  generatedRivalIdentity,
+  identityForEntrant,
+} from "../content/driverRaceIdentities";
+import { resolveEnrichment } from "./raceEnrichment";
 import { installedItems, storedItems } from "./slots";
 import { generateTrack } from "./tracks";
 import type { Track } from "./tracks";
@@ -9,8 +19,12 @@ import {
   type CarResult,
   type ContestOutcome,
   type ContestResult,
+  type DriverRaceIdentity,
+  type EnrichedCarResult,
+  type EnrichedContestResult,
   type NCarContestResult,
   type LockedRaceSetup,
+  type RegionId,
   type RivalProfile,
   type SampleGhost,
   type VehicleBuild,
@@ -243,5 +257,162 @@ function resolveNCarContest(
     // evidence rather than left for a caller to regenerate or reconstruct.
     track,
     tieBreakOrder: rosterOrder.map((entry) => entry.id),
+  };
+}
+export interface ResolveEnrichedContestInput {
+  playerBuild: Build;
+  /** The player's entrant id -> picks their authored driver identity. */
+  entrantId: string;
+  rivalRoster: readonly RivalProfile[];
+  level: number;
+  seed: number;
+  lapCount?: number;
+  regionTheme?: RegionId;
+  config?: RaceEnrichmentConfig;
+}
+
+interface EnrichedCarMeta {
+  id: string;
+  role: "player" | "rival";
+  name: string;
+  color: string;
+  identity: DriverRaceIdentity;
+  baseLaps: PlayerLap[];
+  resolvedStats: Readonly<Partial<Record<import("./types").StatTarget, number>>>;
+  contributingSources: readonly string[];
+}
+
+/**
+ * Feature 033 (T026/T027): the authoritative enriched N-car resolution path.
+ *
+ * Computes the same deterministic base lap simulation as the legacy resolver,
+ * runs the single pure enrichment pass (phases, contextual signatures,
+ * Composure attacks/defenses, bounded temporary effects), then ranks exactly
+ * once from the retained enriched lap totals (contract §1/§2/§8). The legacy
+ * `resolveNCarContest` is deliberately untouched so the pre-enrichment baseline
+ * pins (T003) stay byte-identical; production race consumers switch to this
+ * function to receive retained enrichment evidence.
+ */
+export function resolveEnrichedContest(
+  input: ResolveEnrichedContestInput,
+): EnrichedContestResult {
+  const {
+    playerBuild,
+    entrantId,
+    rivalRoster,
+    level,
+    seed,
+    regionTheme,
+  } = input;
+  const lapCount = input.lapCount ?? LAP_COUNT;
+  const config = input.config ?? DEFAULT_RACE_ENRICHMENT_CONFIG;
+
+  if (rivalRoster.length !== REQUIRED_RIVAL_COUNT) {
+    throw new ContestResolutionError(
+      "invalid-roster-size",
+      `Expected exactly ${REQUIRED_RIVAL_COUNT} rivals, got ${rivalRoster.length}`,
+    );
+  }
+
+  const track = generateTrack(seed, level, regionTheme);
+  const playerIdentity = identityForEntrant(entrantId)
+    ?? DRIVER_RACE_IDENTITIES[0];
+
+  const metas: EnrichedCarMeta[] = [
+    {
+      id: "player",
+      role: "player",
+      name: "Player",
+      color: PLAYER_COLOR,
+      identity: playerIdentity,
+      baseLaps: simulatePlayerLaps(playerBuild, lapCount, track),
+      resolvedStats: resolveCurrentBuildPhysicalStats(playerBuild).stats,
+      contributingSources: installedItems(playerBuild)
+        .filter((item): item is NonNullable<typeof item> => item !== null)
+        .map((item) => item.id),
+    },
+    ...rivalRoster.map((profile, rivalIndex) => {
+      const rivalBuild = resolveRivalBuild(profile, level, seed);
+      return {
+        id: profile.id,
+        role: "rival" as const,
+        name: profile.name,
+        color: profile.color,
+        identity: generatedRivalIdentity(seed, rivalIndex),
+        baseLaps: simulatePlayerLaps(rivalBuild, lapCount, track),
+        resolvedStats: resolveCurrentBuildPhysicalStats(rivalBuild).stats,
+        contributingSources: [],
+      };
+    }),
+  ];
+
+  const rosterOrder = metas.map((meta) => meta.id);
+  const enrichment = resolveEnrichment({
+    config,
+    lapCount,
+    seed,
+    rosterOrder,
+    cars: metas.map((meta) => ({
+      id: meta.id,
+      identity: meta.identity,
+      baseLapTimes: meta.baseLaps.map((lap) => lap.time),
+      resolvedStats: meta.resolvedStats,
+      contributingSources: meta.contributingSources,
+    })),
+  });
+
+  const enrichedTotalById = new Map<string, number>(
+    enrichment.cars.map((car) => [
+      car.id,
+      car.enrichedLaps.reduce((sum, lap) => sum + lap.enrichedTime, 0),
+    ]),
+  );
+  const enrichedLapsById = new Map(
+    enrichment.cars.map((car) => [car.id, car.enrichedLaps]),
+  );
+  const ledgerById = new Map(
+    enrichment.cars.map((car) => [car.id, car.composureLedger]),
+  );
+
+  // One final stable ranking from enriched totals (roster-order tie-break).
+  const ranked = [...metas].sort(
+    (a, b) => enrichedTotalById.get(a.id)! - enrichedTotalById.get(b.id)!
+      || rosterOrder.indexOf(a.id) - rosterOrder.indexOf(b.id),
+  );
+  const leaderTime = enrichedTotalById.get(ranked[0].id)!;
+
+  const cars: EnrichedCarResult[] = ranked.map((meta, index) => ({
+    id: meta.id,
+    role: meta.role,
+    name: meta.name,
+    color: meta.color,
+    time: enrichedTotalById.get(meta.id)!,
+    laps: meta.baseLaps,
+    position: index + 1,
+    gapToLeader: enrichedTotalById.get(meta.id)! - leaderTime,
+    driverIdentity: meta.identity,
+    composureLedger: ledgerById.get(meta.id)!,
+    enrichedLaps: enrichedLapsById.get(meta.id)!,
+  }));
+
+  const player = cars.find((car) => car.role === "player")!;
+  const outcome: ContestOutcome = player.position === 1
+    ? "win"
+    : player.time === leaderTime ? "tie" : "loss";
+
+  return {
+    lapCount,
+    cars,
+    outcome,
+    board: installedItems(playerBuild).filter((item): item is NonNullable<typeof item> => item !== null),
+    storage: storedItems(playerBuild).filter((item): item is NonNullable<typeof item> => item !== null),
+    track,
+    tieBreakOrder: rosterOrder,
+    configVersion: enrichment.configVersion,
+    phaseSchedule: enrichment.phaseSchedule,
+    events: enrichment.events,
+    incidentsEnabled: enrichment.incidentsEnabled,
+    driverIdentities: Object.fromEntries(metas.map((meta) => [meta.id, meta.identity])),
+    eligibility: enrichment.eligibility,
   };
 }

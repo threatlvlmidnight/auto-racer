@@ -798,9 +798,11 @@ export function enrichLapsWithTemporaryEffects(
   phaseForLap: (lap: number) => RacePhase,
   effects: readonly TemporaryLapEffect[] = [],
   incidentTimeLossByLap: ReadonlyMap<number, number> = new Map(),
+  /** 1-indexed race-lap number of the first element (default: array index + 1). */
+  lapNumberBase = 1,
 ): EnrichedLap[] {
   return laps.map((lap, index) => {
-    const lapNumber = index + 1;
+    const lapNumber = lapNumberBase + index;
     const baseTime = lap.time;
     const phase = phaseForLap(lapNumber);
     let adjustment = 0;
