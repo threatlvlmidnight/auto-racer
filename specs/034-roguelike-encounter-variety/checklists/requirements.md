@@ -38,16 +38,16 @@
 
 ## Implementation evidence (T077)
 
-Recorded after the first deterministic implementation pass. The deterministic,
-pure Feature 034 modules ship with passing unit/integration tests; the 
-item-instance migration of the live garage/draft/build/run and the scene-level
-integration (Phases 4+, Tasks T008–T071) remain for a follow-up pass.
+Refreshed after the live integration pass. The deterministic modules now feed
+versioned live-run item authority and all seven encounter surfaces. Atomic
+preview/confirm, typed stale/unavailable recovery, Exhibition playback,
+Tag Specialist stock, Guarded evidence, and exact Scrutineering return are wired.
 
 ### Deterministic gates (passing locally)
 
 | Command | Result | Notes |
 |---|---|---|
-| `npm test` | 1 818 passed (was 1 698) | +120 Feature 034 tests across 115 files |
+| `npm test` | 1 826 passed | 115 test files; localhost deployment gates rerun outside the sandbox |
 | `npm run lint` | clean | no additions |
 | `npm run build` | ✓ | `vite build` + `tsc --noEmit` both pass |
 
@@ -64,10 +64,26 @@ integration (Phases 4+, Tasks T008–T071) remain for a follow-up pass.
 - `src/content/encounterVariants.ts` — three early/mid/late variants per new type (T024/T052, T072 gate).
 - `tests/fixtures/encounter-variety-fixtures.ts` — seeded RNG + instance-build builders (T002).
 
+### Live integration added
+
+- `src/simulation/liveItemInstances.ts` retains run-scoped instance identity
+  across acquisition, movement, storage, tiering, modification, sale, exchange,
+  rebuild, Scrutineering, and race projection without mutating catalog definitions.
+- `src/simulation/encounters.ts` owns exact previews, stale/idempotent guards,
+  retained variant payloads, all build-changing confirmations, Tag Specialist,
+  Exhibition settlement, and immutable history evidence.
+- `src/scenes/RunScene.ts`, `PracticeContestScene.ts`, and
+  `PracticeResultScene.ts` expose the new choice detail, exact-item actions,
+  Tag Specialist purchase flow, and unscored Exhibition playback/results.
+- `src/simulation/playback.ts` applies Guarded once to retained Feature 033
+  overtake evidence while leaving timing and finishing order authoritative.
+- Browser acceptance at 1280×720 confirmed the title/entrant/destination flow
+  and the expanded choice cards' visible input, cost, and consequence copy with
+  no browser console warnings or errors.
+
 ### Deterministic test files added
 
 `itemInstances`, `statNormalization`, `encounterCadence`, `itemModifications`,
 `scrutineering`, `encounterTransactions`, `exhibition`, `tagSpecialist`,
 `encounterContent` (unit), plus `encounter-variety-flow` (integration T074/T075)
 and Test-Day boundary additions (T073). The `balance.test.ts` T016 gate is green.
-

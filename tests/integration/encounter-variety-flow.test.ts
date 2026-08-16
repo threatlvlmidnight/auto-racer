@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ENCOUNTER_FAMILIES, createCadenceState, generateEncounterPair } from "../../src/simulation/encounterCadence";
+import { ENCOUNTER_FAMILIES, cadenceDomainRng, createCadenceState, generateEncounterPair, recordSelection } from "../../src/simulation/encounterCadence";
 import { evaluateExhibitionResult, generateExhibitionTrial } from "../../src/simulation/exhibition";
 import { heldTagCounts, purchaseTagStock, qualifyingTags } from "../../src/simulation/tagSpecialist";
 import { factoryDevelopmentOffers, upgradeWorkshopFree } from "../../src/simulation/encounterOffers";
@@ -7,7 +7,7 @@ import { exchangeSameTierForeign } from "../../src/simulation/encounterTransacti
 import { isSlotReserved } from "../../src/simulation/scrutineering";
 import { projectEncounterHistory, type HistoryOutcome } from "../../src/simulation/historyProjection";
 import { ENTRANTS } from "../../src/content/entrants";
-import { ENCOUNTER_VARIANTS } from "../../src/content/encounterVariants";
+import { ENCOUNTER_VARIANTS, variantsFor } from "../../src/content/encounterVariants";
 import type { EncounterType, ItemDefinition } from "../../src/simulation/types";
 import { testItem } from "../fixtures/vehicle-build-fixtures";
 import { instanceBuild, seededRng } from "../fixtures/encounter-variety-fixtures";
@@ -65,6 +65,39 @@ describe("T075 — async replay determinism for offers, modifications, Exhibitio
     expect(ENCOUNTER_VARIANTS).toEqual(ENCOUNTER_VARIANTS);
     const ids = ENCOUNTER_VARIANTS.map((variant) => variant.variantId);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("T030 — deterministic 20-choice-stage route corpus", () => {
+  const NEW_TYPES: EncounterType[] = [
+    "exhibition-trial", "scrutineering", "factory-development", "upgrade-workshop",
+    "privateer-exchange", "experimental-rebuild", "tag-specialist",
+  ];
+
+  function route(seed: number) {
+    let state = createCadenceState();
+    return Array.from({ length: 20 }, (_unused, index) => {
+      const rng = cadenceDomainRng(seed, index + 1);
+      const pair = generateEncounterPair(state, ALL_TYPES, rng);
+      if (pair.fallback) throw new Error("full eligible corpus unexpectedly fell back");
+      const variants = pair.kinds.map((type) => {
+        const authored = variantsFor(type);
+        return authored.length === 0 ? null : authored[Math.floor(rng() * authored.length) % authored.length].variantId;
+      });
+      state = recordSelection(state, pair.kinds[index % 2]);
+      return { ordinal: index + 1, pair: pair.kinds, variants };
+    });
+  }
+
+  it("replays byte-identically and covers every eligible new type and authored variant across retained seeds", () => {
+    const seeds = Array.from({ length: 32 }, (_unused, index) => index + 1);
+    const first = seeds.flatMap(route);
+    const second = seeds.flatMap(route);
+    expect(second).toEqual(first);
+    const types = new Set(first.flatMap((stage) => stage.pair));
+    NEW_TYPES.forEach((type) => expect(types.has(type)).toBe(true));
+    const variants = new Set(first.flatMap((stage) => stage.variants).filter((id): id is string => id !== null));
+    ENCOUNTER_VARIANTS.forEach((variant) => expect(variants.has(variant.variantId)).toBe(true));
   });
 });
 describe("T050 — garage-state transaction integration", () => {
@@ -157,4 +190,3 @@ describe("T071 — full-run history projection acceptance fixture", () => {
     expect(view[3].targetStage).toBe(9);
   });
 });
-

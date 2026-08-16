@@ -16,6 +16,8 @@ import {
   sellHeldItem,
   selectSponsorOption,
   toggleLock,
+  confirmVarietyEncounterAction,
+  previewVarietyEncounterAction,
   type PartsSupplierPayload,
   type CrossPollinationPayload,
   type RewardDraftPayload,
@@ -840,5 +842,55 @@ describe("card locking (015-economy-depth US4)", () => {
     const fresh = activate(0);
     const freshPayload = fresh.activeEncounter!.payload as PartsSupplierPayload;
     expect(freshPayload.stock.every((entry) => entry.locked === false)).toBe(true);
+  });
+});
+
+describe("Feature 034 retained encounter lifecycle", () => {
+  function activeVariety(type: "upgrade-workshop" | "factory-development") {
+    const item = NEUTRAL_ITEMS[0];
+    const base = createRun({
+      runId: "run-variety-contract",
+      seed: 34,
+      identityTag: "performance",
+      identity: runIdentityForEntrant("evelyn-mercer")!,
+      build: vehicleBuild([item]),
+      rng: () => 0,
+    });
+    const choice = { id: `${base.stages[0].id}-${type}`, stageId: base.stages[0].id, type, summary: type };
+    return chooseEncounter({ ...base, availableChoices: [choice] }, choice.id, () => 0);
+  }
+
+  it("previews and confirms against one exact stable instance, then advances once", () => {
+    const run = activeVariety("upgrade-workshop");
+    const target = run.instanceBuild!.slots.find((slot) => slot.instance)!.instance!;
+    const preview = previewVarietyEncounterAction(run, { kind: "upgrade", instanceId: target.instanceId });
+    expect(preview.disabledReason).toBeNull();
+    const confirmation = confirmVarietyEncounterAction(run, preview, () => 0);
+    expect(confirmation.kind).toBe("confirmed");
+    if (confirmation.kind !== "confirmed") return;
+    expect(confirmation.run.instanceBuild!.slots.find((slot) => slot.instance)?.instance).toMatchObject({
+      instanceId: target.instanceId,
+      tier: 2,
+    });
+    expect(confirmation.run.stageIndex).toBe(run.stageIndex + 1);
+    expect(confirmVarietyEncounterAction(confirmation.run, preview, () => 0).kind).toBe("already-settled");
+  });
+
+  it("rejects a stale preview without mutating the supplied run", () => {
+    const run = activeVariety("upgrade-workshop");
+    const target = run.instanceBuild!.slots.find((slot) => slot.instance)!.instance!;
+    const preview = previewVarietyEncounterAction(run, { kind: "upgrade", instanceId: target.instanceId });
+    const changed = { ...run, encounterRevision: (run.encounterRevision ?? 0) + 1 };
+    const confirmation = confirmVarietyEncounterAction(changed, preview, () => 0);
+    expect(confirmation).toMatchObject({ kind: "stale", run: changed });
+    expect(changed.instanceBuild!.slots.find((slot) => slot.instance)?.instance?.tier).toBe(1);
+  });
+
+  it("returns a disabled preview for an unknown modification rather than throwing", () => {
+    const run = activeVariety("factory-development");
+    const target = run.instanceBuild!.slots.find((slot) => slot.instance)!.instance!;
+    expect(previewVarietyEncounterAction(run, {
+      kind: "modify", instanceId: target.instanceId, modificationId: "not-authored",
+    }).disabledReason).toContain("unavailable");
   });
 });

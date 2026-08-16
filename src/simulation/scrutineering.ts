@@ -149,8 +149,13 @@ export function settleScrutineering(
   if (slot.instance && slot.instance.instanceId !== reservation.surrenderedInstanceId) {
     return { kind: "occupied", reason: "slot-occupied" };
   }
-  const updated = build.slots.map((candidate, index) =>
-    index === slotIndex ? { ...candidate, instance: recoveredInstance } : candidate,
-  );
+  const updated = build.slots.map((candidate, index) => {
+    if (index === slotIndex) {
+      return { ...candidate, instance: { ...recoveredInstance, scrutineeringBonusPercent: 0 } };
+    }
+    return candidate.instance
+      ? { ...candidate, instance: { ...candidate.instance, scrutineeringBonusPercent: 0 } }
+      : candidate;
+  });
   return { kind: "settled", build: { ...build, slots: updated } };
 }

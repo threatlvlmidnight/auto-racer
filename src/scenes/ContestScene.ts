@@ -15,12 +15,13 @@ import {
   type NCarPlaybackSchedule,
   type PlaybackController,
   type PlaybackSpeed,
+  applyGuardedOvertakeOverlay,
 } from "../simulation/playback";
 import { generateTrack, pointAtProgress, trackCenterline } from "../simulation/tracks";
 import { STOCK_PHYSICAL_STATS, type PhysicalStats } from "../simulation/tracks";
 import { deriveLiveStatChangesByLap } from "../simulation/laps";
 import {
-  type NCarContestResult,
+  type EnrichedContestResult,
   type OfferedItem,
   type ItemPhysicsContribution,
   type VehicleBuild,
@@ -68,7 +69,7 @@ function tintFromHex(color: string): number {
  * sidebar; Feature 033 adds presentation-only pause, speed, and Skip controls.
  */
 export class ContestScene extends Phaser.Scene {
-  private result?: NCarContestResult;
+  private result?: EnrichedContestResult;
   private schedule?: NCarPlaybackSchedule;
   // 030-race-playback-controls (T017/T020): scored playback now advances
   // through a fresh race-local PresentationClock whose 1× rate is the legacy
@@ -153,7 +154,7 @@ export class ContestScene extends Phaser.Scene {
       vehicleId: opponent.build.vehicleId,
       levelScaling: () => ({ slotsToFill: 4, priceBias: "high" as const }),
     }));
-    this.result = resolveEnrichedContest({
+    const resolved = resolveEnrichedContest({
       playerBuild: input.build,
       entrantId: input.run.identity.entrantId,
       rivalRoster: eliteRoster ?? input.rivalRoster,
@@ -166,6 +167,13 @@ export class ContestScene extends Phaser.Scene {
       rivalBuilds: eliteOpponents?.map((opponent) => opponent.build) ?? localOpponents?.map((opponent) => opponent.build),
       regionTheme: input.regionId,
     });
+    const guardedInstanceIds = input.run.instanceBuild
+      ? [...input.run.instanceBuild.slots, ...input.run.instanceBuild.storage]
+        .flatMap((position) => position.instance?.modification?.kind === "guarded" ? [position.instance.instanceId] : [])
+      : [];
+    this.result = guardedInstanceIds.length > 0
+      ? { ...resolved, events: applyGuardedOvertakeOverlay(resolved.events, guardedInstanceIds) }
+      : resolved;
     // 027-race-legibility-integrity (contract §1): playback reads the
     // contest's own retained track — it never regenerates one independently,
     // even though generateTrack is pure and would agree given the same seed.

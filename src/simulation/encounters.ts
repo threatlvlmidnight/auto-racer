@@ -1,6 +1,6 @@
 import { drawItem } from "./draft";
 import { commitGarageCommand, sellItem, undoSale, type GarageDestination, type GarageSource } from "./garage";
-import { poolForCrossPollination, poolForEntrant } from "./itemPools";
+import { allItemDefinitions, poolForCrossPollination, poolForEntrant } from "./itemPools";
 import {
   activateChoice,
   completeNonPvpEncounter,
@@ -14,6 +14,24 @@ import {
   type SponsorObjective,
 } from "./run";
 import { resolveDuplicateAcquisition } from "./tiering";
+import { reconcileLiveInstances } from "./liveItemInstances";
+import {
+  cadenceDomainRng,
+  generateEncounterPair,
+  isAcquisitionPrimary,
+  recordSelection,
+  upgradeGuaranteePending,
+} from "./encounterCadence";
+import { ENCOUNTER_VARIANTS, variantsFor } from "../content/encounterVariants";
+import { generateTagSpecialistStock, purchaseTagStock, qualifyingTags, type TagStockEntry } from "./tagSpecialist";
+import { evaluateExhibitionResult, generateExhibitionTrial, type ExhibitionContestEvidence, type ExhibitionTrial } from "./exhibition";
+import { projectEncounterHistory, type EncounterHistoryInput } from "./historyProjection";
+import { projectInstanceBuild } from "./liveItemInstances";
+import { upgradeWorkshopFree } from "./encounterOffers";
+import { attachModification, offeredModificationsFor } from "./itemModifications";
+import { buildWorkshopModification, specById } from "../content/itemModifications";
+import { commitScrutineering } from "./scrutineering";
+import { exchangeSameTierForeign, rebuildForCredit } from "./encounterTransactions";
 import { TAG_WEIGHT, type AcquisitionReceipt, type Build, type ContestResult, type OfferedItem, type VehicleBuild } from "./types";
 
 export type RandomSource = () => number;
@@ -121,6 +139,62 @@ export function registeredEncounterTypes(): readonly (keyof typeof ENCOUNTER_SUM
 export function generateEncounterChoices(run: Run, rng: RandomSource): EncounterChoice[] {
   const stage = run.stages[run.stageIndex];
   if (!stage || stage.kind !== "choice") return [];
+  if (run.cadenceState && run.instanceBuild && Boolean(run.worldTour?.selectedRegions.length)) {
+    const catalog = allItemDefinitions();
+    const eligible = registeredEncounterTypes().filter((type) => {
+      if (type === "sponsor-meeting") return run.activeSponsorContract === null;
+      if (type === "scrutineering") return !run.pendingScrutineering
+        && run.instanceBuild!.slots.filter((slot) => slot.instance).length >= 2;
+      if (type === "factory-development" || type === "privateer-exchange") {
+        return run.instanceBuild!.slots.some((slot) => slot.instance)
+          || run.instanceBuild!.storage.some((position) => position.instance);
+      }
+      if (type === "upgrade-workshop") {
+        return [...run.instanceBuild!.slots.map((slot) => slot.instance), ...run.instanceBuild!.storage.map((position) => position.instance)]
+          .some((instance) => instance !== null && instance.tier < 3);
+      }
+      if (type === "experimental-rebuild") {
+        return run.credits >= 2
+          && [...run.instanceBuild!.slots.map((slot) => slot.instance), ...run.instanceBuild!.storage.map((position) => position.instance)]
+            .some((instance) => instance !== null && instance.tier < 3);
+      }
+      if (type === "tag-specialist") {
+        return (stage.choiceOrdinal ?? 0) >= 17 && qualifyingTags(run.instanceBuild!, catalog).length > 0;
+      }
+      return true;
+    });
+    const domainRng = cadenceDomainRng(run.seed, stage.choiceOrdinal ?? run.cadenceState.choiceOrdinal + 1);
+    let pair = generateEncounterPair(run.cadenceState, eligible, domainRng);
+    // Guarantee the workshop in each global half whenever a legal target exists.
+    if (eligible.includes("upgrade-workshop") && upgradeGuaranteePending(run.cadenceState, stage.position)) {
+      const counterpart = eligible.find((type) => type !== "upgrade-workshop" && !isAcquisitionPrimary(type))
+        ?? eligible.find((type) => type !== "upgrade-workshop");
+      if (counterpart) pair = { kinds: ["upgrade-workshop", counterpart], fallback: false };
+    }
+    // Preserve the established opening-leg Sponsor contract opportunity. The
+    // next-Championship targeting contract depends on meeting the Sponsor
+    // before the intervening Local Race, while later stages use full cadence.
+    if ((stage.choiceOrdinal ?? 0) === 1 && eligible.includes("sponsor-meeting")
+      && !pair.fallback && !pair.kinds.includes("sponsor-meeting")) {
+      pair = { kinds: [pair.kinds[0], "sponsor-meeting"], fallback: false };
+    }
+    if (pair.fallback) return [];
+    return pair.kinds.map((type, index) => {
+      const variants = variantsFor(type);
+      const variant = variants.length > 0
+        ? variants[Math.floor(domainRng() * variants.length) % variants.length]
+        : null;
+      return {
+        id: `${stage.id}-choice-${index + 1}`,
+        stageId: stage.id,
+        type,
+        summary: variant?.description ?? (NEW_ENCOUNTER_SUMMARIES as Partial<Record<NewEncounterType, string>>)[type as NewEncounterType]
+          ?? ENCOUNTER_SUMMARIES[type as keyof typeof ENCOUNTER_SUMMARIES],
+        variantId: variant?.variantId,
+        title: variant?.title,
+      };
+    });
+  }
   const eligible = (Object.keys(ENCOUNTER_SUMMARIES) as (keyof typeof ENCOUNTER_SUMMARIES)[])
     .filter((type) => type !== "sponsor-meeting" || run.activeSponsorContract === null);
   const firstIndex = Math.min(eligible.length - 1, Math.floor(rng() * eligible.length));
@@ -146,8 +220,11 @@ export function chooseEncounter(
   if (!choice) {
     throw new RunTransitionError("encounter-id-mismatch", `Choice ${choiceId} is not current`);
   }
-  const active = activateChoice(run, choice);
-  const payload = createPayload(active, choice.type, rng);
+  const activeBase = activateChoice(run, choice);
+  const active = activeBase.cadenceState
+    ? { ...activeBase, cadenceState: recordSelection(activeBase.cadenceState, choice.type) }
+    : activeBase;
+  const payload = createPayload(active, choice, rng);
   return {
     ...active,
     activeEncounter: active.activeEncounter
@@ -158,10 +235,11 @@ export function chooseEncounter(
 
 function createPayload(
   run: Run,
-  type: EncounterChoice["type"],
+  choice: EncounterChoice,
   rng: RandomSource,
-): RewardDraftPayload | CrossPollinationPayload | PartsSupplierPayload | SponsorMeetingPayload {
+): RewardDraftPayload | CrossPollinationPayload | PartsSupplierPayload | SponsorMeetingPayload | import("./run").PendingEncounterPayload {
   const encounter = run.activeEncounter!;
+  const type = choice.type;
   if (type === "reward-draft") {
     const itemPool = poolForEntrant(run.identity.entrantId);
     return {
@@ -188,7 +266,60 @@ function createPayload(
   if (type === "parts-supplier") {
     return createSupplierPayload(run, rng);
   }
-  return createSponsorPayload(run, rng);
+  if (type === "sponsor-meeting") return createSponsorPayload(run, rng);
+  const variant = choice.variantId
+    ? ENCOUNTER_VARIANTS.find((candidate) => candidate.variantId === choice.variantId)
+    : undefined;
+  if (type === "exhibition-trial") {
+    return {
+      kind: type,
+      variantId: variant?.variantId,
+      data: generateExhibitionTrial(run.seed, run.cadenceState?.choiceOrdinal ?? 1),
+    };
+  }
+  if (type === "tag-specialist") {
+    return {
+      kind: type,
+      variantId: variant?.variantId,
+      data: {
+        qualifyingTags: qualifyingTags(run.instanceBuild!, allItemDefinitions()),
+        selectedTag: null,
+        stock: [],
+        restockUsed: false,
+      } satisfies TagSpecialistPayloadData,
+    };
+  }
+  return { kind: type, variantId: variant?.variantId };
+}
+
+export interface TagSpecialistPayloadData {
+  qualifyingTags: readonly string[];
+  selectedTag: string | null;
+  stock: readonly TagStockEntry[];
+  restockUsed: boolean;
+}
+
+function tagPayload(run: Run): TagSpecialistPayloadData | null {
+  if (run.activeEncounter?.type !== "tag-specialist" || run.activeEncounter.payload.kind !== "tag-specialist") return null;
+  return run.activeEncounter.payload.data as TagSpecialistPayloadData | null;
+}
+
+export function selectTagSpecialistTag(run: Run, tag: string, rng: RandomSource = () => 0): Run {
+  const data = tagPayload(run);
+  if (!data || !data.qualifyingTags.includes(tag)) throw new RunTransitionError("invalid-action", "Tag is not qualified");
+  const pool = allItemDefinitions().filter((item) => item.origin !== run.identity.origin);
+  const stock = generateTagSpecialistStock(tag, pool, rng, run.stageIndex + 1, `${run.seed}:${run.activeEncounter!.id}:tag`);
+  const payload = { ...run.activeEncounter!.payload, data: { ...data, selectedTag: tag, stock, restockUsed: false } };
+  return { ...run, activeEncounter: { ...run.activeEncounter!, payload }, encounterRevision: (run.encounterRevision ?? 0) + 1 };
+}
+
+export function restockTagSpecialist(run: Run, rng: RandomSource = () => 0): Run {
+  const data = tagPayload(run);
+  if (!data?.selectedTag || data.restockUsed) throw new RunTransitionError("invalid-action", "Tag Specialist restock is unavailable");
+  const pool = allItemDefinitions().filter((item) => item.origin !== run.identity.origin);
+  const stock = generateTagSpecialistStock(data.selectedTag, pool, rng, run.stageIndex + 1, `${run.seed}:${run.activeEncounter!.id}:restock`);
+  const payload = { ...run.activeEncounter!.payload, data: { ...data, stock, restockUsed: true } };
+  return { ...run, activeEncounter: { ...run.activeEncounter!, payload }, encounterRevision: (run.encounterRevision ?? 0) + 1 };
 }
 
 function createSupplierPayload(
@@ -341,10 +472,11 @@ export function acceptReward(
   if (!offer) throw new RunTransitionError("encounter-id-mismatch", `Offer ${offerId} is not current`);
   const acquisition = applyAcquisition(run.build, offer.item, placement);
   const { run: updated, creditTransactionIds } = withDuplicateConversion(run, encounterId, acquisition);
+  const live = withLiveBuild(updated, acquisition.build, "draft");
   return completeNonPvpEncounter(
-    updated,
+    live,
     encounterId,
-    { build: acquisition.build, acquisitionOutcome: { kind: "accepted", itemIds: [offer.item.id] }, creditTransactionIds },
+    { build: live.build, acquisitionOutcome: { kind: "accepted", itemIds: [offer.item.id] }, creditTransactionIds },
     rng,
   );
 }
@@ -390,9 +522,9 @@ export function purchaseStock(
     creditTransactions: [...run.creditTransactions, purchaseTransaction],
   };
   const { run: afterConversion } = withDuplicateConversion(afterPurchase, encounterId, acquisition);
+  const live = withLiveBuild(afterConversion, acquisition.build, "encounter");
   return {
-    ...afterConversion,
-    build: acquisition.build,
+    ...live,
     activeEncounter: {
       ...run.activeEncounter!,
       payload: {
@@ -465,9 +597,9 @@ export function sellHeldItem(
   }
   const transaction = transactionFor(run, encounterId, "sell-back", result.creditsGained);
   const receipt = { ...result.receipt, creditsBefore: run.credits, creditsAfter: transaction.balanceAfter };
+  const live = withLiveBuild(run, result.build, "encounter");
   return {
-    ...run,
-    build: result.build,
+    ...live,
     credits: transaction.balanceAfter,
     creditTransactions: [...run.creditTransactions, transaction],
     saleUndo: { receipt, valid: true },
@@ -485,7 +617,8 @@ export function sellInventoryItem(
   const contextId = run.activeEncounter?.id ?? `${run.id}-inventory-${run.stageIndex}`;
   const transaction = transactionFor(run, contextId, "sell-back", result.creditsGained);
   const receipt = { ...result.receipt, creditsBefore: run.credits, creditsAfter: transaction.balanceAfter };
-  return { ...run, build: result.build, credits: transaction.balanceAfter,
+  const live = withLiveBuild(run, result.build, "encounter");
+  return { ...live, credits: transaction.balanceAfter,
     creditTransactions: [...run.creditTransactions, transaction], saleUndo: { receipt, valid: true } };
 }
 
@@ -498,9 +631,9 @@ export function undoSoldItem(run: Run, encounterId: string): Run {
   const undo = undoSale(run.build, run.saleUndo.receipt);
   if (undo.kind === "invalid") throw new RunTransitionError("invalid-action", "The original inventory location is unavailable");
   const sale = run.saleUndo.receipt;
+  const live = withLiveBuild(run, undo.build, "encounter");
   return {
-    ...run,
-    build: undo.build,
+    ...live,
     credits: sale.creditsBefore,
     creditTransactions: [...run.creditTransactions, transactionFor(run, encounterId, "sell-back", -sale.totalPayout)],
     saleUndo: { ...run.saleUndo, valid: false },
@@ -715,5 +848,354 @@ function transactionFor(
     kind,
     amount,
     balanceAfter,
+  };
+}
+
+function withLiveBuild(
+  run: Run,
+  build: VehicleBuild,
+  provenance: import("./types").InstanceProvenance,
+): Run {
+  if (build === run.build) return run;
+  const reservedSlotId = run.pendingScrutineering?.reservation.slotId;
+  if (reservedSlotId && build.slots.find((slot) => slot.slotId === reservedSlotId)?.item) {
+    throw new RunTransitionError("invalid-action", "Scrutineering has reserved that vehicle slot until settlement");
+  }
+  if (!run.encounterVarietyVersion) return { ...run, build };
+  const reconciled = reconcileLiveInstances(
+    run.build,
+    build,
+    run.instanceBuild,
+    { runId: run.id, nextOrdinal: run.itemInstanceOrdinal ?? 1 },
+    provenance,
+  );
+  if (reconciled.kind !== "ok") {
+    throw new RunTransitionError("invalid-action", `Instance authority unavailable (${reconciled.reason})`);
+  }
+  return {
+    ...run,
+    build: reconciled.build,
+    instanceBuild: reconciled.instanceBuild,
+    itemInstanceOrdinal: reconciled.nextOrdinal,
+    encounterRevision: (run.encounterRevision ?? 0) + 1,
+  };
+}
+
+// --- Feature 034 retained encounter lifecycle / atomic action contract -----
+
+export type VarietyEncounterAction =
+  | { kind: "decline" }
+  | { kind: "unavailable"; reason: string }
+  | { kind: "upgrade"; instanceId: string }
+  | { kind: "modify"; instanceId: string; modificationId: string }
+  | { kind: "scrutineer"; slotId: string }
+  | { kind: "exchange"; instanceId: string; replacementDefinitionId: string }
+  | { kind: "rebuild"; instanceId: string; replacementDefinitionId: string }
+  | { kind: "tag-purchase"; entryId: string };
+
+export interface VarietyActionPreview {
+  encounterId: string;
+  encounterType: NewEncounterType;
+  action: VarietyEncounterAction;
+  stateFingerprint: string;
+  costCredits: number;
+  consequence: string;
+  disabledReason: string | null;
+}
+
+export type VarietyConfirmation =
+  | { kind: "confirmed"; run: Run }
+  | { kind: "stale" | "illegal" | "unavailable" | "already-settled"; run: Run; reason: string };
+
+function varietyFingerprint(run: Run, action: VarietyEncounterAction): string {
+  return `${run.activeEncounter?.id ?? "none"}:${run.encounterRevision ?? 0}:${JSON.stringify(action)}`;
+}
+
+export function previewVarietyEncounterAction(run: Run, action: VarietyEncounterAction): VarietyActionPreview {
+  const active = run.activeEncounter;
+  if (!active || active.type === "pvp" || !(active.type in NEW_ENCOUNTER_SUMMARIES)) {
+    throw new RunTransitionError("invalid-encounter-type", "Expected Feature 034 encounter");
+  }
+  let disabledReason: string | null = null;
+  if (!run.instanceBuild) disabledReason = "Legacy run has no instance authority";
+  if (action.kind === "upgrade") {
+    const target = run.instanceBuild
+      ? [...run.instanceBuild.slots.map((slot) => slot.instance), ...run.instanceBuild.storage.map((position) => position.instance)]
+        .find((instance) => instance?.instanceId === action.instanceId)
+      : null;
+    if (!target) disabledReason = "Selected item is no longer held";
+    else if (target.tier === 3) disabledReason = "Selected item is already max tier";
+  }
+  if (action.kind === "modify" && run.instanceBuild) {
+    const target = [...run.instanceBuild.slots.map((slot) => slot.instance), ...run.instanceBuild.storage.map((position) => position.instance)]
+      .find((instance) => instance?.instanceId === action.instanceId);
+    const definition = target ? allItemDefinitions().find((item) => item.id === target.definitionId) : null;
+    if (!target || !definition) disabledReason = "Selected item is no longer available";
+    else {
+      const spec = specById(action.modificationId);
+      if (!spec || !offeredModificationsFor(definition).some((candidate) => candidate.modificationId === spec.modificationId)) {
+        disabledReason = "Modification is unavailable for this item";
+      }
+    }
+  }
+  if (action.kind === "scrutineer") {
+    if (run.pendingScrutineering) disabledReason = "A Scrutineering effect is already pending";
+    else if (!run.instanceBuild?.slots.find((slot) => slot.slotId === action.slotId)?.instance) {
+      disabledReason = "Select an installed item";
+    }
+  }
+  if (action.kind === "exchange" || action.kind === "rebuild") {
+    const held = run.instanceBuild
+      ? [...run.instanceBuild.slots.map((slot) => slot.instance), ...run.instanceBuild.storage.map((position) => position.instance)]
+      : [];
+    const target = held.find((instance) => instance?.instanceId === action.instanceId);
+    const catalog = new Map(allItemDefinitions().map((item) => [item.id, item]));
+    const source = target ? catalog.get(target.definitionId) : undefined;
+    const replacement = catalog.get(action.replacementDefinitionId);
+    if (!target || !source || !replacement) disabledReason = "Selected item or replacement is unavailable";
+    else if (action.kind === "exchange" && replacement.origin === source.origin) disabledReason = "Replacement must be foreign-origin";
+    else if (action.kind === "rebuild" && target.tier === 3) disabledReason = "Max-tier items cannot be rebuilt";
+    else if (action.kind === "rebuild" && replacement.installationCategory !== source.installationCategory) {
+      disabledReason = "Replacement must match the installation category";
+    } else if (action.kind === "rebuild" && run.credits < 2) disabledReason = "Rebuild requires 2 credits";
+  }
+  if (action.kind === "tag-purchase") {
+    const data = tagPayload(run);
+    const entry = data?.stock.find((candidate) => candidate.entryId === action.entryId);
+    if (!entry) disabledReason = "Stock entry is unavailable";
+    else if (run.credits < entry.price) disabledReason = `Requires ${entry.price} credits`;
+    else if (run.instanceBuild && !run.instanceBuild.slots.some((slot) => !slot.instance)
+      && !run.instanceBuild.storage.some((position) => !position.instance)) disabledReason = "Garage is full";
+  }
+  return {
+    encounterId: active.id,
+    encounterType: active.type as NewEncounterType,
+    action,
+    stateFingerprint: varietyFingerprint(run, action),
+    costCredits: action.kind === "rebuild" ? 2
+      : action.kind === "tag-purchase" ? tagPayload(run)?.stock.find((entry) => entry.entryId === action.entryId)?.price ?? 0 : 0,
+    consequence: action.kind === "decline" ? "Leave without changing the run"
+      : action.kind === "unavailable" ? action.reason
+        : action.kind === "upgrade" ? "Raise the exact item by one tier"
+          : action.kind === "modify" ? "Replace the exact item's Workshop Modification"
+            : action.kind === "exchange" ? "Trade the exact item for the selected same-tier foreign part"
+              : action.kind === "rebuild" ? "Pay 2 credits and replace the exact item one tier higher"
+                : action.kind === "tag-purchase" ? "Buy this exact retained stock entry"
+                  : "Impound this item for the next scored race and boost the others",
+    disabledReason,
+  };
+}
+
+function appendVarietyEvidence(
+  run: Run,
+  outcome: EncounterHistoryInput["outcome"],
+  fingerprint: string,
+  pendingCategory: EncounterHistoryInput["pendingCategory"] = null,
+  targetStage: number | null = null,
+  creditsDelta = 0,
+): Run {
+  const active = run.activeEncounter!;
+  const evidence: EncounterHistoryInput = {
+    encounterId: active.id,
+    typeId: active.type as NewEncounterType,
+    stageOrdinal: run.stages[run.stageIndex]?.position ?? run.stageIndex + 1,
+    outcome,
+    creditsDelta,
+    pendingCategory,
+    targetStage,
+    mutationFingerprint: fingerprint,
+  };
+  return { ...run, encounterHistory: [...(run.encounterHistory ?? []), evidence] };
+}
+
+function nextScoredStage(run: Run): number {
+  return run.stages.slice(run.stageIndex + 1).find((stage) => stage.kind === "pvp")?.position
+    ?? run.stageIndex + 2;
+}
+
+function mapInstanceBuild(
+  build: import("./types").InstanceBuild,
+  instanceId: string,
+  update: (instance: import("./types").ItemInstance) => import("./types").ItemInstance,
+): import("./types").InstanceBuild {
+  return {
+    ...build,
+    slots: build.slots.map((slot) => slot.instance?.instanceId === instanceId ? { ...slot, instance: update(slot.instance) } : slot),
+    storage: build.storage.map((position) => position.instance?.instanceId === instanceId ? { ...position, instance: update(position.instance) } : position),
+  };
+}
+
+export function confirmVarietyEncounterAction(
+  run: Run,
+  preview: VarietyActionPreview,
+  rng: RandomSource = () => 0,
+): VarietyConfirmation {
+  if (run.encounterHistory?.some((entry) => entry.encounterId === preview.encounterId)) {
+    return { kind: "already-settled", run, reason: "Encounter already settled" };
+  }
+  if (run.activeEncounter?.id !== preview.encounterId
+    || varietyFingerprint(run, preview.action) !== preview.stateFingerprint) {
+    return { kind: "stale", run, reason: "Run state changed after preview" };
+  }
+  if (preview.disabledReason) return { kind: "unavailable", run, reason: preview.disabledReason };
+  if (!run.instanceBuild) return { kind: "unavailable", run, reason: "Instance authority unavailable" };
+
+  let next = run;
+  let outcome: EncounterHistoryInput["outcome"] = "accepted";
+  if (preview.action.kind === "decline" || preview.action.kind === "unavailable") {
+    outcome = preview.action.kind === "decline" ? "declined" : "unavailable";
+  } else if (preview.action.kind === "upgrade") {
+    const upgraded = upgradeWorkshopFree(run.instanceBuild, preview.action.instanceId);
+    if (upgraded.kind !== "ok") return { kind: "illegal", run, reason: upgraded.code };
+    const catalog = new Map(allItemDefinitions().map((item) => [item.id, item]));
+    const projected = projectInstanceBuild(upgraded.build, catalog);
+    if (!projected) return { kind: "unavailable", run, reason: "Unknown item definition" };
+    next = { ...run, instanceBuild: upgraded.build, build: projected, encounterRevision: (run.encounterRevision ?? 0) + 1 };
+  } else if (preview.action.kind === "modify") {
+    const modification = buildWorkshopModification(preview.action.modificationId, preview.encounterId, run.stageIndex + 1);
+    if (!modification) return { kind: "illegal", run, reason: "Unknown modification" };
+    const instanceBuild = mapInstanceBuild(run.instanceBuild, preview.action.instanceId, (instance) => attachModification(instance, modification));
+    const catalog = new Map(allItemDefinitions().map((item) => [item.id, item]));
+    const projected = projectInstanceBuild(instanceBuild, catalog);
+    if (!projected) return { kind: "unavailable", run, reason: "Unknown item definition" };
+    next = { ...run, instanceBuild, build: projected, encounterRevision: (run.encounterRevision ?? 0) + 1 };
+  } else if (preview.action.kind === "scrutineer") {
+    const slotId = preview.action.slotId;
+    const catalog = new Map(allItemDefinitions().map((item) => [item.id, item]));
+    const result = commitScrutineering(
+      run.instanceBuild,
+      slotId,
+      run.stageIndex + 1,
+      undefined,
+      (instance) => catalog.get(instance.definitionId)?.price ?? 0,
+    );
+    if (result.kind !== "committed") return { kind: "unavailable", run, reason: result.reason };
+    const recoveredInstance = run.instanceBuild.slots.find((slot) => slot.slotId === slotId)!.instance!;
+    const pendingEffectId = `${preview.encounterId}-scrutineering`;
+    const projected = projectInstanceBuild(result.build, catalog);
+    if (!projected) return { kind: "unavailable", run, reason: "Unknown item definition" };
+    const target = nextScoredStage(run);
+    next = {
+      ...run,
+      instanceBuild: result.build,
+      build: projected,
+      pendingScrutineering: {
+        pendingEffectId,
+        sourceEncounterId: preview.encounterId,
+        template: result.template,
+        reservation: { pendingEffectId, slotId: result.template.reservedSlotId, surrenderedInstanceId: result.template.surrenderedInstanceId },
+        recoveredInstance,
+        targetScoredStage: target,
+        status: "pending",
+      },
+      encounterRevision: (run.encounterRevision ?? 0) + 1,
+    };
+    next = appendVarietyEvidence(next, "pending", preview.stateFingerprint, "scrutineering", target);
+    return {
+      kind: "confirmed",
+      run: completeNonPvpEncounter(next, preview.encounterId, { build: next.build, acquisitionOutcome: { kind: "scrutineering-pending" } }, rng),
+    };
+  } else if (preview.action.kind === "exchange" || preview.action.kind === "rebuild") {
+    const action = preview.action;
+    const catalog = new Map(allItemDefinitions().map((item) => [item.id, item]));
+    const held = [...run.instanceBuild.slots.map((slot) => slot.instance), ...run.instanceBuild.storage.map((position) => position.instance)];
+    const target = held.find((instance) => instance?.instanceId === action.instanceId);
+    const source = target ? catalog.get(target.definitionId) : undefined;
+    const replacement = catalog.get(action.replacementDefinitionId);
+    if (!target || !source || !replacement) return { kind: "unavailable", run, reason: "Item definition unavailable" };
+    const replacementId = `${run.id}-item-${run.itemInstanceOrdinal ?? 1}`;
+    const changed = action.kind === "exchange"
+      ? exchangeSameTierForeign(run.instanceBuild, target.instanceId, source, replacement, replacementId)
+      : rebuildForCredit(run.instanceBuild, target.instanceId, source, source.price, run.credits, 2, replacement, replacementId);
+    if (changed.kind === "failure") return { kind: "illegal", run, reason: changed.code };
+    const projected = projectInstanceBuild(changed.value, catalog);
+    if (!projected) return { kind: "unavailable", run, reason: "Unknown item definition" };
+    next = {
+      ...run,
+      instanceBuild: changed.value,
+      build: projected,
+      itemInstanceOrdinal: (run.itemInstanceOrdinal ?? 1) + 1,
+      encounterRevision: (run.encounterRevision ?? 0) + 1,
+    };
+    if (action.kind === "rebuild") {
+      const transaction = transactionFor(next, preview.encounterId, "experimental-rebuild", -2);
+      next = {
+        ...next,
+        credits: transaction.balanceAfter,
+        creditTransactions: [...next.creditTransactions, transaction],
+      };
+    }
+  } else if (preview.action.kind === "tag-purchase") {
+    const action = preview.action;
+    const data = tagPayload(run);
+    const entry = data?.stock.find((candidate) => candidate.entryId === action.entryId);
+    if (!data || !entry) return { kind: "unavailable", run, reason: "Stock entry unavailable" };
+    const purchased = purchaseTagStock(
+      run.instanceBuild,
+      data.stock,
+      entry.entryId,
+      `${run.id}-item-${run.itemInstanceOrdinal ?? 1}`,
+    );
+    if (purchased.kind === "failure") return { kind: "illegal", run, reason: purchased.reason };
+    const catalog = new Map(allItemDefinitions().map((item) => [item.id, item]));
+    const projected = projectInstanceBuild(purchased.build, catalog);
+    if (!projected) return { kind: "unavailable", run, reason: "Unknown item definition" };
+    const transaction = transactionFor(run, preview.encounterId, "tag-specialist-purchase", -entry.price);
+    next = {
+      ...run,
+      instanceBuild: purchased.build,
+      build: projected,
+      credits: transaction.balanceAfter,
+      creditTransactions: [...run.creditTransactions, transaction],
+      itemInstanceOrdinal: (run.itemInstanceOrdinal ?? 1) + 1,
+      encounterRevision: (run.encounterRevision ?? 0) + 1,
+    };
+  }
+
+  next = appendVarietyEvidence(next, outcome, preview.stateFingerprint, null, null, next.credits - run.credits);
+  const transactionIds = next.creditTransactions.slice(run.creditTransactions.length).map((transaction) => transaction.id);
+  return {
+    kind: "confirmed",
+    run: completeNonPvpEncounter(next, preview.encounterId, {
+      build: next.build,
+      acquisitionOutcome: { kind: outcome },
+      creditTransactionIds: transactionIds,
+    }, rng),
+  };
+}
+
+/** Deterministic chronology consumed by cadence presentation. */
+export function retainedVarietyHistory(run: Run) {
+  return projectEncounterHistory(run.encounterHistory ?? []);
+}
+
+/** Settles Exhibition evidence without touching scored-race or pending-effect authority. */
+export function completeExhibitionEncounter(
+  run: Run,
+  evidence: ExhibitionContestEvidence,
+  rng: RandomSource = () => 0,
+): VarietyConfirmation {
+  const active = run.activeEncounter;
+  if (!active || active.type !== "exhibition-trial" || active.payload.kind !== "exhibition-trial") {
+    return { kind: "unavailable", run, reason: "Exhibition is not active" };
+  }
+  if (run.encounterHistory?.some((entry) => entry.encounterId === active.id)) {
+    return { kind: "already-settled", run, reason: "Exhibition already settled" };
+  }
+  const trial = active.payload.data as ExhibitionTrial | undefined;
+  if (!trial) return { kind: "unavailable", run, reason: "Exhibition objectives are unavailable" };
+  const result = evaluateExhibitionResult(trial, evidence);
+  const fingerprint = `${active.id}:${JSON.stringify(result.objectives)}`;
+  const evidenced = appendVarietyEvidence(
+    { ...run, reputation: run.reputation + result.reputationAward },
+    "accepted",
+    fingerprint,
+  );
+  return {
+    kind: "confirmed",
+    run: completeNonPvpEncounter(evidenced, active.id, {
+      build: run.build,
+      acquisitionOutcome: { kind: `exhibition-${result.score}`, itemIds: [] },
+    }, rng),
   };
 }

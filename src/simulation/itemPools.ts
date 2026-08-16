@@ -10,6 +10,14 @@ import type { EntrantId, ItemDefinition, VehicleId } from "./types";
 
 const ENTRANT_IDS: readonly EntrantId[] = ENTRANTS.map((entrant) => entrant.id);
 
+/** Complete immutable playable catalog in stable authoring order. */
+export function allItemDefinitions(): readonly ItemDefinition[] {
+  return [
+    ...NEUTRAL_ITEMS,
+    ...ENTRANT_IDS.flatMap((entrantId) => EXCLUSIVE_ITEMS[entrantId]),
+  ];
+}
+
 /**
  * Deterministic PRNG (mulberry32), duplicated locally rather than imported
  * from rivals.ts — matching this project's own established convention

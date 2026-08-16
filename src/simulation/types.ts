@@ -381,6 +381,8 @@ export interface VehicleSlotState {
   item: ItemDefinition | null;
   /** 016-duplicate-item-tiering: meaningful only when item is non-null. */
   tier: 1 | 2 | 3;
+  /** Feature 034 stable run-scoped identity; absent only on typed legacy input. */
+  instanceId?: string;
 }
 
 export interface StoredPosition {
@@ -388,6 +390,8 @@ export interface StoredPosition {
   item: ItemDefinition | null;
   /** 016-duplicate-item-tiering: meaningful only when item is non-null. */
   tier: 1 | 2 | 3;
+  /** Feature 034 stable run-scoped identity; absent only on typed legacy input. */
+  instanceId?: string;
 }
 
 /** The run's authoritative current build; replaces the generic board. */
@@ -1299,4 +1303,3 @@ export const CANONICAL_STAT_TARGETS: readonly CanonicalStatTarget[] = [
   "brakingPower",
   "corneringSpeed",
 ];
-

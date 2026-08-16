@@ -45,8 +45,8 @@ export type DeepReadonly<T> = T extends (...args: never[]) => unknown
       ? { readonly [Key in keyof T]: DeepReadonly<T[Key]> }
       : T;
 
-export type PracticeOriginCategory = "run-hub" | "acquisition" | "pvp-briefing";
-export type PracticeOriginContext = "run-hub" | "supplier" | "reward-draft" | "pvp-briefing" | "pre-race-setup";
+export type PracticeOriginCategory = "run-hub" | "acquisition" | "pvp-briefing" | "exhibition-trial";
+export type PracticeOriginContext = "run-hub" | "supplier" | "reward-draft" | "pvp-briefing" | "pre-race-setup" | "exhibition-trial";
 export type PracticeRoute = "RunScene" | "PrepareScene" | "PreRaceScene";
 
 export interface PracticeNavigationState {
@@ -821,7 +821,8 @@ function validateOrigin(run: Run, context: PracticeOriginContext, encounterId: s
   }
   const expectedKind = context === "supplier"
     ? "parts-supplier"
-    : context === "reward-draft" ? "reward-draft" : "pvp";
+    : context === "reward-draft" ? "reward-draft"
+      : context === "exhibition-trial" ? "exhibition-trial" : "pvp";
   if (!run.activeEncounter || run.activeEncounter.id !== encounterId || run.activeEncounter.type !== expectedKind) {
     throw new Error("Origin does not match the active encounter");
   }

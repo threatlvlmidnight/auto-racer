@@ -1,6 +1,20 @@
 # Handoff
 
-## Latest session — Feature 034 deterministic core implemented (2026-08-15)
+## Latest session — Feature 034 live implementation completed (2026-08-15)
+
+Feature 034 is now wired into live World Tour runs. Stable run-scoped item
+instances survive garage/economy mutations; all seven new encounter types have
+retained payloads and scene actions; Exhibition reuses unscored practice
+playback; Tag Specialist supports qualifying-tag selection, one restock, exact
+stock inspection, purchase, and leave; Scrutineering returns the exact impounded
+instance after the next scored race; and Guarded rewrites the first retained
+successful overtake against the player without changing settlement authority.
+
+Validation: `npm run lint` and `npm run build` pass; full `npm test` passed
+1,826/1,826 across 115 files. In-app browser acceptance traversed the live
+title/entrant/destination/choice path with no console warnings or errors.
+
+## Prior session — Feature 034 deterministic core implemented (2026-08-15)
 
 The first implementation pass for Feature 034 landed the **deterministic, pure
 simulation core** (the TDD-held portion) as additive modules with passing tests.

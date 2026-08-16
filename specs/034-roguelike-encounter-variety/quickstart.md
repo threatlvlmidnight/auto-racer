@@ -53,3 +53,15 @@ The owner performs browser visual acceptance. Implementation validation should
 still cover keyboard/pointer/touch actions and supported viewport layout through
 presentation-contract tests; this planning cycle does not require automated
 visual screenshots.
+
+## Implementation validation — 2026-08-15
+
+- Focused Feature 034 unit/integration suites passed, including stable live
+  instances, atomic stale/idempotent confirmation, Guarded once-per-race,
+  Exhibition isolation, Tag Specialist, and the 20-stage/32-seed route corpus.
+- `npm run lint` passed.
+- `npm run build` passed (`vite build` plus `tsc --noEmit`).
+- Full `npm test` passed 1,826 tests across 115 files.
+- In-app browser acceptance at 1280×720 traversed title → entrant → destination
+  → live route choices and verified the visible interaction/input/cost/result
+  card treatment. Browser console warnings/errors: none.

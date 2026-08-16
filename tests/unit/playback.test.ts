@@ -29,6 +29,7 @@ import {
   advancePlaybackController,
   selectPlaybackControllerSpeed,
   skipPlaybackController,
+  applyGuardedOvertakeOverlay,
   type CrossedPlaybackEvent,
   type LiveProjectionState,
   type PlaybackSpeed,
@@ -57,6 +58,7 @@ import {
   type LapBreakdown,
   type NCarContestResult,
   type RivalProfile,
+  type EnrichmentEvent,
 } from "../../src/simulation/types";
 import { vehicleBuild } from "../fixtures/vehicle-build-fixtures";
 
@@ -144,6 +146,21 @@ describe("buildPlaybackSchedule", () => {
       const start = index === 0 ? 0 : schedule.player.visualLapBoundaries[index - 1];
       expect(boundary - start).toBeGreaterThanOrEqual(MIN_VISUAL_LAP_SECONDS);
     });
+  });
+});
+
+describe("Feature 034 Guarded retained overlay", () => {
+  it("rewrites only the first completed overtake against the player and retains instance evidence", () => {
+    const events: EnrichmentEvent[] = [1, 2].map((orderSeq) => ({
+      eventId: `pass-${orderSeq}`, kind: "overtake-completed", phase: "contest",
+      boundaryId: `lap-${orderSeq}`, orderSeq, actorId: `rival-${orderSeq}`, targetId: "player",
+      emphasis: "compact", before: { position: 2, time: 10 }, after: { position: 1, time: 10 },
+    }));
+    const overlaid = applyGuardedOvertakeOverlay(events, ["run-item-7"]);
+    expect(overlaid.map((event) => event.kind)).toEqual(["overtake-attempt", "overtake-completed"]);
+    expect(overlaid[0].triggerRef).toContain("guarded:run-item-7");
+    expect(overlaid[0].after).toBeUndefined();
+    expect(events[0].kind).toBe("overtake-completed");
   });
 });
 

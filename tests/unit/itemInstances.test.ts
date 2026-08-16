@@ -10,6 +10,8 @@ import {
 import type { ItemDefinition } from "../../src/simulation/types";
 import { testItem } from "../fixtures/vehicle-build-fixtures";
 import { instanceBuild } from "../fixtures/encounter-variety-fixtures";
+import { createEmptyVehicleBuild } from "../../src/simulation/build";
+import { emptyInstanceBuild, reconcileLiveInstances } from "../../src/simulation/liveItemInstances";
 
 beforeEach(() => {
   resetInstanceIds();
@@ -77,5 +79,39 @@ describe("definitionFor / cloneInstance — immutable definition boundary (T007)
     expect(copy.instanceId).toBe(instance.instanceId);
     expect(copy).toEqual(instance);
     expect(copy).not.toBe(instance);
+  });
+});
+
+describe("T008–T011 live garage instance migration", () => {
+  it("allocates once, then preserves identity through move and tier changes", () => {
+    const empty = createEmptyVehicleBuild("the-highwheel");
+    const item = testItem({ id: "live-a", name: "Live A", price: 2, timeModifier: -0.1 });
+    const installed = {
+      ...empty,
+      slots: empty.slots.map((slot, index) => index === 0 ? { ...slot, item, tier: 1 as const } : slot),
+    };
+    const acquired = reconcileLiveInstances(empty, installed, emptyInstanceBuild(empty), { runId: "run-a", nextOrdinal: 1 }, "draft");
+    expect(acquired.kind).toBe("ok");
+    if (acquired.kind !== "ok") return;
+    const instanceId = acquired.build.slots[0].instanceId;
+    expect(instanceId).toBe("run-a-item-1");
+
+    const moved = {
+      ...acquired.build,
+      slots: acquired.build.slots.map((slot, index) => index === 0 ? { ...slot, item: null, tier: 1 as const, instanceId: undefined } : slot),
+      storage: acquired.build.storage.map((position, index) => index === 0 ? { ...position, item, tier: 2 as const, instanceId } : position),
+    };
+    const reconciled = reconcileLiveInstances(acquired.build, moved, acquired.instanceBuild, { runId: "run-a", nextOrdinal: acquired.nextOrdinal }, "draft");
+    expect(reconciled.kind).toBe("ok");
+    if (reconciled.kind !== "ok") return;
+    expect(reconciled.build.storage[0].instanceId).toBe(instanceId);
+    expect(reconciled.instanceBuild.storage[0].instance?.tier).toBe(2);
+    expect(reconciled.nextOrdinal).toBe(2);
+  });
+
+  it("rejects a missing instance authority instead of guessing a migration", () => {
+    const build = createEmptyVehicleBuild("the-highwheel");
+    expect(reconcileLiveInstances(build, build, undefined, { runId: "legacy", nextOrdinal: 1 }, "draft"))
+      .toEqual({ kind: "legacy-unavailable", reason: "missing-instance-build" });
   });
 });

@@ -1,6 +1,29 @@
 import type { Track } from "./tracks";
 import type { CarRole, ContestResult, EnrichmentEvent, FiredItem, LiveStatChange, NCarContestResult, OfferedItem } from "./types";
 
+/**
+ * Guarded is a retained presentation overlay: the first completed pass against
+ * the player becomes a defended attempt, while authoritative timing/finishing
+ * order remains untouched. The bound instance id is retained as evidence.
+ */
+export function applyGuardedOvertakeOverlay(
+  events: readonly EnrichmentEvent[],
+  guardedInstanceIds: readonly string[],
+): readonly EnrichmentEvent[] {
+  if (guardedInstanceIds.length === 0) return events;
+  let consumed = false;
+  return events.map((event) => {
+    if (consumed || event.kind !== "overtake-completed" || event.targetId !== "player" || event.actorId === "player") return event;
+    consumed = true;
+    return {
+      ...event,
+      kind: "overtake-attempt" as const,
+      after: undefined,
+      triggerRef: `guarded:${guardedInstanceIds[0]}:${event.triggerRef ?? event.eventId}`,
+    };
+  });
+}
+
 export const RACE_ANIMATION_SECONDS = 20;
 export const MIN_VISUAL_LAP_SECONDS = 0.5;
 

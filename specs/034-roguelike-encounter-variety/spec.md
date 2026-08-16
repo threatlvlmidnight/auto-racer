@@ -4,8 +4,9 @@
 
 **Created**: 2026-08-15
 
-**Status**: Implementation in progress — deterministic core landed; scene/presentation
-and live-garage migration remain (see `checklists/requirements.md` T077 evidence).
+**Status**: Implemented — retained live-run authority, all seven encounter
+surfaces, Exhibition playback, Tag Specialist, modifications, deferred
+Scrutineering, cadence/history, and recovery are wired and validated.
 
 **Input**: Expand between-race choices beyond shops and reward drafts with solo
 Exhibitions, voluntary sacrifices, transformations, upgrades, and build-responsive

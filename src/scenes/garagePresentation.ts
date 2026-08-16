@@ -87,6 +87,7 @@ export interface GarageSlotModel {
   itemName: string | null;
   installationState: InstallationState | null;
   installationLabel: string | null;
+  instanceId?: string;
 }
 
 export function garageSlotModels(build: VehicleBuild): GarageSlotModel[] {
@@ -104,6 +105,7 @@ export function garageSlotModels(build: VehicleBuild): GarageSlotModel[] {
       itemName: item?.name ?? null,
       installationState: installation?.state ?? null,
       installationLabel: installation ? INSTALLATION_LABELS[installation.state] : null,
+      ...(slot.instanceId ? { instanceId: slot.instanceId } : {}),
     };
   });
 }
@@ -117,6 +119,7 @@ export interface GarageStorageModel {
   stateLabel: string;
   itemId: string | null;
   itemName: string | null;
+  instanceId?: string;
 }
 
 export function garageStorageModels(build: VehicleBuild): GarageStorageModel[] {
@@ -131,6 +134,7 @@ export function garageStorageModels(build: VehicleBuild): GarageStorageModel[] {
       stateLabel: !item ? "EMPTY" : storageActive ? "STORED · ACTIVE" : "STORED · INERT",
       itemId: item?.id ?? null,
       itemName: item?.name ?? null,
+      ...(position.instanceId ? { instanceId: position.instanceId } : {}),
     };
   });
 }

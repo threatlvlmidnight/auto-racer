@@ -1,10 +1,18 @@
 import Phaser from "phaser";
 import {
   chooseEncounter,
+  confirmVarietyEncounterAction,
+  previewVarietyEncounterAction,
+  restockTagSpecialist,
+  selectTagSpecialistTag,
+  type TagSpecialistPayloadData,
+  retainedVarietyHistory,
   selectSponsorOption,
   type SponsorMeetingPayload,
   type SponsorOption,
 } from "../simulation/encounters";
+import { allItemDefinitions } from "../simulation/itemPools";
+import { offeredModificationsFor } from "../simulation/itemModifications";
 import {
   canEnterEntrantSelection,
   createUnavailableRun,
@@ -23,6 +31,7 @@ import type { RunIdentity } from "../simulation/types";
  */
 const UNAVAILABLE_IDENTITY: RunIdentity = runIdentityForEntrant("evelyn-mercer")!;
 import type { PracticeOriginInput } from "../simulation/practice";
+import { createPracticeReturnContext, createPracticeSession, resolvePractice } from "../simulation/practice";
 import { runPresentation, runRoute } from "./runPresentation";
 import {
   addDemoBackdrop,
@@ -34,6 +43,7 @@ import {
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
 import { championshipProgressModel, worldTourItineraryModel } from "./worldTourPresentation";
 import { createRunEncounterCard, createRunLegPlaque, runLegVisualState } from "./runChrome";
+import { encounterTypeView } from "./encounterPresentation";
 
 export class RunScene extends Phaser.Scene {
   private run!: Run;
@@ -226,7 +236,14 @@ export class RunScene extends Phaser.Scene {
     }
 
     if (model.history.length > 0) {
-      const path = model.history.slice(-8).map((entry) => `${entry.stagePosition}. ${entry.type.replace(/-/g, " ")}`).join("  >  ");
+      const varietyById = new Map(retainedVarietyHistory(this.run).map((entry) => [entry.encounterId, entry]));
+      const path = model.history.slice(-8).map((entry) => {
+        const variety = varietyById.get(entry.encounterId);
+        const status = variety?.pending
+          ? `pending ${variety.pending} → stage ${variety.targetStage ?? "?"}`
+          : variety?.outcome ?? "settled";
+        return `${entry.stagePosition}. ${entry.type.replace(/-/g, " ")} [${status}]`;
+      }).join("  >  ");
       this.add.text(width / 2, 365, path, {
         fontSize: "10px",
         color: "#9eb5c9",
@@ -273,6 +290,11 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
+    if (this.run.activeEncounter) {
+      this.renderVarietyEncounter();
+      return;
+    }
+
     model.choices.forEach((choice, index) => {
       const x = width * (index === 0 ? 0.3 : 0.7);
       const card = createRunEncounterCard(this, x, 250);
@@ -295,7 +317,12 @@ export class RunScene extends Phaser.Scene {
         align: "center",
         wordWrap: { width: 260 },
       }).setOrigin(0.5);
-      const enter = this.addControl(x, 304, "Enter", () => this.selectChoice(choice.id), {
+      const detail = encounterTypeView(choice.type, choice.summary);
+      this.add.text(x, 275, `INPUT · ${detail.requiredInput}\nCOST · ${detail.cost}\nRESULT · ${detail.consequence}`, {
+        fontSize: "8px", fontFamily: UI_FONT, color: "#9eb5c9", align: "center",
+        wordWrap: { width: 270 },
+      }).setOrigin(0.5);
+      const enter = this.addControl(x, 326, "Enter", () => this.selectChoice(choice.id), {
         width: 112,
         height: 30,
         fontSize: "12px",
@@ -308,6 +335,123 @@ export class RunScene extends Phaser.Scene {
       });
     });
     this.addControl(width / 2, 395, "TEST DAY · UNSCORED", () => this.openTestDay("run-hub"));
+  }
+
+  private renderVarietyEncounter(): void {
+    const active = this.run.activeEncounter!;
+    const width = LOGICAL_WIDTH;
+    const summary = active.title ?? active.type.replace(/-/g, " ").toUpperCase();
+    this.add.text(width / 2, 160, summary, {
+      fontSize: "22px", fontFamily: DISPLAY_FONT, fontStyle: "bold", color: "#f1eee5",
+    }).setOrigin(0.5);
+    if (active.type === "exhibition-trial") {
+      const trial = (active.payload as import("../simulation/run").PendingEncounterPayload).data as { objectives?: readonly { description: string; committedThreshold: number }[] } | undefined;
+      this.add.text(width / 2, 215, trial?.objectives?.map((objective) =>
+        `${objective.description}: ${objective.committedThreshold}`).join("\n") ?? "Objectives unavailable", {
+        fontSize: "13px", fontFamily: UI_FONT, color: "#cddbd2", align: "center",
+      }).setOrigin(0.5);
+      this.addControl(width / 2, 305, "RUN UNSCORED EXHIBITION", () => this.startExhibition());
+      this.addControl(width / 2, 350, "DECLINE", () => this.confirmVariety({ kind: "decline" }));
+      return;
+    }
+    if (active.type === "tag-specialist") {
+      const data = (active.payload as import("../simulation/run").PendingEncounterPayload).data as TagSpecialistPayloadData;
+      if (!data.selectedTag) {
+        this.add.text(width / 2, 205, "Choose a tag held by at least two of your parts", {
+          fontSize: "13px", fontFamily: UI_FONT, color: "#cddbd2",
+        }).setOrigin(0.5);
+        data.qualifyingTags.slice(0, 5).forEach((tag, index) => {
+          this.addControl(120 + index * 140, 270, tag.toUpperCase(), () => {
+            this.scene.restart({ run: selectTagSpecialistTag(this.run, tag, Math.random) });
+          }, { width: 125, fontSize: "9px" });
+        });
+      } else {
+        this.add.text(width / 2, 195, `SELECTED TAG · ${data.selectedTag.toUpperCase()}`, {
+          fontSize: "12px", fontFamily: UI_FONT, color: "#8fd8ff",
+        }).setOrigin(0.5);
+        data.stock.forEach((entry, index) => {
+          const x = 190 + index * 210;
+          this.add.text(x, 245, `${entry.item.name}\n${entry.price} credits${entry.modified ? " · MODIFIED +2" : ""}`, {
+            fontSize: "11px", fontFamily: UI_FONT, color: "#d7e1e6", align: "center", wordWrap: { width: 190 },
+          }).setOrigin(0.5);
+          const action = { kind: "tag-purchase" as const, entryId: entry.entryId };
+          const preview = previewVarietyEncounterAction(this.run, action);
+          this.addControl(x, 305, preview.disabledReason ?? "PURCHASE", () => this.confirmVariety(action), {
+            width: 180, fontSize: "9px",
+          });
+        });
+        if (!data.restockUsed) {
+          this.addControl(width / 2, 350, "RESTOCK ONCE", () => {
+            this.scene.restart({ run: restockTagSpecialist(this.run, Math.random) });
+          }, { width: 140, fontSize: "9px" });
+        }
+      }
+      this.addControl(width / 2, 395, "LEAVE", () => this.confirmVariety({ kind: "decline" }));
+      return;
+    }
+    const catalog = new Map(allItemDefinitions().map((item) => [item.id, item]));
+    const held: { instance: import("../simulation/types").ItemInstance; slotId?: string }[] = this.run.instanceBuild
+      ? [
+          ...this.run.instanceBuild.slots.flatMap((slot) => slot.instance ? [{ instance: slot.instance, slotId: slot.slotId }] : []),
+          ...this.run.instanceBuild.storage.flatMap((position) => position.instance ? [{ instance: position.instance }] : []),
+        ]
+      : [];
+    this.add.text(width / 2, 190, held.length > 0 ? "Choose the exact retained item" : "No eligible retained item", {
+      fontSize: "12px", fontFamily: UI_FONT, color: held.length > 0 ? "#cddbd2" : "#e6c1bd",
+    }).setOrigin(0.5);
+    held.slice(0, 5).forEach((entry, index) => {
+      const definition = catalog.get(entry.instance.definitionId);
+      if (!definition) return;
+      const x = 80 + index * 160;
+      let action: Parameters<typeof previewVarietyEncounterAction>[1] | null = null;
+      if (active.type === "upgrade-workshop") action = { kind: "upgrade", instanceId: entry.instance.instanceId };
+      if (active.type === "factory-development") {
+        const modification = offeredModificationsFor(definition)[0];
+        if (modification) action = { kind: "modify", instanceId: entry.instance.instanceId, modificationId: modification.modificationId };
+      }
+      if (active.type === "scrutineering" && entry.slotId) action = { kind: "scrutineer", slotId: entry.slotId };
+      if (active.type === "privateer-exchange") {
+        const replacement = allItemDefinitions().find((item) => item.origin !== definition.origin && item.id !== definition.id);
+        if (replacement) action = { kind: "exchange", instanceId: entry.instance.instanceId, replacementDefinitionId: replacement.id };
+      }
+      if (active.type === "experimental-rebuild") {
+        const replacement = allItemDefinitions().find((item) => item.installationCategory === definition.installationCategory && item.id !== definition.id);
+        if (replacement) action = { kind: "rebuild", instanceId: entry.instance.instanceId, replacementDefinitionId: replacement.id };
+      }
+      this.add.text(x, 235, `${definition.name}\nTier ${entry.instance.tier}\n${entry.instance.instanceId}`, {
+        fontSize: "9px", fontFamily: UI_FONT, color: "#d7e1e6", align: "center", wordWrap: { width: 140 },
+      }).setOrigin(0.5);
+      if (action) {
+        const preview = previewVarietyEncounterAction(this.run, action);
+        this.addControl(x, 305, preview.disabledReason ?? "CONFIRM", () => this.confirmVariety(action!), {
+          width: 142, height: 34, fontSize: "8px",
+        });
+      }
+    });
+    this.addControl(width / 2, 365, "DECLINE / LEAVE", () => this.confirmVariety({ kind: "decline" }));
+    if (this.run.pendingScrutineering) {
+      this.add.text(width / 2, 405, `SCRUTINEERING PENDING · returns after scored stage ${this.run.pendingScrutineering.targetScoredStage}`, {
+        fontSize: "10px", fontFamily: UI_FONT, color: "#8fd8ff",
+      }).setOrigin(0.5);
+    }
+  }
+
+  private confirmVariety(action: Parameters<typeof previewVarietyEncounterAction>[1]): void {
+    const preview = previewVarietyEncounterAction(this.run, action);
+    const confirmed = confirmVarietyEncounterAction(this.run, preview, Math.random);
+    this.scene.restart({ run: confirmed.run });
+  }
+
+  private startExhibition(): void {
+    const active = this.run.activeEncounter;
+    if (!active || active.type !== "exhibition-trial") return;
+    const context = createPracticeReturnContext(this.run, {
+      context: "exhibition-trial", selection: null,
+      navigation: { viewToken: "exhibition", focusToken: "exhibition-entry", scrollToken: "top" },
+    });
+    const session = resolvePractice(createPracticeSession(this.run, context));
+    if (session.state !== "completed") return;
+    this.scene.start("PracticeContestScene", { run: this.run, session, exhibitionEncounterId: active.id });
   }
 
   private openTestDay(context: "run-hub" | "pvp-briefing"): void {

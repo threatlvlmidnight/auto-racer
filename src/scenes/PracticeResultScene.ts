@@ -25,10 +25,12 @@ import type { OfferedItem } from "../simulation/types";
 import { configureHiDpiScene, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "./layout";
 import { recordedLapVehicleStatModel } from "./vehicleStatPresentation";
 import { enrichmentResultsSummary } from "./raceEnrichmentPresentation";
+import { completeExhibitionEncounter } from "../simulation/encounters";
 
 export interface PracticeResultSceneData {
   run?: Run;
   session?: PracticeSession;
+  exhibitionEncounterId?: string;
 }
 
 export class PracticeResultScene extends Phaser.Scene {
@@ -36,6 +38,7 @@ export class PracticeResultScene extends Phaser.Scene {
   private session?: PracticeSession;
   private focusRing?: PracticeFocusHandle;
   private itemInspector?: Phaser.GameObjects.Container;
+  private exhibitionEncounterId?: string;
 
   constructor() {
     super("PracticeResultScene");
@@ -49,6 +52,7 @@ export class PracticeResultScene extends Phaser.Scene {
     }
     this.run = data.run;
     this.session = data.session;
+    this.exhibitionEncounterId = data.exhibitionEncounterId;
     this.render();
     this.input.keyboard?.on("keydown-ENTER", () => this.returnToPreparation());
     this.input.keyboard?.on("keydown-R", () => this.repeat());
@@ -195,6 +199,7 @@ export class PracticeResultScene extends Phaser.Scene {
   }
 
   private repeat(): void {
+    if (this.exhibitionEncounterId) return;
     if (!this.run || !this.session) return;
     const next = resolvePractice(createPracticeSession(
       this.run,
@@ -215,6 +220,15 @@ export class PracticeResultScene extends Phaser.Scene {
   private returnToPreparation(): void {
     if (!this.run || !this.session) return;
     clearPracticeRecovery();
+    if (this.exhibitionEncounterId && this.session.result) {
+      const contest = this.session.result.contest;
+      const fastestLapTime = Math.min(...contest.laps.map((lap) => lap.playerLapTime));
+      const itemActivations = contest.laps.reduce((sum, lap) => sum + lap.firedItems.length, 0);
+      const demandScore = Math.max(0, Math.min(100, Math.round(100 - Math.abs(contest.gap) * 10)));
+      const settled = completeExhibitionEncounter(this.run, { fastestLapTime, itemActivations, demandScore }, Math.random);
+      this.scene.start("RunScene", { run: settled.run });
+      return;
+    }
     const returned = practiceReturnData(this.run, this.session);
     this.scene.start(returned.route, returned);
   }

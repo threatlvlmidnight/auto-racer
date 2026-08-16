@@ -101,7 +101,7 @@ export function generateTagSpecialistStock(
   const selected = order.slice(0, 3);
   const modifiable = selected.filter((definition) => offeredModificationsFor(definition).length > 0);
 
-  const chosenModifiedDefinition = modifiable.length > 0 ? order[0] : null;
+  const chosenModifiedDefinition = modifiable[0] ?? null;
   const chosenModification = chosenModifiedDefinition
     ? offeredModificationsFor(chosenModifiedDefinition)[0]
     : null;
@@ -152,12 +152,18 @@ export type TagPurchaseResult =
  * otherwise an empty storage index; refuses (typed) when the garage is full.
  * The caller debits the exact `entry.price` credits against the run.
  */
-export function purchaseTagStock(build: InstanceBuild, stock: readonly TagStockEntry[], entryId: string): TagPurchaseResult {
+export function purchaseTagStock(
+  build: InstanceBuild,
+  stock: readonly TagStockEntry[],
+  entryId: string,
+  instanceId?: string,
+): TagPurchaseResult {
   const entry = stock.find((candidate) => candidate.entryId === entryId);
   if (!entry) return { kind: "failure", reason: "duplicate" };
   const capacity = placementCapacity(build);
   if (capacity.freeSlotId !== null) {
     const instance = createItemInstance(entry.definitionId, "tag-specialist", 1);
+    if (instanceId) instance.instanceId = instanceId;
     if (entry.modification) instance.modification = { ...entry.modification };
     return {
       kind: "installed",
@@ -170,6 +176,7 @@ export function purchaseTagStock(build: InstanceBuild, stock: readonly TagStockE
   }
   if (capacity.freeStorageIndex !== null) {
     const instance = createItemInstance(entry.definitionId, "tag-specialist", 1);
+    if (instanceId) instance.instanceId = instanceId;
     if (entry.modification) instance.modification = { ...entry.modification };
     return {
       kind: "stored",
@@ -184,4 +191,3 @@ export function purchaseTagStock(build: InstanceBuild, stock: readonly TagStockE
   }
   return { kind: "failure", reason: "full" };
 }
-

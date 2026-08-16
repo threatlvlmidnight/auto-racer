@@ -150,8 +150,11 @@ export function generateEncounterPair(
     // Bounded fallback: relax the cooldown once before giving up.
     const relaxed = eligible.filter((type) => type !== first && eligibleSet.has(type));
     if (relaxed.length === 0) return { kinds: [], fallback: true };
-    const chosen = relaxed[boundedIndex(rng() * relaxed.length, relaxed.length)] as EncounterType;
-    if (isAcquisitionPrimary(first) && isAcquisitionPrimary(chosen)) return { kinds: [], fallback: true };
+    let chosen = relaxed[boundedIndex(rng() * relaxed.length, relaxed.length)] as EncounterType;
+    if (isAcquisitionPrimary(first) && isAcquisitionPrimary(chosen)) {
+      chosen = relaxed.find((type) => !isAcquisitionPrimary(type)) as EncounterType;
+      if (!chosen) return { kinds: [], fallback: true };
+    }
     return { kinds: [first, chosen], fallback: false };
   }
 
