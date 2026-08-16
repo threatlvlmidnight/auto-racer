@@ -57,6 +57,24 @@ export interface TrackPoint {
   headingRadians: number;
 }
 
+/**
+ * Mixes the run seed and race ordinal without losing the ordinal when a live
+ * run uses a millisecond timestamp. The legacy formula is retained for its
+ * exact-integer range so established deterministic fixtures stay stable;
+ * large seeds are folded into an explicit 32-bit mix instead of overflowing
+ * JavaScript's safe-integer precision.
+ */
+export function trackGenerationSeed(seed: number, pvpOrdinal: number): number {
+  const legacyCombined = seed * 1000003 + pvpOrdinal;
+  if (Number.isSafeInteger(legacyCombined)) return legacyCombined;
+  const low = seed >>> 0;
+  const high = Math.floor(seed / 0x100000000) >>> 0;
+  return (
+    Math.imul((low ^ high) >>> 0, 1000003)
+    + Math.imul(pvpOrdinal | 0, 0x9e3779b1)
+  ) >>> 0;
+}
+
 /** A build's capability in each of four physical dimensions (021 data-model.md). */
 export interface PhysicalStats {
   acceleration: number;
@@ -458,7 +476,7 @@ export function simulateLapPhysics(
  * with zero rework here (spec.md Assumptions).
  */
 export function generateTrack(seed: number, pvpOrdinal: number, regionTheme?: RegionId): Track {
-  const combinedSeed = seed * 1000003 + pvpOrdinal;
+  const combinedSeed = trackGenerationSeed(seed, pvpOrdinal);
   let segments: readonly TrackSegment[] | undefined;
   let acceptedAttempt = 0;
   let usedFallback = false;

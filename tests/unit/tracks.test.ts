@@ -13,6 +13,7 @@ import {
   STOCK_PHYSICAL_STATS,
   summarizeTrack,
   trackCharacteristics,
+  trackGenerationSeed,
   TrackSummaryError,
   type PhysicalStats,
   type Track,
@@ -102,6 +103,16 @@ describe("generateTrack determinism (T011, FR-002)", () => {
     const first = generateTrack(17, 2);
     const second = generateTrack(17, 2);
     expect(second).toEqual(first);
+  });
+
+  it("keeps race ordinals distinct for live timestamp-sized run seeds", () => {
+    const liveSeed = 1_786_855_254_400;
+    const mixedSeeds = Array.from({ length: 20 }, (_, index) => trackGenerationSeed(liveSeed, index + 1));
+    const tracks = Array.from({ length: 20 }, (_, index) => generateTrack(liveSeed, index + 1));
+    const geometry = tracks.map((track) => JSON.stringify(track.points));
+
+    expect(new Set(mixedSeeds).size).toBe(20);
+    expect(new Set(geometry).size).toBeGreaterThan(15);
   });
 
   it("never reads live input, wall-clock time, or unseeded randomness (repeated calls agree across many pairs)", () => {
