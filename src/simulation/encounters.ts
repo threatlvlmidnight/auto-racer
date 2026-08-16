@@ -35,6 +35,11 @@ import { exchangeSameTierForeign, rebuildForCredit } from "./encounterTransactio
 import { TAG_WEIGHT, type AcquisitionReceipt, type Build, type ContestResult, type OfferedItem, type VehicleBuild } from "./types";
 
 export type RandomSource = () => number;
+export const EXHIBITION_MIN_CHOICE_ORDINAL = 9;
+
+export function exhibitionEligibleAtChoiceOrdinal(choiceOrdinal: number): boolean {
+  return choiceOrdinal >= EXHIBITION_MIN_CHOICE_ORDINAL;
+}
 
 /**
  * Where an acquired item goes. Feature 010 replaced the generic board index
@@ -142,6 +147,7 @@ export function generateEncounterChoices(run: Run, rng: RandomSource): Encounter
   if (run.cadenceState && run.instanceBuild && Boolean(run.worldTour?.selectedRegions.length)) {
     const catalog = allItemDefinitions();
     const eligible = registeredEncounterTypes().filter((type) => {
+      if (type === "exhibition-trial") return exhibitionEligibleAtChoiceOrdinal(stage.choiceOrdinal ?? 0);
       if (type === "sponsor-meeting") return run.activeSponsorContract === null;
       if (type === "scrutineering") return !run.pendingScrutineering
         && run.instanceBuild!.slots.filter((slot) => slot.instance).length >= 2;
@@ -167,7 +173,8 @@ export function generateEncounterChoices(run: Run, rng: RandomSource): Encounter
     let pair = generateEncounterPair(run.cadenceState, eligible, domainRng);
     // Guarantee the workshop in each global half whenever a legal target exists.
     if (eligible.includes("upgrade-workshop") && upgradeGuaranteePending(run.cadenceState, stage.position)) {
-      const counterpart = eligible.find((type) => type !== "upgrade-workshop" && !isAcquisitionPrimary(type))
+      const counterpart = eligible.find((type) => type !== "upgrade-workshop" && isAcquisitionPrimary(type))
+        ?? eligible.find((type) => type !== "upgrade-workshop" && !isAcquisitionPrimary(type))
         ?? eligible.find((type) => type !== "upgrade-workshop");
       if (counterpart) pair = { kinds: ["upgrade-workshop", counterpart], fallback: false };
     }
@@ -176,7 +183,8 @@ export function generateEncounterChoices(run: Run, rng: RandomSource): Encounter
     // before the intervening Local Race, while later stages use full cadence.
     if ((stage.choiceOrdinal ?? 0) === 1 && eligible.includes("sponsor-meeting")
       && !pair.fallback && !pair.kinds.includes("sponsor-meeting")) {
-      pair = { kinds: [pair.kinds[0], "sponsor-meeting"], fallback: false };
+      const acquisition = pair.kinds.find(isAcquisitionPrimary) ?? pair.kinds[0];
+      pair = { kinds: [acquisition, "sponsor-meeting"], fallback: false };
     }
     if (pair.fallback) return [];
     return pair.kinds.map((type, index) => {

@@ -6,7 +6,6 @@ import {
   restockTagSpecialist,
   selectTagSpecialistTag,
   type TagSpecialistPayloadData,
-  retainedVarietyHistory,
   selectSponsorOption,
   type SponsorMeetingPayload,
   type SponsorOption,
@@ -31,7 +30,6 @@ import type { RunIdentity } from "../simulation/types";
  */
 const UNAVAILABLE_IDENTITY: RunIdentity = runIdentityForEntrant("evelyn-mercer")!;
 import type { PracticeOriginInput } from "../simulation/practice";
-import { createPracticeReturnContext, createPracticeSession, resolvePractice } from "../simulation/practice";
 import { runPresentation, runRoute } from "./runPresentation";
 import {
   addDemoBackdrop,
@@ -235,23 +233,6 @@ export class RunScene extends Phaser.Scene {
       });
     }
 
-    if (model.history.length > 0) {
-      const varietyById = new Map(retainedVarietyHistory(this.run).map((entry) => [entry.encounterId, entry]));
-      const path = model.history.slice(-8).map((entry) => {
-        const variety = varietyById.get(entry.encounterId);
-        const status = variety?.pending
-          ? `pending ${variety.pending} → stage ${variety.targetStage ?? "?"}`
-          : variety?.outcome ?? "settled";
-        return `${entry.stagePosition}. ${entry.type.replace(/-/g, " ")} [${status}]`;
-      }).join("  >  ");
-      this.add.text(width / 2, 365, path, {
-        fontSize: "10px",
-        color: "#9eb5c9",
-        align: "center",
-        wordWrap: { width: width - 60 },
-      }).setOrigin(0.5);
-    }
-
     if (model.pendingSponsorLabel) {
       this.add.text(width / 2, 405, model.pendingSponsorLabel, {
         fontSize: "12px",
@@ -445,13 +426,7 @@ export class RunScene extends Phaser.Scene {
   private startExhibition(): void {
     const active = this.run.activeEncounter;
     if (!active || active.type !== "exhibition-trial") return;
-    const context = createPracticeReturnContext(this.run, {
-      context: "exhibition-trial", selection: null,
-      navigation: { viewToken: "exhibition", focusToken: "exhibition-entry", scrollToken: "top" },
-    });
-    const session = resolvePractice(createPracticeSession(this.run, context));
-    if (session.state !== "completed") return;
-    this.scene.start("PracticeContestScene", { run: this.run, session, exhibitionEncounterId: active.id });
+    this.scene.start("ContestScene", { run: this.run, encounterId: active.id, exhibition: true });
   }
 
   private openTestDay(context: "run-hub" | "pvp-briefing"): void {

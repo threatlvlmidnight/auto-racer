@@ -133,6 +133,25 @@ export function generateEncounterPair(
   const fresh = eligible.filter((type) => !isOnSelectedCooldown(state, type));
   const pool = fresh.length > 0 ? fresh : eligible;
 
+  // When both families are legal, always reserve one of the two cards for an
+  // acquisition encounter. This keeps shops/rewards reliably available while
+  // preserving the feature's equally important non-acquisition alternative.
+  const eligibleAcquisition = eligible.filter(isAcquisitionPrimary);
+  const eligibleNonAcquisition = eligible.filter((type) => !isAcquisitionPrimary(type));
+  if (eligibleAcquisition.length > 0 && eligibleNonAcquisition.length > 0) {
+    const freshAcquisition = eligibleAcquisition.filter((type) => !isOnSelectedCooldown(state, type));
+    const freshNonAcquisition = eligibleNonAcquisition.filter((type) => !isOnSelectedCooldown(state, type));
+    const acquisitionPool = freshAcquisition.length > 0 ? freshAcquisition : eligibleAcquisition;
+    const nonAcquisitionPool = freshNonAcquisition.length > 0 ? freshNonAcquisition : eligibleNonAcquisition;
+    const acquisition = acquisitionPool[boundedIndex(rng() * acquisitionPool.length, acquisitionPool.length)];
+    const nonAcquisition = nonAcquisitionPool[boundedIndex(rng() * nonAcquisitionPool.length, nonAcquisitionPool.length)];
+    const acquisitionFirst = rng() < 0.5;
+    return {
+      kinds: acquisitionFirst ? [acquisition, nonAcquisition] : [nonAcquisition, acquisition],
+      fallback: false,
+    };
+  }
+
   const first = pool[boundedIndex(rng() * pool.length, pool.length)];
   if (!first) return { kinds: [], fallback: true };
 

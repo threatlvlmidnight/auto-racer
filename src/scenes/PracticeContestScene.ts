@@ -43,7 +43,6 @@ import { createVehicleStatPanel } from "./vehicleStatVisuals";
 export interface PracticeContestSceneData {
   run?: Run;
   session?: PracticeSession;
-  exhibitionEncounterId?: string;
 }
 
 export class PracticeContestScene extends Phaser.Scene {
@@ -60,7 +59,6 @@ export class PracticeContestScene extends Phaser.Scene {
   private focusRing?: PracticeFocusHandle;
   private selectedItem?: { item: OfferedItem; tier: 1 | 2 | 3 };
   private itemInspector?: Phaser.GameObjects.Container;
-  private exhibitionEncounterId?: string;
   private audioState: AudioState = createAudioState();
   private readonly handleVisibility = (): void => {
     if (document.hidden) {
@@ -81,7 +79,6 @@ export class PracticeContestScene extends Phaser.Scene {
     }
     this.run = data.run;
     this.session = data.session;
-    this.exhibitionEncounterId = data.exhibitionEncounterId;
     // Feature 033: fresh legacy-rate 1× clock per race; 2× remains selectable.
     // Guard above proves data.session.result exists; the class-field mutation
     // defeats TS narrowing, so the non-null assertion mirrors render()'s usage.
@@ -320,7 +317,7 @@ export class PracticeContestScene extends Phaser.Scene {
     const session = this.session;
     this.session = undefined;
     this.playbackController = undefined;
-    this.scene.start("PracticeResultScene", { run: this.run, session, exhibitionEncounterId: this.exhibitionEncounterId });
+    this.scene.start("PracticeResultScene", { run: this.run, session });
   }
 
   private cancel(): void {

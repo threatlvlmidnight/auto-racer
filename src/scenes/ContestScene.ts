@@ -30,7 +30,7 @@ import {
 import type { Run } from "../simulation/run";
 import { createItemCard, createItemInspector } from "./itemVisuals";
 import { resolvedItemEvidence, type ItemPresentationContext } from "./itemPresentation";
-import { contestSceneInput, raceLapLabel } from "./runPresentation";
+import { contestSceneInput, raceLapLabel, type ContestSceneInput } from "./runPresentation";
 import { addDemoBackdrop, addRunStamp, DISPLAY_FONT, UI_FONT } from "./demoTheme";
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
 import { recordedLapVehicleStatModel, reduceLiveStatPanel, vehicleItemLookup, type LiveStatPanelState } from "./vehicleStatPresentation";
@@ -49,6 +49,7 @@ import type { RivalProfile } from "../simulation/types";
 import { raceBoardLayout } from "./raceBoardPresentation";
 import { enrichmentCallout } from "./raceEnrichmentPresentation";
 import { createAudioState, emitCue, isBrowserAudioMuted, setAudioMuted, setBrowserAudioMuted, startBrowserEngine, startEngine, stopBrowserEngine, stopEngine, unlockAudio, unlockBrowserAudio, type AudioState } from "./audioPresentation";
+import { resolveSoloExhibitionContest, type ExhibitionTrial } from "../simulation/exhibition";
 
 const BOARD_SLOT_HEIGHT = 58;
 const BOARD_Y = 406;
@@ -111,23 +112,50 @@ export class ContestScene extends Phaser.Scene {
   private playedBuild?: VehicleBuild;
   private vehicleStatPanel?: Phaser.GameObjects.Container;
   private audioState: AudioState = createAudioState();
+  private exhibitionMode = false;
 
   constructor() {
     super("ContestScene");
   }
 
-  create(data: { run?: Run; encounterId?: string; setup?: LockedRaceSetup }): void {
+  create(data: { run?: Run; encounterId?: string; setup?: LockedRaceSetup; exhibition?: boolean }): void {
     configureHiDpiScene(this);
     if (!data.run || !data.encounterId) {
       this.scene.start("RunScene", { unavailable: true });
       return;
     }
-    let input;
-    try {
-      input = contestSceneInput(data.run, data.encounterId);
-    } catch {
-      this.scene.start("RunScene", { unavailable: true });
-      return;
+    const active = data.run.activeEncounter;
+    this.exhibitionMode = data.exhibition === true
+      && active?.id === data.encounterId
+      && active.type === "exhibition-trial"
+      && active.payload.kind === "exhibition-trial";
+    let input: ContestSceneInput;
+    if (this.exhibitionMode) {
+      if (!active || active.type !== "exhibition-trial" || active.payload.kind !== "exhibition-trial") {
+        this.scene.start("RunScene", { unavailable: true });
+        return;
+      }
+      const stage = data.run.stages.find((candidate) => candidate.id === active.stageId);
+      const trial = active.payload.data as ExhibitionTrial | undefined;
+      input = {
+        run: data.run,
+        encounterId: data.encounterId,
+        lapCount: 10,
+        build: data.run.build,
+        rivalRoster: [],
+        level: stage?.position ?? 1,
+        seed: trial?.seed ?? data.run.seed,
+        raceKind: "local",
+        regionId: stage?.regionId,
+        eliteFinale: false,
+      };
+    } else {
+      try {
+        input = contestSceneInput(data.run, data.encounterId);
+      } catch {
+        this.scene.start("RunScene", { unavailable: true });
+        return;
+      }
     }
 
     this.run = input.run;
@@ -154,7 +182,14 @@ export class ContestScene extends Phaser.Scene {
       vehicleId: opponent.build.vehicleId,
       levelScaling: () => ({ slotsToFill: 4, priceBias: "high" as const }),
     }));
-    const resolved = resolveEnrichedContest({
+    const resolved = this.exhibitionMode ? resolveSoloExhibitionContest({
+      build: input.build,
+      entrantId: input.run.identity.entrantId,
+      level: input.level,
+      seed: input.seed,
+      lapCount: input.lapCount,
+      regionTheme: input.regionId,
+    }) : resolveEnrichedContest({
       playerBuild: input.build,
       entrantId: input.run.identity.entrantId,
       rivalRoster: eliteRoster ?? input.rivalRoster,
@@ -296,6 +331,7 @@ export class ContestScene extends Phaser.Scene {
         result,
         run: this.run,
         encounterId: this.encounterId,
+        exhibition: this.exhibitionMode,
       });
     }
   }
@@ -439,7 +475,9 @@ export class ContestScene extends Phaser.Scene {
       const result = this.result;
       this.result = undefined;
       this.playbackController = undefined;
-      this.scene.start("ResultScene", { result, run: this.run, encounterId: this.encounterId });
+      this.scene.start("ResultScene", {
+        result, run: this.run, encounterId: this.encounterId, exhibition: this.exhibitionMode,
+      });
     }
   }
 
@@ -450,7 +488,7 @@ export class ContestScene extends Phaser.Scene {
     addDemoBackdrop(this, regionalRaceBackdrop(regionId), 0.22);
     addRunStamp(this, this.run!);
     this.add
-      .text(width / 2, 34, "CONTEST", {
+      .text(width / 2, 34, this.exhibitionMode ? "EXHIBITION" : "CONTEST", {
         fontSize: "28px",
         fontFamily: DISPLAY_FONT,
         fontStyle: "bold",
@@ -458,7 +496,7 @@ export class ContestScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     this.add
-      .text(SIDEBAR_X, SIDEBAR_TOP_Y - 22, "PROJECTED PACE", {
+      .text(SIDEBAR_X, SIDEBAR_TOP_Y - 22, this.exhibitionMode ? "SOLO PACE" : "PROJECTED PACE", {
         fontSize: "12px",
         fontFamily: UI_FONT,
         fontStyle: "bold",

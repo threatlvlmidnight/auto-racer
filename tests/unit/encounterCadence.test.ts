@@ -62,6 +62,14 @@ describe("generateEncounterPair — no two-acquisition pair (T023/SC-001)", () =
       });
     });
   });
+
+  it("offers exactly one acquisition card whenever both families are eligible", () => {
+    ENCOUNTER_SEEDS.forEach((seed) => {
+      const result = generateEncounterPair(createCadenceState(), ALL_TYPES, seededRng(seed));
+      expect(result.fallback).toBe(false);
+      if (!result.fallback) expect(result.kinds.filter(isAcquisitionPrimary)).toHaveLength(1);
+    });
+  });
 });
 
 describe("two-stage selected-type cooldown (T023)", () => {

@@ -29,6 +29,8 @@ import { createBuildTrackFitPanel } from "./trackFitVisuals";
 import { regionDefinition } from "../content/regions";
 import { classifyScalingItem } from "../simulation/buffs";
 import { enrichmentResultsSummary } from "./raceEnrichmentPresentation";
+import { completeExhibitionEncounter } from "../simulation/encounters";
+import { exhibitionEvidenceFromResult } from "../simulation/exhibition";
 
 const STANDINGS_ROW_HEIGHT = 13;
 
@@ -46,12 +48,17 @@ export class ResultScene extends Phaser.Scene {
   private encounterId!: string;
   private selectedItem?: OfferedItem;
   private itemInspector?: Phaser.GameObjects.Container;
+  private exhibitionMode = false;
+  private trackFitPanel?: Phaser.GameObjects.Container;
+  private trackFitDetailsPanel?: Phaser.GameObjects.Container;
+  private trackFitToggle?: Phaser.GameObjects.Text;
+  private trackFitMode: "graph" | "details" = "graph";
 
   constructor() {
     super("ResultScene");
   }
 
-  create(data: { result?: NCarContestResult; run?: Run; encounterId?: string }): void {
+  create(data: { result?: NCarContestResult; run?: Run; encounterId?: string; exhibition?: boolean }): void {
     configureHiDpiScene(this);
     if (!data.result || !data.run || !data.encounterId) {
       this.scene.start("RunScene", { unavailable: true });
@@ -60,6 +67,10 @@ export class ResultScene extends Phaser.Scene {
     this.result = data.result;
     this.run = data.run;
     this.encounterId = data.encounterId;
+    this.exhibitionMode = data.exhibition === true
+      && data.run.activeEncounter?.id === data.encounterId
+      && data.run.activeEncounter.type === "exhibition-trial";
+    this.trackFitMode = "graph";
     const width = LOGICAL_WIDTH;
     addDemoBackdrop(this, "scene-finish-line", 0.6);
     // Credits are not actionable on Results and the top-right space belongs to
@@ -73,11 +84,11 @@ export class ResultScene extends Phaser.Scene {
     }
 
     this.add
-      .text(width * 0.24, 42, outcomeLabel(this.result), {
+      .text(width * 0.24, 42, this.exhibitionMode ? "EXHIBITION COMPLETE" : outcomeLabel(this.result), {
         fontSize: "26px",
         fontFamily: DISPLAY_FONT,
         fontStyle: "bold",
-        color: outcomeColor(this.result),
+        color: this.exhibitionMode ? "#ffd447" : outcomeColor(this.result),
       })
       .setOrigin(0.5);
 
@@ -87,15 +98,19 @@ export class ResultScene extends Phaser.Scene {
       fontSize: "11px", fontFamily: UI_FONT, fontStyle: "bold", color: "#ffd447",
     }).setOrigin(0.5);
     this.renderSetupEvidence(width);
-    this.renderEnrichmentEvidence(width);
 
-    createDemoButton(this, width / 2, 402, "CONTINUE CHAMPIONSHIP", () => {
-      const run = continueRunFromResult(this.run, this.encounterId, this.result);
-      this.scene.start("RunScene", { run });
+    createDemoButton(this, width / 2, 402, this.exhibitionMode ? "COMPLETE EXHIBITION" : "CONTINUE CHAMPIONSHIP", () => {
+      if (this.exhibitionMode) {
+        const result = this.result as import("../simulation/types").EnrichedContestResult;
+        const settled = completeExhibitionEncounter(this.run, exhibitionEvidenceFromResult(result), Math.random);
+        this.scene.start("RunScene", { run: settled.run });
+        return;
+      }
+      this.scene.start("RunScene", { run: continueRunFromResult(this.run, this.encounterId, this.result) });
     });
     createDemoButton(this, width - 70, 382, "INVENTORY", () => this.scene.start("InventoryScene", {
       run: this.run, host: "result", returnScene: "ResultScene",
-      returnData: { result: this.result, encounterId: this.encounterId },
+      returnData: { result: this.result, encounterId: this.encounterId, exhibition: this.exhibitionMode },
     }), true, { fontSize: "10px", width: 112, height: 30 });
   }
 
@@ -128,13 +143,53 @@ export class ResultScene extends Phaser.Scene {
    * FR-019: missing/malformed evidence is labeled, not inferred).
    */
   private renderBuildTrackFit(width: number): void {
-    createBuildTrackFitPanel(
+    this.trackFitPanel = createBuildTrackFitPanel(
       this,
       width * 0.49,
       18,
       buildTrackFitPresentation(this.result),
       { width: width * 0.49, height: 238 },
     ).setDepth(18);
+
+    const panelWidth = width * 0.49;
+    const panelHeight = 238;
+    const enriched = this.result as import("../simulation/types").EnrichedContestResult;
+    const summary = enriched.events ? enrichmentResultsSummary(enriched.events) : null;
+    const lines = summary
+      ? [
+          summary.decisive ? `DECISIVE · ${summary.decisive.text}` : "No decisive moment recorded.",
+          ...summary.events.slice(0, 7).map((event) => `• ${event.text}`),
+        ]
+      : ["Race-moment evidence is unavailable for this result."];
+    if (this.exhibitionMode && lines.length === 1 && lines[0] === "No decisive moment recorded.") {
+      lines[0] = "Solo Exhibition · no rivals or race incidents.";
+    }
+    const background = this.add.rectangle(0, 0, panelWidth, panelHeight, 0x11171b, 0.94)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, 0x8a969a, 0.75);
+    const title = this.add.text(12, 10, "RACE DETAILS", {
+      fontSize: "15px", fontFamily: DISPLAY_FONT, fontStyle: "bold", color: "#e8b95f",
+    });
+    const body = this.add.text(12, 38, lines.join("\n\n"), {
+      fontSize: "9px", fontFamily: UI_FONT, color: "#cddbd2",
+      wordWrap: { width: panelWidth - 24 }, lineSpacing: 2,
+    });
+    this.trackFitDetailsPanel = this.add.container(width * 0.49, 18, [background, title, body])
+      .setSize(panelWidth, panelHeight)
+      .setDepth(18)
+      .setVisible(false);
+    this.trackFitToggle = this.add.text(width - 16, 48, "DETAILS", {
+      fontSize: "9px", fontFamily: UI_FONT, fontStyle: "bold", color: "#171d21",
+      backgroundColor: "#f3eee2", padding: { x: 10, y: 6 },
+    }).setOrigin(1, 0.5).setInteractive({ useHandCursor: true }).setDepth(30);
+    this.trackFitToggle.on("pointerdown", () => this.toggleTrackFitDetails());
+  }
+
+  private toggleTrackFitDetails(): void {
+    this.trackFitMode = this.trackFitMode === "graph" ? "details" : "graph";
+    this.trackFitPanel?.setVisible(this.trackFitMode === "graph");
+    this.trackFitDetailsPanel?.setVisible(this.trackFitMode === "details");
+    this.trackFitToggle?.setText(this.trackFitMode === "graph" ? "DETAILS" : "TRACK FIT");
   }
 
   /**
@@ -184,21 +239,6 @@ export class ResultScene extends Phaser.Scene {
     this.add.text(width * 0.76, 246, carSetupLines(player).join("\n"), {
       fontSize: "10px", fontFamily: UI_FONT, color: "#ffd447", lineSpacing: 3,
     }).setOrigin(0.5, 0);
-  }
-
-  /** Feature 033: Results consumes retained events, never reruns enrichment. */
-  private renderEnrichmentEvidence(width: number): void {
-    const enriched = this.result as import("../simulation/types").EnrichedContestResult;
-    if (!enriched.events) return;
-    const summary = enrichmentResultsSummary(enriched.events);
-    const lines = [
-      summary.decisive ? `RACE MOMENT · ${summary.decisive.text}` : "RACE MOMENTS · None recorded",
-      ...summary.events.slice(0, 3).map((event) => `• ${event.text}`),
-    ];
-    this.add.text(width * 0.76, 72, lines.join("\n"), {
-      fontSize: "8px", fontFamily: UI_FONT, color: "#cddbd2",
-      wordWrap: { width: width * 0.38 }, lineSpacing: 2,
-    }).setOrigin(0.5, 0).setDepth(25);
   }
 
   private renderStandings(centerX: number, startY: number): void {

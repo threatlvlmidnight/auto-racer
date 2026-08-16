@@ -1,3 +1,10 @@
+import { identityForEntrant } from "../content/driverRaceIdentities";
+import { simulatePlayerLaps } from "./laps";
+import { computePhaseSchedule, createComposureLedger, racePhaseForLap } from "./raceEnrichment";
+import { installedItems, storedItems } from "./slots";
+import { generateTrack, summarizeTrack } from "./tracks";
+import type { Build, EnrichedContestResult, EntrantId, RegionId } from "./types";
+
 /**
  * Exhibition Trial — an unscored solo race with three precommitted objectives
  * from the time, item-activation, and track-demand families (034 tasks
@@ -47,6 +54,87 @@ export interface ExhibitionResult {
   objectives: readonly ExhibitionObjectiveOutcome[];
   /** Guaranteed literal: Exhibition never mutates Championship state (T055). */
   championshipUnchanged: true;
+}
+
+export interface SoloExhibitionContestInput {
+  build: Build;
+  entrantId: EntrantId;
+  seed: number;
+  level: number;
+  lapCount: number;
+  regionTheme?: RegionId;
+}
+
+/**
+ * Resolves an Exhibition through the normal retained N-car playback contract,
+ * but with exactly one player car and no rivals, attacks, incidents, or race
+ * settlement. ContestScene and ResultScene can therefore reuse their normal
+ * track, playback, audio, evidence, and controls without presenting Test Day.
+ */
+export function resolveSoloExhibitionContest(input: SoloExhibitionContestInput): EnrichedContestResult {
+  const track = generateTrack(input.seed, input.level, input.regionTheme);
+  const laps = simulatePlayerLaps(input.build, input.lapCount, track);
+  const identity = identityForEntrant(input.entrantId);
+  if (!identity) throw new RangeError(`Unknown Exhibition entrant: ${input.entrantId}`);
+  const phaseSchedule = computePhaseSchedule(input.lapCount);
+  const time = laps.reduce((sum, lap) => sum + lap.time, 0);
+  const ledger = createComposureLedger("player", 0);
+  const player = {
+    id: "player",
+    role: "player" as const,
+    name: "Player",
+    color: "#ffd447",
+    time,
+    laps,
+    position: 1,
+    gapToLeader: 0,
+    driverIdentity: identity,
+    composureLedger: ledger,
+    enrichedLaps: laps.map((lap, index) => ({
+      lap: index + 1,
+      phase: racePhaseForLap(phaseSchedule, index + 1),
+      baseTime: lap.time,
+      enrichedTime: lap.time,
+      incidentTimeLoss: 0,
+    })),
+  };
+  return {
+    lapCount: input.lapCount,
+    cars: [player],
+    outcome: "win",
+    board: installedItems(input.build).filter((item): item is NonNullable<typeof item> => item !== null),
+    storage: storedItems(input.build).filter((item): item is NonNullable<typeof item> => item !== null),
+    track,
+    tieBreakOrder: ["player"],
+    configVersion: "exhibition-solo-v1",
+    phaseSchedule,
+    events: [],
+    incidentsEnabled: false,
+    driverIdentities: { player: identity },
+    eligibility: [],
+  };
+}
+
+/** Derives the three objective inputs from the retained solo result only. */
+export function exhibitionEvidenceFromResult(result: EnrichedContestResult): ExhibitionContestEvidence {
+  const player = result.cars.find((car) => car.role === "player");
+  if (!player || player.laps.length === 0) {
+    return { fastestLapTime: Number.POSITIVE_INFINITY, itemActivations: 0, demandScore: 0 };
+  }
+  const summary = summarizeTrack(result.track, result.lapCount);
+  const finalStats = player.laps[player.laps.length - 1].physics?.stats;
+  const demandScore = finalStats
+    ? Math.round([
+        [summary.demands.power, finalStats.topSpeed],
+        [summary.demands.braking, finalStats.brakingPower],
+        [summary.demands.cornering, finalStats.corneringSpeed],
+      ].reduce((sum, [demand, vehicle]) => sum + Math.max(0, 100 - Math.abs(demand - vehicle)), 0) / 3)
+    : 0;
+  return {
+    fastestLapTime: Math.min(...player.laps.map((lap) => lap.time)),
+    itemActivations: player.laps.reduce((sum, lap) => sum + lap.firedItems.length, 0),
+    demandScore,
+  };
 }
 
 /** mulberry32 seeded PRNG for objective generation (no library dependency). */

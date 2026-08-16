@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   evaluateExhibitionResult,
+  exhibitionEvidenceFromResult,
   generateExhibitionTrial,
+  resolveSoloExhibitionContest,
   type ExhibitionContestEvidence,
 } from "../../src/simulation/exhibition";
 import { resolveContest } from "../../src/simulation/contest";
@@ -63,6 +65,22 @@ describe("evaluateExhibitionResult — scoring 0–3 (T051/T054/FR-041)", () => 
 });
 
 describe("T055 — Exhibition reuses real race authority without Championship mutation", () => {
+  it("resolves through the standard retained race contract with only the player car", () => {
+    const first = resolveSoloExhibitionContest({
+      build: vehicleBuild([]), entrantId: "evelyn-mercer", seed: 34, level: 9, lapCount: 10,
+    });
+    const second = resolveSoloExhibitionContest({
+      build: vehicleBuild([]), entrantId: "evelyn-mercer", seed: 34, level: 9, lapCount: 10,
+    });
+
+    expect(first).toEqual(second);
+    expect(first.cars).toHaveLength(1);
+    expect(first.cars[0]).toMatchObject({ role: "player", position: 1 });
+    expect(first.events).toEqual([]);
+    expect(first.incidentsEnabled).toBe(false);
+    expect(exhibitionEvidenceFromResult(first).fastestLapTime).toBeGreaterThan(0);
+  });
+
   it("derives Exhibition evidence from the retained solo contest and confirms isolation", () => {
     const build = vehicleBuild([]);
     const contest = resolveContest(build, { id: "exhibition-ghost", lapTime: 6 }, 8);
