@@ -51,7 +51,7 @@ describe("upgradeWorkshop — free single-tier upgrade (T039/FR-046)", () => {
 
 function upgradeWorkshopCommon(build: ReturnType<typeof instanceBuild>): { kind: string } {
   const entry = build.slots.find((slot) => slot.instance);
-  if (!entry?.instance) return { kind: "failure" as const, code: "missing-instance" };
+  if (!entry?.instance) return { kind: "failure" };
   return upgradeWorkshopFree(build, entry.instance.instanceId) as { kind: string };
 }
 

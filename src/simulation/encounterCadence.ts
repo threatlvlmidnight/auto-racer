@@ -28,6 +28,23 @@ export const ENCOUNTER_FAMILIES: Readonly<Record<EncounterType, EncounterFamily>
   "experimental-rebuild": "transformation",
 };
 
+/**
+ * A named seed domain for cadence pair generation (034 T028): each choice
+ * ordinal's RNG stream is derived from its own (runSeed, choiceOrdinal) pair so
+ * choice generation never shares or contaminates other encounter seed domains.
+ */
+export function cadenceDomainRng(runSeed: number, choiceOrdinal: number): () => number {
+  const seed = (Math.imul((runSeed ^ 0x9e3779b9) >>> 0, 31) + Math.imul(choiceOrdinal, 2654435761)) >>> 0;
+  let state = seed >>> 0;
+  return () => {
+    state |= 0;
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 /** Reads an encounter's family (legacy summaries included). */
 export function familyFor(type: EncounterType): EncounterFamily {
   return ENCOUNTER_FAMILIES[type];

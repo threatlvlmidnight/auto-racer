@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  cadenceDomainRng,
   createCadenceState,
   ENCOUNTER_FAMILIES,
   familyFor,
@@ -123,5 +124,24 @@ describe("Upgrade Workshop guarantee windows (T026/FR-046)", () => {
     expect(upgradeGuaranteePending(state, 30)).toBe(true);
     state = markUpgradeOffered(state, 30);
     expect(upgradeGuaranteePending(state, 30)).toBe(false);
+  });
+});
+
+describe("named seed domains — isolated, stable pair generation (T028)", () => {
+  it("derives a stable, per-choice RNG stream from the run seed + choice ordinal", () => {
+    const a = cadenceDomainRng(7, 1);
+    const b = cadenceDomainRng(7, 1);
+    expect([a(), a()]).toEqual([b(), b()]);
+  });
+
+  it("isolates different choice ordinals on the same seed", () => {
+    expect(cadenceDomainRng(7, 1)()).not.toBe(cadenceDomainRng(7, 2)());
+  });
+
+  it("generates the same deterministic pair for identical retained inputs", () => {
+    const state = createCadenceState();
+    const first = generateEncounterPair(state, ALL_TYPES, cadenceDomainRng(7, 1));
+    const second = generateEncounterPair(state, ALL_TYPES, cadenceDomainRng(7, 1));
+    expect(second).toEqual(first);
   });
 });
