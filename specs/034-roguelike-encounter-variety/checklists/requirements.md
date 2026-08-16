@@ -47,9 +47,9 @@ integration (Phases 4+, Tasks T008–T071) remain for a follow-up pass.
 
 | Command | Result | Notes |
 |---|---|---|
-| `npm test` | 1 780 passed (was 1 698) | +82 Feature 034 tests across 111 files |
+| `npm test` | 1 818 passed (was 1 698) | +120 Feature 034 tests across 115 files |
 | `npm run lint` | clean | no additions |
-| `npm run build` | ✓ built in 2.47s | `vite build` + `tsc --noEmit` both pass |
+| `npm run build` | ✓ | `vite build` + `tsc --noEmit` both pass |
 
 ### Deterministic modules added
 
