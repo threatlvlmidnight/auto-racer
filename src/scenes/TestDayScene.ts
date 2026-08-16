@@ -29,6 +29,7 @@ import { configureHiDpiScene, LOGICAL_HEIGHT, LOGICAL_WIDTH } from "./layout";
 import { currentVehicleStatModel } from "./vehicleStatPresentation";
 import { createVehicleStatPanel } from "./vehicleStatVisuals";
 import { STOCK_PHYSICAL_STATS } from "../simulation/tracks";
+import { circuitIdentityLine, testDayCircuitIdentity } from "./circuitPresentation";
 import { identityForEntrant } from "../content/driverRaceIdentities";
 import { DEFAULT_RACE_ENRICHMENT_CONFIG } from "../simulation/enrichmentConfig";
 import { signatureEligibilityFor } from "../simulation/raceEnrichment";
@@ -87,6 +88,18 @@ export class TestDayScene extends Phaser.Scene {
       fontStyle: "bold",
       color: "#d9483f",
     }).setOrigin(0.5);
+    // Feature 035 US1 (T023): the borrowed upcoming track is labelled fixed and
+    // unscored — it is never presented as a scored geographic event.
+    const setupTrack = this.session?.returnContext.originState.setupSnapshot?.track;
+    if (setupTrack) {
+      const identity = testDayCircuitIdentity(setupTrack);
+      this.add.text(width / 2, 106, circuitIdentityLine(identity).toUpperCase(), {
+        fontFamily: UI_FONT,
+        fontSize: "11px",
+        fontStyle: "bold",
+        color: "#cddbd2",
+      }).setOrigin(0.5);
+    }
     [model.rival, model.configuration, model.snapshot].forEach((label, index) => {
       this.add.text(width / 2, 126 + index * 30, label, {
         fontFamily: UI_FONT,

@@ -11,15 +11,33 @@ import type {
   ItemDefinition,
   ItemPhysicalContributionEvidence,
   ItemPhysicsContribution,
+  ItemRarity,
   PhysicsCondition,
   StatTarget,
   VehicleBuild,
 } from "../simulation/types";
+import { RARITY_SEMANTICS } from "../simulation/types";
 
 export type ItemStatKey = StatTarget;
 export type EffectDirection = "gain" | "loss" | "neutral";
 export type EffectState = "authored" | "active" | "inactive" | "conditional";
 export type ItemVisualKind = "direct" | "buff" | "synergy" | "conditional" | "economy-only";
+
+/** Feature 035 display-only rarity facts derived from the authored catalog. */
+export function itemRarityDisplay(item: ItemDefinition): {
+  rarity: ItemRarity;
+  label: "Standard" | "Notable" | "Rare";
+  frame: import("../simulation/types").RaritySemantics["frame"];
+  a11yToken: string;
+} {
+  const semantics = RARITY_SEMANTICS[item.rarity];
+  return {
+    rarity: item.rarity,
+    label: semantics.label,
+    frame: semantics.frame,
+    a11yToken: semantics.a11yToken,
+  };
+}
 
 export interface StatPresentationDefinition {
   key: ItemStatKey;
@@ -209,6 +227,10 @@ export interface ItemPresentationContext {
 export interface CompactItemModel {
   itemId: string;
   name: string;
+  rarity: ItemRarity;
+  rarityLabel: string;
+  rarityFrame: import("../simulation/types").RaritySemantics["frame"];
+  rarityA11yToken: string;
   tierLabel: string | null;
   categoryLabel: "POWER" | "CHASSIS";
   originLabel: string;
@@ -225,6 +247,9 @@ export interface CompactItemModel {
 export interface ItemIdentitySection {
   itemId: string;
   name: string;
+  rarityLabel: string;
+  rarityFrame: import("../simulation/types").RaritySemantics["frame"];
+  rarityA11yToken: string;
   originLabel: string;
   categoryLabel: string;
   tier: 1 | 2 | 3;
@@ -389,9 +414,14 @@ export function compactItemModel(item: ItemDefinition, context: ItemPresentation
   const conditionTokens = completeLines.flatMap((line) => line.conditionLabel ? [line.conditionLabel] : []);
   const summary = completeLines.map((line) => `${line.directionLabel}: ${line.statLabel} ${line.valueLabel}${line.conditionLabel ? ` ${line.conditionLabel}` : ""}`);
   const priceLabel = priceVisible ? `${item.price} cr` : null;
+  const rarity = itemRarityDisplay(item);
   return {
     itemId: item.id,
     name: item.name,
+    rarity: rarity.rarity,
+    rarityLabel: rarity.label,
+    rarityFrame: rarity.frame,
+    rarityA11yToken: rarity.a11yToken,
     tierLabel: tier > 1 ? `★${tier}` : null,
     categoryLabel: item.installationCategory.toUpperCase() as "POWER" | "CHASSIS",
     originLabel: ORIGIN_LABELS[item.origin],
@@ -437,6 +467,9 @@ export function itemInspectorModel(item: ItemDefinition, context: ItemPresentati
     identity: {
       itemId: item.id,
       name: item.name,
+      rarityLabel: authored.rarityLabel,
+      rarityFrame: authored.rarityFrame,
+      rarityA11yToken: authored.rarityA11yToken,
       originLabel: ORIGIN_LABELS[item.origin],
       categoryLabel: item.installationCategory.toUpperCase(),
       tier,

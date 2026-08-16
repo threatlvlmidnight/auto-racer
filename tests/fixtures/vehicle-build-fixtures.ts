@@ -54,7 +54,7 @@ export function testItem(
     & Partial<ItemDefinition>,
 ): ItemDefinition {
   return {
-    origin: "coachworks",
+    origin: "coachworks", rarity: "standard",
     installationCategory: "power",
     synergyTags: [],
     fittedBehavior: { kind: "none", description: "Test fixture: no additional Fitted effect." },

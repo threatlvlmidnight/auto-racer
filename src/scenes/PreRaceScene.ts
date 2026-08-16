@@ -25,7 +25,7 @@ import {
   type PracticeFocusHandle,
 } from "./demoTheme";
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
-import { regionDefinition } from "../content/regions";
+import { circuitIdentityLine, circuitPresentationIdentity } from "./circuitPresentation";
 import { createRuntimeTextControl } from "./uiChrome";
 import { identityForEntrant } from "../content/driverRaceIdentities";
 import { DEFAULT_RACE_ENRICHMENT_CONFIG } from "../simulation/enrichmentConfig";
@@ -195,7 +195,9 @@ export class PreRaceScene extends Phaser.Scene {
     const stage = this.setupInput.run.stages[this.setupInput.run.stageIndex];
     if (stage?.regionId) {
       const raceLabel = stage.raceKind === "local" ? "LOCAL RACE" : "CHAMPIONSHIP RACE";
-      this.track(this.add.text(LOGICAL_WIDTH / 2, 51, `${regionDefinition(stage.regionId).name} · ${raceLabel}`, {
+      // Feature 035 US1: recorded track name + explicit LOCATION identity.
+      const identity = circuitPresentationIdentity(this.setupInput.track, stage);
+      this.track(this.add.text(LOGICAL_WIDTH / 2, 51, `${circuitIdentityLine(identity)} · ${raceLabel}`, {
         fontSize: "11px", fontFamily: UI_FONT, fontStyle: "bold", color: "#cddbd2",
       }).setOrigin(0.5));
     }

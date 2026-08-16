@@ -99,6 +99,34 @@ equivalents, and a landscape primary-scene overlap/readability audit. It
 deliberately does not take over Feature 026's responsive-host and 390×844 work,
 Feature 032's upgrade transaction, or Feature 034's encounters.
 
+## Latest session — Feature 035 interface clarity implemented (2026-08-16)
+
+Feature 035 (interface clarity and reward feedback) is implemented as
+presentation-only work on branch `035-interface-clarity-reward-feedback`.
+Delivered on top of Feature 034's green baseline:
+
+- **Circuit identity**: scored-race identity (recorded track name + explicit
+  `LOCATION:`) is projected through `circuitPresentation.ts`,
+  `runPresentation.ts`, and the PreRace/Result/Run-history surfaces; Test Day
+  uses a `FIXED CONFIGURATION · UNSCORED` borrowed-track label. A `circuit`
+  display-only field is retained at settlement for scored history.
+- **Adjustable**: `adjustablePresentation` reserves `ADJUSTABLE` for installed
+  items with an eligible pre-race control; stored/non-configurable items are
+  `absent`. The `Variable-Ratio Test Gearbox` was renamed Two-Speed Test
+  Gearbox (same item ID/price/physics/effects).
+- **Rarity**: `ItemRarity` (Standard/Notable/Rare) authored on all 70 items
+  with `RARITY_SEMANTICS`; display-only — `validateItemPools()`, duplicate
+  tiering, setup eligibility, economy, and simulation are unchanged.
+- **Card/upgrade feedback**: `cardFeedbackState` (structural precedence,
+  non-color tokens, reduced-motion) rendered on shared cards/inspectors.
+- **Audit**: finite 12-scene × 4-viewport × 3-input-mode matrix
+  (`cardFeedbackPresentation.AUDIT_CASES`) validated in tests.
+
+Automated gates are green: 124 test files / 1864 tests, lint, build,
+build:pages, and the production-artifact audit. Owner browser QA
+(screenshots/input sweeps at 1920×1080, 1366×768, 1024×768, 800×450) remains —
+see `specs/035-interface-clarity-reward-feedback/acceptance-evidence.md`.
+
 ## Latest session — Feature 034 planning complete (2026-08-15)
 
 Feature 034's former active marker has advanced to Feature 035. Specification, owner clarification, research,

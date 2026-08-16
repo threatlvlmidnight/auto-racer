@@ -19,7 +19,7 @@ const NONE_IMPROVISED: ItemDefinition["improvisedBehavior"] = {
 export const NEUTRAL_ITEMS: readonly ItemDefinition[] = [
   {
     id: "neutral-forged-pistons",
-    name: "Forged Pistons",
+    name: "Forged Pistons", rarity: "notable",
     price: 4,
     timeModifier: 0,
     origin: "fieldworks",
@@ -41,7 +41,7 @@ export const NEUTRAL_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "neutral-copper-core-radiator",
-    name: "Copper-Core Radiator",
+    name: "Copper-Core Radiator", rarity: "standard",
     price: 2,
     timeModifier: 0,
     origin: "coachworks",
@@ -53,7 +53,7 @@ export const NEUTRAL_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "neutral-reinforced-connecting-rods",
-    name: "Reinforced Connecting Rods",
+    name: "Reinforced Connecting Rods", rarity: "notable",
     price: 4,
     timeModifier: 0,
     origin: "fieldworks",
@@ -65,7 +65,7 @@ export const NEUTRAL_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "neutral-bookmakers-chit",
-    name: "Bookmaker's Chit",
+    name: "Bookmaker's Chit", rarity: "standard",
     price: 2,
     timeModifier: 0,
     origin: "backroads",
@@ -76,7 +76,7 @@ export const NEUTRAL_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "neutral-engine-builders-nameplate",
-    name: "Engine Builder's Nameplate",
+    name: "Engine Builder's Nameplate", rarity: "notable",
     price: 4,
     timeModifier: 0,
     origin: "coachworks",
@@ -87,7 +87,7 @@ export const NEUTRAL_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "neutral-reinforced-spare-wheel",
-    name: "Reinforced Spare Wheel",
+    name: "Reinforced Spare Wheel", rarity: "standard",
     price: 2,
     timeModifier: 0,
     origin: "fieldworks",
@@ -100,7 +100,7 @@ export const NEUTRAL_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "neutral-leaf-sprung-axle-set",
-    name: "Leaf-Sprung Axle Set",
+    name: "Leaf-Sprung Axle Set", rarity: "standard",
     price: 4,
     timeModifier: 0,
     origin: "coachworks",
@@ -112,7 +112,7 @@ export const NEUTRAL_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "neutral-hardened-wheel-hubs",
-    name: "Hardened Wheel Hubs",
+    name: "Hardened Wheel Hubs", rarity: "notable",
     price: 4,
     timeModifier: 0,
     origin: "fieldworks",
@@ -124,7 +124,7 @@ export const NEUTRAL_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "neutral-trackside-tachometer",
-    name: "Trackside Tachometer",
+    name: "Trackside Tachometer", rarity: "rare",
     price: 4,
     timeModifier: 0,
     origin: "velodrome",
@@ -140,7 +140,7 @@ export const NEUTRAL_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "neutral-patrons-brass-plaque",
-    name: "Patron's Brass Plaque",
+    name: "Patron's Brass Plaque", rarity: "notable",
     price: 4,
     timeModifier: 0,
     origin: "coachworks",

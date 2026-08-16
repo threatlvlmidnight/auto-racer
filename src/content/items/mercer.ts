@@ -30,7 +30,7 @@ export const MERCER_ITEMS: readonly ItemDefinition[] = [
   // --- Chase cards (#1-#4), one per build archetype ---
   {
     id: "mercer-matched-coachwork-wheelset",
-    name: "Matched Coachwork Wheelset",
+    name: "Matched Coachwork Wheelset", rarity: "rare",
     price: 5,
     timeModifier: 0,
     origin: "coachworks",
@@ -52,7 +52,7 @@ export const MERCER_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "mercer-journeymans-logbook",
-    name: "Journeyman's Logbook",
+    name: "Journeyman's Logbook", rarity: "rare",
     price: 5,
     timeModifier: 0,
     origin: "coachworks",
@@ -65,7 +65,7 @@ export const MERCER_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "mercer-ironbound-axle-assembly",
-    name: "Ironbound Axle Assembly",
+    name: "Ironbound Axle Assembly", rarity: "rare",
     price: 5,
     timeModifier: 0,
     origin: "coachworks",
@@ -83,7 +83,7 @@ export const MERCER_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "mercer-appraisers-ledger",
-    name: "Appraiser's Ledger",
+    name: "Appraiser's Ledger", rarity: "rare",
     price: 5,
     timeModifier: 0,
     origin: "coachworks",
@@ -97,7 +97,7 @@ export const MERCER_ITEMS: readonly ItemDefinition[] = [
   // --- Supporting items (#5-#15) ---
   {
     id: "mercer-double-doweled-wheel-hub",
-    name: "Double-Doweled Wheel Hub",
+    name: "Double-Doweled Wheel Hub", rarity: "standard",
     price: 2,
     timeModifier: 0,
     origin: "coachworks",
@@ -109,7 +109,7 @@ export const MERCER_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "mercer-ash-framed-running-board",
-    name: "Ash-Framed Running Board",
+    name: "Ash-Framed Running Board", rarity: "notable",
     price: 4,
     timeModifier: 0,
     origin: "coachworks",
@@ -121,7 +121,7 @@ export const MERCER_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "mercer-hand-forged-axle-pin",
-    name: "Hand-Forged Axle Pin",
+    name: "Hand-Forged Axle Pin", rarity: "notable",
     price: 4,
     timeModifier: 0,
     origin: "coachworks",
@@ -133,7 +133,7 @@ export const MERCER_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "mercer-tested-leaf-spring",
-    name: "Tested Leaf Spring",
+    name: "Tested Leaf Spring", rarity: "standard",
     price: 2,
     timeModifier: 0,
     origin: "coachworks",
@@ -145,7 +145,7 @@ export const MERCER_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "mercer-journeymans-wrench-set",
-    name: "Journeyman's Wrench Set",
+    name: "Journeyman's Wrench Set", rarity: "notable",
     price: 4,
     timeModifier: 0,
     origin: "coachworks",
@@ -158,7 +158,7 @@ export const MERCER_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "mercer-reinforced-brake-drum",
-    name: "Reinforced Brake Drum",
+    name: "Reinforced Brake Drum", rarity: "standard",
     price: 2,
     timeModifier: 0,
     origin: "coachworks",
@@ -170,7 +170,7 @@ export const MERCER_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "mercer-hand-fitted-steering-knuckle",
-    name: "Hand-Fitted Steering Knuckle",
+    name: "Hand-Fitted Steering Knuckle", rarity: "notable",
     price: 4,
     timeModifier: 0,
     origin: "coachworks",
@@ -189,7 +189,7 @@ export const MERCER_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "mercer-lacquered-coach-panel",
-    name: "Lacquered Coach Panel",
+    name: "Lacquered Coach Panel", rarity: "standard",
     price: 2,
     timeModifier: 0,
     origin: "coachworks",
@@ -201,7 +201,7 @@ export const MERCER_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "mercer-oilskin-driving-coat",
-    name: "Oilskin Driving Coat",
+    name: "Oilskin Driving Coat", rarity: "standard",
     price: 2,
     timeModifier: 0,
     origin: "coachworks",
@@ -214,7 +214,7 @@ export const MERCER_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "mercer-trade-ledger-chit",
-    name: "Trade Ledger Chit",
+    name: "Trade Ledger Chit", rarity: "standard",
     price: 2,
     timeModifier: 0,
     origin: "coachworks",
@@ -225,7 +225,7 @@ export const MERCER_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "mercer-brass-fitted-toolbox",
-    name: "Brass-Fitted Toolbox",
+    name: "Brass-Fitted Toolbox", rarity: "notable",
     price: 4,
     timeModifier: 0,
     origin: "coachworks",

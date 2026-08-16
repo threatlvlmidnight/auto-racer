@@ -3,6 +3,7 @@ import type { OfferedItem } from "../simulation/types";
 import {
   compactItemModel,
   itemInspectorModel,
+  itemRarityDisplay,
   type ItemInspectorModel,
   type ItemPresentationContext,
   type PlacementComparisonModel,
@@ -68,6 +69,12 @@ export function createItemIcon(
     .setOrigin(0.5);
 
   const children: Phaser.GameObjects.GameObject[] = [background, graphics, cooldown];
+  // Feature 035: non-color rarity token on the icon (text, not color alone).
+  const rarityMark = scene.add.text(-size / 2 + 4, size / 2 - 4, itemRarityDisplay(item).a11yToken, {
+    fontSize: "9px", fontFamily: UI_FONT, fontStyle: "bold",
+    color: "#e9edf0", backgroundColor: "#101817", padding: { x: 2, y: 0 },
+  }).setOrigin(0, 1);
+  children.push(rarityMark);
   if (descriptor.activeWhileStored) {
     const storageMark = scene.add.graphics();
     storageMark.fillStyle(0x65c7f7, 1);
@@ -94,12 +101,17 @@ export function createItemCard(
     selected?: boolean;
     focused?: boolean;
     emphasis?: "compact" | "offer";
+    adjustable?: import("./adjustablePresentation").AdjustablePresentation;
+    reducedMotion?: boolean;
   },
 ): Phaser.GameObjects.Container {
   const model = compactItemModel(item, options.context ?? { surface: "garage-slot", tier: 1 });
   const offerEmphasis = options.emphasis === "offer";
+  const adjustable = options.adjustable;
+  const adjustableAvailable = adjustable?.status === "available";
+  const frameWidth = model.rarity === "rare" ? 2 : 1;
   const border = scene.add.rectangle(0, 0, options.width, options.height, 0x172426, 0.94)
-    .setStrokeStyle(options.selected || options.focused ? 3 : 1,
+    .setStrokeStyle(options.selected || options.focused ? 3 : frameWidth,
       options.focused ? 0xd7e4e7 : options.selected ? DEMO_COLORS.italianRedBright : DEMO_COLORS.steel);
   const nameX = -options.width / 2 + 8;
   const nameWidth = options.width - 16;
@@ -128,11 +140,17 @@ export function createItemCard(
     ? model.conditionTokens.slice(0, 2).map((token) => `◆ ${token}`).join(" ")
     : `TAGS: ${model.stateBadges.length > 0 ? model.stateBadges.map((badge) => badge.label).join(" · ") : "none"}`;
   const metadata = scene.add.text(-options.width / 2 + 8, metadataY,
-    `${model.categoryLabel} · ${model.originLabel}${model.priceLabel ? ` · ${model.priceLabel}` : ""}\n${tagLine}`, {
+    `${model.categoryLabel} · ${model.originLabel}${model.priceLabel ? ` · ${model.priceLabel}` : ""} · ${model.rarityLabel.toUpperCase()}${adjustableAvailable ? ` · [${adjustable.controlLabel} ${adjustable.currentValueLabel}]` : ""}\n${tagLine}`, {
       fontSize: offerEmphasis ? "10px" : "8px", fontFamily: UI_FONT, color: "#b8c0c2",
       wordWrap: { width: options.width - 16 },
       maxLines: 1,
     });
+  const rarityChip = scene.add.text(options.width / 2 - 4, -options.height / 2 + 4, `${model.rarityLabel.toUpperCase()}${model.rarity === "rare" ? " ★" : ""}`, {
+    fontSize: "8px", fontFamily: UI_FONT, fontStyle: "bold",
+    color: model.rarity === "rare" ? "#f1c27a" : "#d7e4e7",
+    backgroundColor: model.rarity === "rare" ? "#3a2418" : "#22303a",
+    padding: { x: 2, y: 1 },
+  }).setOrigin(1, 0);
   const allEffectLines = model.effectLines.map((line) => {
     const marker = line.direction === "gain" ? "▲" : line.direction === "loss" ? "▼" : "◆";
     return `${marker} ${line.statLabel} ${line.valueLabel}${line.conditionLabel ? ` · ${line.conditionLabel}` : ""}`;
@@ -149,7 +167,7 @@ export function createItemCard(
     maxLines: visibleLineLimit,
   });
 
-  const children: Phaser.GameObjects.GameObject[] = [border, name, metadata, effects];
+  const children: Phaser.GameObjects.GameObject[] = [border, rarityChip, name, metadata, effects];
   if (hiddenLineCount > 0) {
     children.push(scene.add.text(options.width / 2 - 8, options.height / 2 - 8,
       `+${hiddenLineCount} MORE · SELECT FOR DETAILS`, {
@@ -162,7 +180,9 @@ export function createItemCard(
       }).setOrigin(1, 1));
   }
   const card = scene.add.container(x, y, children).setSize(options.width, options.height);
-  card.setData("accessibilityLabel", model.accessibilityLabel);
+  const a11yParts = [model.accessibilityLabel, `Rarity ${model.rarityLabel}`];
+  if (adjustableAvailable) a11yParts.push(`Adjustable: ${adjustable!.controlLabel} ${adjustable!.currentValueLabel}`);
+  card.setData("accessibilityLabel", a11yParts.join(". "));
   card.setData("itemModel", model);
   return card;
 }
@@ -188,7 +208,7 @@ export function createItemInspectorFromModel(
   const background = scene.add.rectangle(0, 0, options.width, options.height, DEMO_COLORS.ink, 0.97)
     .setStrokeStyle(2, DEMO_COLORS.silver, 0.85);
   const title = scene.add.text(-options.width / 2 + 10, -options.height / 2 + 8,
-    `${model.identity.name} · ${model.identity.tierLabel}`, {
+    `${model.identity.name} · ${model.identity.tierLabel} · [${model.identity.rarityLabel.toUpperCase()}]`, {
       fontSize: "13px", fontFamily: UI_FONT, fontStyle: "bold", color: "#f1eee5",
       wordWrap: { width: options.width - 20 },
     });

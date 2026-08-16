@@ -30,7 +30,8 @@ import type { RunIdentity } from "../simulation/types";
  */
 const UNAVAILABLE_IDENTITY: RunIdentity = runIdentityForEntrant("evelyn-mercer")!;
 import type { PracticeOriginInput } from "../simulation/practice";
-import { runPresentation, runRoute } from "./runPresentation";
+import { historyCircuitFacts, runPresentation, runRoute } from "./runPresentation";
+import { circuitIdentityLine } from "./circuitPresentation";
 import {
   addDemoBackdrop,
   createDemoButton,
@@ -463,6 +464,7 @@ export class RunScene extends Phaser.Scene {
       ? stage?.raceKind === "local" ? "Local Race" : "Championship Race"
       : entry.type.replace(/-/g, " ");
     const parts = [`${entry.stagePosition}. ${typeLabel}`];
+    const identityFacts = entry.pvp ? historyCircuitFacts(entry) : null;
     if (entry.acquisition) {
       const items = entry.acquisition.itemIds?.length
         ? `: ${entry.acquisition.itemIds.join(", ")}`
@@ -471,6 +473,9 @@ export class RunScene extends Phaser.Scene {
     }
     if (entry.pvp) {
       parts.push(`${entry.pvp.outcome}, ${entry.pvp.lapCount} laps, gap ${entry.pvp.gap.toFixed(1)}s`);
+    }
+    if (identityFacts) {
+      parts.push(circuitIdentityLine(identityFacts));
     }
     if (entry.sponsor) {
       const target = entry.sponsor.targetSeconds !== undefined

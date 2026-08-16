@@ -22,7 +22,7 @@ export const SOTO_ITEMS: readonly ItemDefinition[] = [
   // --- Chase cards (#1-#4), one per build archetype ---
   {
     id: "soto-racing-crankset",
-    name: "Racing Crankset",
+    name: "Racing Crankset", rarity: "rare",
     price: 5,
     timeModifier: 0,
     origin: "velodrome",
@@ -35,7 +35,7 @@ export const SOTO_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "soto-oversized-drive-sprocket",
-    name: "Oversized Drive Sprocket",
+    name: "Oversized Drive Sprocket", rarity: "rare",
     price: 5,
     timeModifier: 0,
     origin: "velodrome",
@@ -48,7 +48,7 @@ export const SOTO_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "soto-close-ratio-chainwheel-set",
-    name: "Close-Ratio Chainwheel Set",
+    name: "Close-Ratio Chainwheel Set", rarity: "rare",
     price: 5,
     timeModifier: 0,
     origin: "velodrome",
@@ -78,7 +78,7 @@ export const SOTO_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "soto-double-butted-tube-frame",
-    name: "Double-Butted Tube Frame",
+    name: "Double-Butted Tube Frame", rarity: "rare",
     price: 5,
     timeModifier: 0,
     origin: "velodrome",
@@ -102,7 +102,7 @@ export const SOTO_ITEMS: readonly ItemDefinition[] = [
   // --- Supporting items (#5-#15) ---
   {
     id: "soto-pneumatic-racing-tyres",
-    name: "Pneumatic Racing Tyres",
+    name: "Pneumatic Racing Tyres", rarity: "notable",
     price: 4,
     timeModifier: 0,
     origin: "velodrome",
@@ -114,7 +114,7 @@ export const SOTO_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "soto-tensioned-wire-spoke-wheels",
-    name: "Tensioned Wire-Spoke Wheels",
+    name: "Tensioned Wire-Spoke Wheels", rarity: "notable",
     price: 4,
     timeModifier: 0,
     origin: "velodrome",
@@ -126,7 +126,7 @@ export const SOTO_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "soto-hollow-steel-fork",
-    name: "Hollow Steel Fork",
+    name: "Hollow Steel Fork", rarity: "standard",
     price: 2,
     timeModifier: 0,
     origin: "velodrome",
@@ -138,7 +138,7 @@ export const SOTO_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "soto-cable-operated-rim-brake",
-    name: "Cable-Operated Rim Brake",
+    name: "Cable-Operated Rim Brake", rarity: "standard",
     price: 2,
     timeModifier: 0,
     origin: "velodrome",
@@ -150,7 +150,7 @@ export const SOTO_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "soto-roller-link-drive-chain",
-    name: "Roller-Link Drive Chain",
+    name: "Roller-Link Drive Chain", rarity: "notable",
     price: 4,
     timeModifier: 0,
     origin: "velodrome",
@@ -162,7 +162,7 @@ export const SOTO_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "soto-ratchet-freewheel",
-    name: "Ratchet Freewheel",
+    name: "Ratchet Freewheel", rarity: "notable",
     price: 4,
     timeModifier: 0,
     origin: "velodrome",
@@ -179,7 +179,7 @@ export const SOTO_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "soto-chain-tensioner",
-    name: "Chain Tensioner",
+    name: "Chain Tensioner", rarity: "standard",
     price: 2,
     timeModifier: 0,
     origin: "velodrome",
@@ -191,7 +191,7 @@ export const SOTO_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "soto-hand-pump-pressure-gauge",
-    name: "Hand Pump and Pressure Gauge",
+    name: "Hand Pump and Pressure Gauge", rarity: "notable",
     price: 4,
     timeModifier: 0,
     origin: "velodrome",
@@ -203,7 +203,7 @@ export const SOTO_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "soto-two-speed-drive-hub",
-    name: "Two-Speed Drive Hub",
+    name: "Two-Speed Drive Hub", rarity: "notable",
     price: 4,
     timeModifier: 0,
     origin: "velodrome",
@@ -217,7 +217,7 @@ export const SOTO_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "soto-kick-start-chainring",
-    name: "Kick-Start Chainring",
+    name: "Kick-Start Chainring", rarity: "standard",
     price: 2,
     timeModifier: 0,
     origin: "velodrome",
@@ -229,7 +229,7 @@ export const SOTO_ITEMS: readonly ItemDefinition[] = [
   },
   {
     id: "soto-engine-drive-pulley",
-    name: "Engine Drive Pulley",
+    name: "Engine Drive Pulley", rarity: "standard",
     price: 2,
     timeModifier: 0,
     origin: "velodrome",

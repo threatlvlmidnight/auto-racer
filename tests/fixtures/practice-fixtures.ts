@@ -49,6 +49,7 @@ export function minimumClampPracticeBuild(): Build {
   return vehicleBuild([{
       id: "minimum-clamp",
       name: "Minimum Clamp Fixture",
+      rarity: "standard",
       price: 0,
       timeModifier: -20,
       cooldown: 1,

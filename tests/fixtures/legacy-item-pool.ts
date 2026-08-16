@@ -16,7 +16,7 @@ import type { ItemDefinition } from "../../src/simulation/types";
 export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   {
     id: "item-001",
-    name: "Close-Ratio Gearset",
+    name: "Close-Ratio Gearset", rarity: "standard",
     price: 4,
     timeModifier: -3,
     identityTag: "performance",
@@ -37,7 +37,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-002",
-    name: "Lightweight Flywheel",
+    name: "Lightweight Flywheel", rarity: "standard",
     price: 3,
     timeModifier: -1.25,
     identityTag: "performance",
@@ -67,7 +67,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-003",
-    name: "Experimental Brake Bias",
+    name: "Experimental Brake Bias", rarity: "standard",
     price: 2,
     timeModifier: 0.75,
     cooldown: 3,
@@ -86,7 +86,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-004",
-    name: "Track-Spec Dampers",
+    name: "Track-Spec Dampers", rarity: "standard",
     price: 4,
     timeModifier: -2.1,
     identityTag: "performance",
@@ -107,7 +107,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-005",
-    name: "Blueprinted Engine",
+    name: "Blueprinted Engine", rarity: "standard",
     price: 5,
     timeModifier: -4.5,
     identityTag: "performance",
@@ -128,7 +128,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-006",
-    name: "Low-Drag Mirror Set",
+    name: "Low-Drag Mirror Set", rarity: "standard",
     price: 2,
     timeModifier: -0.6,
     cooldown: 1,
@@ -147,7 +147,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-007",
-    name: "Forged Control Arms",
+    name: "Forged Control Arms", rarity: "standard",
     price: 3,
     timeModifier: -1.8,
     identityTag: "performance",
@@ -168,7 +168,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-008",
-    name: "Ceramic Heat Shield",
+    name: "Ceramic Heat Shield", rarity: "standard",
     price: 2,
     timeModifier: 0.4,
     cooldown: 2,
@@ -187,7 +187,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-009",
-    name: "Limited-Slip Differential",
+    name: "Limited-Slip Differential", rarity: "standard",
     price: 4,
     timeModifier: -2.7,
     identityTag: "performance",
@@ -208,7 +208,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-010",
-    name: "Reinforced Skid Plate",
+    name: "Reinforced Skid Plate", rarity: "standard",
     price: 2,
     timeModifier: 1.1,
     cooldown: 1,
@@ -228,7 +228,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-011",
-    name: "Compact Data Logger",
+    name: "Compact Data Logger", rarity: "standard",
     price: 3,
     timeModifier: -0.9,
     cooldown: 2,
@@ -256,7 +256,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-012",
-    name: "Performance Calibration Suite",
+    name: "Performance Calibration Suite", rarity: "standard",
     price: 4,
     timeModifier: 0,
     identityTag: "performance",
@@ -277,7 +277,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-013",
-    name: "Tyre Rack",
+    name: "Tyre Rack", rarity: "standard",
     price: 2,
     timeModifier: -0.35,
     cooldown: 3,
@@ -297,7 +297,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-014",
-    name: "Adaptive Telemetry Loop",
+    name: "Adaptive Telemetry Loop", rarity: "standard",
     price: 4,
     timeModifier: 0,
     identityTag: "performance",
@@ -319,7 +319,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-015",
-    name: "Race Engineer Headset",
+    name: "Race Engineer Headset", rarity: "standard",
     price: 5,
     timeModifier: 0,
     identityTag: "performance",
@@ -343,7 +343,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   // 5 items and Power/Chassis to an even 10/10 split.
   {
     id: "item-016",
-    name: "Ported Intake Manifold",
+    name: "Ported Intake Manifold", rarity: "standard",
     price: 3,
     timeModifier: -1.5,
     identityTag: "performance",
@@ -364,7 +364,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-017",
-    name: "Trail-Braking Pedal Box",
+    name: "Trail-Braking Pedal Box", rarity: "standard",
     price: 2,
     timeModifier: 0.55,
     cooldown: 2,
@@ -383,7 +383,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-018",
-    name: "Twin-Choke Carburetor",
+    name: "Twin-Choke Carburetor", rarity: "standard",
     price: 4,
     timeModifier: -2.35,
     identityTag: "performance",
@@ -404,7 +404,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-019",
-    name: "Banked Velodrome Wheels",
+    name: "Banked Velodrome Wheels", rarity: "standard",
     price: 2,
     timeModifier: -0.8,
     cooldown: 1,
@@ -424,7 +424,7 @@ export const LEGACY_ITEM_POOL: ItemDefinition[] = [
   },
   {
     id: "item-020",
-    name: "Reinforced Axle Housing",
+    name: "Reinforced Axle Housing", rarity: "standard",
     price: 5,
     timeModifier: -1.95,
     identityTag: "performance",

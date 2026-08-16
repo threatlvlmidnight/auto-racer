@@ -19,7 +19,7 @@ import { classifyScalingItem } from "../../src/simulation/buffs";
 describe("Feature 032 scaling evidence reconciliation", () => {
   it("uses authored fitted-value inputs without inventing persistence", () => {
     const scaling = classifyScalingItem({
-      id: "scaled", name: "Scaled", price: 4, timeModifier: 0, origin: "coachworks",
+      id: "scaled", name: "Scaled", rarity: "standard", price: 4, timeModifier: 0, origin: "coachworks",
       installationCategory: "power", synergyTags: [],
       buff: { boostPercent: 1, scalesWithFittedValue: true },
       fittedBehavior: { kind: "none", description: "none" },

@@ -37,6 +37,7 @@ import {
   type ContestOutcome,
   type ContestResult,
   type EntrantId,
+  type HistoryCircuitEvidence,
   type IdentityTag,
   type InstanceBuild,
   type ItemInstance,
@@ -348,6 +349,12 @@ export interface RunHistoryEntry {
     ghostTime: number;
     gap: number;
     enrichment?: import("./types").RaceEnrichmentReplayEvidence;
+    /**
+     * Feature 035 display-only circuit evidence retained at settlement for a
+     * scored race. Copied from the already-resolved track/stage boundary; it
+     * never participates in settlement, replay, or next-track choice.
+     */
+    circuit?: HistoryCircuitEvidence;
   };
   sponsorOutcome?: SponsorContract;
   /** Exact Feature 034 immediate/deferred encounter evidence. */
@@ -917,6 +924,13 @@ export function completePvpEncounter(
       ghostTime: result.ghostTime,
       gap: result.gap,
       enrichment: result.enrichment,
+      circuit: result.circuit && stage.regionId
+        ? {
+            trackId: result.circuit.trackId,
+            trackName: result.circuit.trackName,
+            regionId: stage.regionId,
+          }
+        : undefined,
     },
     sponsorOutcome,
   };

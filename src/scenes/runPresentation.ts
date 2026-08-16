@@ -14,8 +14,12 @@ import { GHOST_POOL, RIVAL_PROFILES } from "../content/rivals";
 import { selectGhostRoster } from "../simulation/rivals";
 import { localRivalRoster } from "../simulation/localOpponents";
 import type { CarProgress } from "../simulation/playback";
-import type { ContestResult, NCarContestResult, RivalProfile } from "../simulation/types";
+import type { ContestResult, HistoryCircuitEvidence, NCarContestResult, RivalProfile } from "../simulation/types";
 import type { RandomSource } from "../simulation/encounters";
+import {
+  circuitPresentationIdentity,
+  type CircuitPresentationIdentity,
+} from "./circuitPresentation";
 import type {
   PartsSupplierPayload,
   SponsorMeetingPayload,
@@ -260,6 +264,7 @@ export function toLegacyContestResult(result: NCarContestResult): ContestResult 
     playerPosition: player.position,
     finishingOrder: result.cars.map((car) => car.role === "player" ? "player" : car.id),
     enrichment,
+    circuit: { trackId: result.track.id, trackName: result.track.name },
   };
 }
 
@@ -276,6 +281,29 @@ export function raceLapLabel(name: string, progress: CarProgress, lapCount: numb
   return progress.finished
     ? `${name} · FINISHED`
     : `${name} · LAP ${Math.min(progress.lapIndex + 1, lapCount)}/${lapCount}`;
+}
+
+/**
+ * Feature 035 US1: project the exact retained circuit identity onto a
+ * completed scored-race history summary. Returns null when the history entry
+ * carries no circuit evidence (legacy/non-scored). Consumes retained facts
+ * only — never regenerates or infers a track from a seed.
+ */
+export function historyCircuitFacts(summary: RunHistorySummary): CircuitPresentationIdentity | null {
+  const evidence = summary.pvp?.circuit as HistoryCircuitEvidence | undefined;
+  if (!evidence) return null;
+  return circuitPresentationIdentity(
+    { id: evidence.trackId, name: evidence.trackName },
+    { regionId: evidence.regionId },
+  );
+}
+
+/** Direct scored-race identity from a resolved track + current stage context. */
+export function resolvedCircuitIdentity(
+  track: Pick<import("../simulation/tracks").Track, "id" | "name"> | undefined | null,
+  stage: { regionId?: import("../simulation/types").RegionId; raceKind?: import("../simulation/types").RaceKind } | null,
+): CircuitPresentationIdentity {
+  return circuitPresentationIdentity(track, stage);
 }
 
 export function runRoute(run: Run): RunSceneRoute {

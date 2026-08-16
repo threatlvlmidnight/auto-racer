@@ -11,8 +11,11 @@ handoff; feature task ledgers remain the source of truth for individual tasks.
    Begin only after 033's retained race-evidence contract is available; its
    T001 is the explicit handoff. This delivers instance-bound items, canonical
    stat points, encounter cadence, transformations, and Workshop effects.
-2. **035 Interface Clarity & Reward Feedback** — analyzed and ready for
-   implementation. It owns whole-game readability and reward feedback, not new
+2. **035 Interface Clarity & Reward Feedback** — **IMPLEMENTED (2026-08-16)**.
+   Presentation-only whole-game readability and reward feedback: recorded-circuit
+   `LOCATION:` identity (Test Day fixed/unscored), reserved `Adjustable`
+   vocabulary, display-only Standard/Notable/Rare rarity, non-color upgrade
+   cues, reduced-motion equivalents, and a finite landscape audit matrix. No new
    encounter or race authority.
 
 ## Planned follow-ups requiring scope refresh

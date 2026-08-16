@@ -140,6 +140,17 @@ See `specs/011-build-test-day/quickstart.md` and
 `specs/011-build-test-day/acceptance-evidence.md` for the full validation
 workflow and retained evidence.
 
+## Interface clarity & reward feedback (Feature 035)
+
+Feature 035 improves presentation only: every scored-race identity surface shows
+the recorded track name and an explicit `LOCATION:` (with Test Day marked fixed
+and unscored), `Adjustable` is reserved for items with a genuine pre-race
+control, each playable item carries display-only Standard/Notable/Rare rarity,
+and card/upgrade/administration feedback uses non-color structural cues and a
+bounded reduced-motion equivalent. It changes no contest, economy, tiering,
+setup, or track authority. See
+`specs/035-interface-clarity-reward-feedback/acceptance-evidence.md`.
+
 ## Demo deployment (GitHub Pages)
 
 Feature 031-demo-deployment publishes a shareable demo to

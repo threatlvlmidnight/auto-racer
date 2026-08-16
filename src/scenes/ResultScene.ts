@@ -26,7 +26,7 @@ import { recordedLapVehicleStatModel } from "./vehicleStatPresentation";
 import { createVehicleStatPanel } from "./vehicleStatVisuals";
 import { buildTrackFitPresentation } from "./trackSummaryPresentation";
 import { createBuildTrackFitPanel } from "./trackFitVisuals";
-import { regionDefinition } from "../content/regions";
+import { circuitIdentityLine, circuitPresentationIdentity } from "./circuitPresentation";
 import { classifyScalingItem } from "../simulation/buffs";
 import { enrichmentResultsSummary } from "./raceEnrichmentPresentation";
 import { completeExhibitionEncounter } from "../simulation/encounters";
@@ -78,7 +78,10 @@ export class ResultScene extends Phaser.Scene {
     addRunStamp(this, this.run, { showCredits: false });
     const stage = this.run.stages[this.run.stageIndex];
     if (stage?.regionId) {
-      this.add.text(width / 2, 18, `${regionDefinition(stage.regionId).name} · ${stage.raceKind === "local" ? "LOCAL RACE" : "CHAMPIONSHIP RACE"}`, {
+      // Feature 035 US1: the same player-readable circuit identity (retained
+      // track name + explicit LOCATION) as selection/briefing/history.
+      const identity = circuitPresentationIdentity(this.result.track, stage);
+      this.add.text(width / 2, 18, `${circuitIdentityLine(identity)} · ${stage.raceKind === "local" ? "LOCAL RACE" : "CHAMPIONSHIP RACE"}`, {
         fontSize: "11px", fontFamily: UI_FONT, fontStyle: "bold", color: "#cddbd2",
       }).setOrigin(0.5);
     }

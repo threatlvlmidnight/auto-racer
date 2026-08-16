@@ -36,6 +36,8 @@ import {
 } from "./garagePresentation";
 import { createItemCard, createItemInspector, createPlacementComparisonInspector } from "./itemVisuals";
 import { placementComparisonModel, type ItemPresentationContext } from "./itemPresentation";
+import { adjustablePresentation } from "./adjustablePresentation";
+import { deriveEligibleSetupControls } from "../simulation/raceSetup";
 import {
   addDemoBackdrop,
   addHeaderBand,
@@ -569,12 +571,18 @@ export class PrepareScene extends Phaser.Scene {
       priceVisible: false,
       installation: garageInstallationPresentation(item, slotType),
     };
+    const adjustable = adjustablePresentation({
+      item,
+      heldLocation: source.area === "vehicle" ? { area: "vehicle", slotId: source.slotId } : { area: "storage", index: source.index },
+      eligibleControls: deriveEligibleSetupControls(this.run!.build),
+    });
     const card = createItemCard(this, x, y, item, {
       width: slotWidth - 10,
       height: SLOT_HEIGHT - 4,
       iconSize: 20,
       context,
       selected: this.selectedItemId === item.id,
+      adjustable,
     })
       .setInteractive({ useHandCursor: true });
     this.track(card);

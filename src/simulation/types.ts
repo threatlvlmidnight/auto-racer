@@ -14,6 +14,44 @@ export interface SpecCar {
 
 export type IdentityTag = "performance";
 
+// --- Feature 035: interface clarity and reward feedback --------------------
+// Display-only catalog rarity (spec.md FR/scope). It communicates authored card
+// hierarchy for presentation ONLY — it never enters draft odds, price, tiering,
+// race setup, lap simulation, or settlement. Every authored ItemDefinition has
+// exactly one value (data-model.md "ItemRarity").
+export type ItemRarity = "standard" | "notable" | "rare";
+
+/** Rarity display tokens: never color alone (data-model.md "ItemRarity"). */
+export interface RaritySemantics {
+  token: ItemRarity;
+  label: "Standard" | "Notable" | "Rare";
+  rank: 0 | 1 | 2;
+  /** Non-color structural cue shared by cards/inspectors. */
+  frame: "flat" | "accented" | "ornate";
+  /** Short accessibility token rendered alongside the label. */
+  a11yToken: string;
+}
+
+/** Localized rarity vocabulary with stable, non-color structural semantics. */
+export const RARITY_SEMANTICS: Record<ItemRarity, RaritySemantics> = {
+  standard: { token: "standard", label: "Standard", rank: 0, frame: "flat", a11yToken: "S" },
+  notable: { token: "notable", label: "Notable", rank: 1, frame: "accented", a11yToken: "N" },
+  rare: { token: "rare", label: "Rare", rank: 2, frame: "ornate", a11yToken: "R" },
+};
+
+/**
+ * Display-only circuit identity retained for completed scored races
+ * (data-model.md "HistoryCircuitEvidence"). Copied from the already-resolved
+ * race/stage boundary at settlement; it never participates in settlement,
+ * replay resolution, or next-track choice.
+ */
+export interface HistoryCircuitEvidence {
+  trackId: string;
+  trackName: string;
+  regionId: RegionId;
+}
+
+
 // --- Feature 029: versioned world championship ---------------------------
 
 export type SelectableRegionId =
@@ -143,6 +181,8 @@ export interface ItemDefinition {
   id: string;
   /** Display label only — theme is undecided (constitution TODO(THEME)). */
   name: string;
+  /** Feature 035 display-only catalog rarity (FR-006). Never affects odds/price/tier/simulation/economy. */
+  rarity: ItemRarity;
   /** Authored run-economy cost in credits. */
   price: number;
   /** Per-lap magnitude. May be negative (faster) or positive (worse). */
@@ -579,6 +619,13 @@ export interface ContestResult {
   finishingOrder?: readonly string[];
   /** Immutable Feature 033 authority retained when an N-car race is settled. */
   enrichment?: RaceEnrichmentReplayEvidence;
+  /**
+   * Feature 035 display-only circuit evidence forwarded from the resolved
+   * N-car result's retained track by the settlement bridge. Presentation-only;
+   * never read by simulation/economy/settlement. Absent for legacy 1v1 results
+   * that never resolved an N-car track.
+   */
+  circuit?: Pick<HistoryCircuitEvidence, "trackId" | "trackName">;
 }
 
 // --- Feature 012: multi-ghost contest --------------------------------------

@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-15
 
-**Status**: Task list complete — ready for implementation
+**Status**: Implemented (2026-08-16, branch `035-interface-clarity-reward-feedback`) — automated gates green; owner browser QA records visual/input evidence in acceptance-evidence.md.
 
 **Input**: Resolve the remaining demo readability and reward-feedback debt:
 make circuit context and adjustable controls unambiguous, make cards and
