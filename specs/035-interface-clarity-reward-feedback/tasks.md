@@ -9,10 +9,10 @@ contracts/interface-clarity-contract.md, quickstart.md
 their implementation. Phaser scene work consumes those models; owner browser
 acceptance records visual/input evidence after automated gates pass.
 
-> **Implementation review (2026-08-16): COMPLETE.** The reopened tasks were
-> completed in a second pass (see
-> [IMPLEMENTATION-REVIEW-FOLLOWUP.md](./IMPLEMENTATION-REVIEW-FOLLOWUP.md)).
-> Only T043 (owner browser QA) remains open.
+> **Owner acceptance (2026-08-17): FAILED.** The earlier implementation-review
+> work landed, but deployed-build screenshots exposed supported-landscape
+> collisions. T043 and T045–T050 remain open; see
+> [owner-qa-findings-2026-08-17.md](./owner-qa-findings-2026-08-17.md).
 
 ## Format: [ID] [P?] [Story] Description
 
@@ -147,8 +147,21 @@ consequential content without claiming new portrait reflow.
 
 [X] T041 [P] Reconcile README.md, specs/DEFERRED.md, specs/HANDOFF.md, and specs/ROADMAP.md with Feature 035 decisions and any Feature 026 follow-ups
 [X] T042 Run npm test, npm run lint, npm run build, and npm run build:pages; fix only Feature 035 regressions and record the exact results in acceptance-evidence.md
-[ ] T043 Perform owner browser QA at 1920×1080, 1366×768, 1024×768, and 800×450 across the complete primary-scene/state/input matrix; attach screenshots or explicit review outcomes to acceptance-evidence.md
+[ ] T043 [MANUAL-FRONTIER-OR-OWNER] Perform browser QA at 1920×1080, 1366×768, 1024×768, and 800×450 across the complete primary-scene/state/input matrix; attach screenshots or explicit review outcomes to acceptance-evidence.md. The coding agent MUST NOT execute or close this task.
 [X] T044 Re-run the Constitution Check against delivered code and record final PASS evidence, including no change to odds, price, tier authority, simulation, economy, or Test Day scoring, in acceptance-evidence.md
+
+## Phase 7: Owner QA remediation (2026-08-17)
+
+**Purpose**: Resolve concrete supported-landscape failures found in the owner
+screenshots before T043 can be completed. See
+`owner-qa-findings-2026-08-17.md`.
+
+[ ] T045 [CODE-DEEPSEEK] Record UI-035-01 through UI-035-03 as failed T043 cases in acceptance-evidence.md, including the exact dense-state fixture and viewport for each reproduction
+[ ] T046 [CODE-DEEPSEEK] Fix PreRaceScene circuit/header/stat-panel collisions, remove duplicated identity, and apply bounded normalized-stat formatting rather than raw floating-point output
+[ ] T047 [CODE-DEEPSEEK] Fix PrepareScene Supplier cards, semantic state regions, upgrade cue, receipt, installed row, and storage row so the combined long-name/multi-stat/upgrade/unavailable/receipt fixture has no overlap
+[ ] T048 [CODE-DEEPSEEK] Coordinate ContestScene safe regions for identity, focus/standings, status/evidence, installed build, and playback controls with Feature 036 without changing playback or result authority
+[ ] T049 [CODE-DEEPSEEK] Add production-path regression coverage for the three dense states and layout-bound invariants; pure audit-case arrays do not satisfy this task
+[ ] T050 [CODE-DEEPSEEK] Re-run automated gates and provide exact routes, seeds/states, viewport sizes, and expected outcomes for T043 verification; do not capture screenshots, perform visual acceptance, or close T043
 
 ## Dependencies and execution order
 

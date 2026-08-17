@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-15
 
-**Status**: Clarified — ready for planning
+**Status**: Planned and analyzed — implementation-ready after Features 041/042
 
 **Input**: Add an optional asynchronous multiplayer loop where a player can
 submit a committed build, discover another player’s recorded ghost, and replay a
@@ -36,6 +36,23 @@ or making the current static demo depend on an online service.
 - Q: Which optional service platform is selected? → A: Supabase. Use its
   anonymous identity, relational data, and optional server function capability
   while keeping the service unconfigured/optional in the static demo.
+
+### Planning resolutions 2026-08-17
+
+- Remote V1 contests are explicitly unscored exhibitions. They never settle a
+  world-tour stage, consume an encounter, or award credits, reputation, points,
+  or history. This prevents optional service availability and pool strength from
+  changing progression.
+- A remote exhibition reuses the normal watched eight-car race and Results UI:
+  the challenger, six existing deterministic local rivals, and one verified
+  remote ghost. It is not a separate 1v1 test screen.
+- Discovery carries the publisher's exact versioned circuit. The challenger
+  commits setup for that retained circuit through a short-lived bound offer;
+  independent local runs do not need matching random track seeds.
+- Pseudonyms are assigned by the service from authored neutral vocabulary. V1
+  contains no user-authored name, profile copy, report text, or chat.
+- The $0 pilot is closed development infrastructure. Public promotion requires
+  a separate CAPTCHA/anti-abuse, moderation, load, privacy, and cost review.
 
 ## User Scenarios & Testing
 
@@ -163,6 +180,20 @@ reason, while local gameplay stays intact.
 - **FR-011**: The feature MUST preserve the authoritative Feature 033 event and
   result contract and the Feature 034 item-instance/versioned run contract; it
   MUST not freeze a remote payload until those dependencies are stable.
+- **FR-012**: Every V1 remote contest MUST be an unscored exhibition that cannot
+  settle or mutate a championship run, encounter, economy, standings, history,
+  RNG, or local race evidence.
+- **FR-013**: Remote contests MUST reuse the normal eight-car watched race and
+  Results presentation with one verified remote ghost and six deterministic
+  local rivals; they MUST NOT use a separate 1v1 test screen.
+- **FR-014**: Discovery MUST bind the selected ghost and its exact versioned
+  retained circuit before the challenger commits setup and the server resolves
+  the contest.
+- **FR-015**: V1 MUST accept no user-authored profile, pseudonym, report, or chat
+  text; pseudonyms MUST be service-authored and reports MUST use fixed reasons.
+- **FR-016**: A disabled, unconfigured, or unconsented client MUST NOT create an
+  identity, instantiate the concrete service, or make a multiplayer network
+  request during boot or local play.
 
 ### Key Entities
 
@@ -194,6 +225,9 @@ reason, while local gameplay stays intact.
 - **SC-005**: Full contract, integration, replay-parity, privacy/moderation,
   deployment/runbook, lint, type-check, and production-build checks pass with
   no regression to static-demo local play.
+- **SC-006**: In 100% of success and failure fixtures, the supplied local run,
+  encounter, economy, history, standings, RNG evidence, and existing local race
+  result remain deep-equal before and after multiplayer actions.
 
 ## Assumptions
 

@@ -4,7 +4,9 @@
 
 **Created**: 2026-08-15
 
-**Status**: Tasks generated — ready for implementation
+**Status**: Owner acceptance failed (2026-08-17); implementation remediation
+reopened. T044 and T058–T062 remain. See
+`owner-qa-findings-2026-08-17.md` and the manual matrix in `quickstart.md`.
 
 **Input**: Enhance the watched race with credible circuit presentation, improved
 vehicle models, picture-in-picture signature moments, and richer visual drama

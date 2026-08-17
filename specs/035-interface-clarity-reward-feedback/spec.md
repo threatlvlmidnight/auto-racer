@@ -4,10 +4,10 @@
 
 **Created**: 2026-08-15
 
-**Status**: Implemented (2026-08-16, branch `035-interface-clarity-reward-feedback`).
-Reopened production tasks completed in a second pass; automated gates green.
-Only T043 (owner browser QA) remains — see `IMPLEMENTATION-REVIEW-FOLLOWUP.md`
-and `acceptance-evidence.md`.
+**Status**: Owner acceptance failed (2026-08-17); implementation remediation
+reopened. T043 and T045–T050 remain. See
+`owner-qa-findings-2026-08-17.md`, `IMPLEMENTATION-REVIEW-FOLLOWUP.md`, and
+`acceptance-evidence.md`.
 
 **Input**: Resolve the remaining demo readability and reward-feedback debt:
 make circuit context and adjustable controls unambiguous, make cards and

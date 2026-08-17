@@ -4,7 +4,9 @@
 
 **Created**: 2026-08-15
 
-**Status**: Planning complete — gated on Features 034 and 035
+**Status**: Planning complete — final catalog asset production is gated on
+Features 035, 041, and 042. Art-direction prototypes may proceed without
+claiming final catalog coverage.
 
 **Input**: Give every playable item a recognizable, cohesive visual treatment
 and make that art the primary visual anchor of item cards and inspection without
@@ -19,8 +21,11 @@ accessibility information that players use to make decisions.
   hybrid: transparent cutouts for compact cards plus composed-scene crops for
   selected inspector/hero treatment. Fall back to composed-sheet crops only if
   the approved production budget cannot support the hybrid.
-- Q: What catalog boundary must ship with bespoke art? → A: Wait for Feature 034
-  and ship the current catalog together with its locked additions.
+- Q: What catalog boundary must ship with bespoke art? → A: Feature 034 is
+  complete, but owner feedback now requires the Feature 041 synergy pass and
+  Feature 042 item/Loot expansion first. Ship the catalog only after those
+  mechanical identities and the final roster are locked; do not generate a
+  second full asset corpus for items added immediately afterward.
 - Q: May states modify base art? → A: Base art remains invariant. Tier, rarity,
   modification, installation, storage, selection, and focus use separate
   overlays; effects and modifications may add approved visual effects such as

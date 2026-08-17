@@ -1,13 +1,41 @@
 # Spec Kit Analysis: Interface Clarity and Reward Feedback
 
-**Date**: 2026-08-15  
+**Date**: 2026-08-15; re-analyzed 2026-08-17 after failed owner QA
 **Artifacts analyzed**: spec.md, clarification-questionnaire.md, plan.md,
 research.md, data-model.md, contract, quickstart.md, tasks.md, Constitution 1.3.0
 
-## Result
+## 2026-08-17 remediation analysis
 
-**PASS after remediation.** No critical or high-severity finding remains. The
-44 tasks are dependency-ordered, every requirement and user story has
+**READY FOR CODE REMEDIATION; MANUAL ACCEPTANCE EXCLUDED.** The owner screenshots
+invalidate the earlier landscape PASS but do not introduce an unresolved
+product or authority decision. T045–T050 cover the three reproduced failure
+clusters, while T043 remains a separately labeled
+`[MANUAL-FRONTIER-OR-OWNER]` gate.
+
+| Finding | Code tasks | Verification ownership |
+|---|---|---|
+| UI-035-01 Pre-Race duplicate identity, collision, raw precision | T045–T046, T049–T050 | T043 frontier/owner |
+| UI-035-02 Supplier card/receipt/garage collision | T045, T047, T049–T050 | T043 frontier/owner |
+| UI-035-03 Contest HUD collision | T045, T048–T050 plus Feature 036 T061–T062 | T043/T044 frontier/owner |
+
+Consistency conclusions:
+
+- The remediation changes presentation/layout only and cannot alter circuit,
+  purchase, tier, setup, playback, or race-result authority.
+- Feature 035 T048 and Feature 036 T061 intentionally share `ContestScene` and
+  must be implemented in one serialized code batch rather than parallel edits.
+- Feature 043 track art is not a dependency for these fixes.
+- Automated layout bounds and production-path tests are allowed; screenshots
+  and qualitative visual judgments are not DeepSeek work.
+- Regional shop demand remains a separate future onboarding/context feature.
+- No critical/high specification inconsistency remains. The package is ready
+  for its `[CODE-DEEPSEEK]` tasks.
+
+## Original 2026-08-15 result
+
+**PASS after remediation at that time.** No critical or high-severity finding
+remained before owner QA. The original 44 tasks were dependency-ordered, every
+requirement and user story had
 implementation and verification coverage, and presentation-only boundaries are
 explicit.
 
@@ -65,4 +93,3 @@ worldTourPresentation model.
 
 The package is ready for implementation; no implementation was started by this
 analysis.
-

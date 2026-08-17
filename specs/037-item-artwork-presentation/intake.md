@@ -2,7 +2,9 @@
 
 **Created**: 2026-08-15
 
-**Status**: Intake — plan asset pipeline now; execute catalog art after Feature 034 stabilizes item content.
+**Status**: Intake/planning complete — art-direction prototypes may proceed,
+but final catalog art waits for Feature 035 acceptance and Features 041/042 to
+lock synergy mechanics and the expanded item roster.
 
 ## Problem
 
@@ -39,4 +41,3 @@ rarity, prices, placement, or accessibility information.
 - Asset volume and generation/review cadence per batch.
 - Whether art represents item definition only or also has small overlays for
   tier, modification, and installation state.
-

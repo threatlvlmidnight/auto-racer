@@ -65,6 +65,12 @@ verified the rendered race at runtime.
 
 ### Owner review sign-off (T044 — manual only)
 
+**2026-08-17 result: FAILED.** The deployed-build review found an oversized,
+flat track treatment; unreadable dense-field labels; and overlapping HUD,
+focus/PiP, evidence, installed-card, and playback-control regions. See
+`owner-qa-findings-2026-08-17.md`. Complete T058–T062 before repeating this
+matrix.
+
 - [ ] Artifacts: four bespoke player vehicles visible and distinguishable by
       number/pattern/label and silhouette; rivals identifiable without color.
 - [ ] Circuit: layered top-down road/verge/start-finish matches the retained
@@ -77,4 +83,3 @@ verified the rendered race at runtime.
 
 _Record any visual-only findings and re-run the focused checks above before
 marking this feature ready for owner acceptance._
-

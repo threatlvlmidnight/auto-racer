@@ -2,8 +2,8 @@
 
 **Created**: 2026-08-16
 
-**Status**: Intake — clarify topology, targeting, stacking, and presentation
-rules before planning.
+**Status**: Planning cycle complete — implementation-ready on 2026-08-17;
+coding not started.
 
 ## Problem
 
@@ -86,4 +86,3 @@ without making resolution order-dependent or opaque.
   understand why an effect is active or inactive without relying on color.
 - Existing items without adjacency clauses retain exactly their current
   behavior and resolved values.
-

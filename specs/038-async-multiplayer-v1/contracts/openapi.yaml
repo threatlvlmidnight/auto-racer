@@ -1,0 +1,334 @@
+openapi: 3.1.0
+info:
+  title: Auto Racer Async Multiplayer V1
+  version: 1.0.0
+  description: Optional authenticated Edge Function contract. The static game does not depend on this API.
+servers:
+  - url: https://{projectRef}.supabase.co/functions/v1
+    variables:
+      projectRef:
+        default: optional-pilot
+security:
+  - bearerAuth: []
+paths:
+  /participant-enable:
+    post:
+      operationId: enableParticipant
+      responses:
+        "200":
+          description: Existing or newly assigned anonymous participant.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ParticipantResponse" }
+        default: { $ref: "#/components/responses/Error" }
+  /ghost-publish:
+    post:
+      operationId: publishGhost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GhostPublishCommand" }
+      responses:
+        "200":
+          description: Verified discoverable ghost summary, including idempotent retry.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GhostSummaryResponse" }
+        default: { $ref: "#/components/responses/Error" }
+  /ghost-discover:
+    post:
+      operationId: discoverGhost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GhostDiscoveryCommand" }
+      responses:
+        "200":
+          description: A bound 15-minute offer or a successful null result.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DiscoveryResponse" }
+        default: { $ref: "#/components/responses/Error" }
+  /contest-resolve:
+    post:
+      operationId: resolveContest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContestResolveCommand" }
+      responses:
+        "200":
+          description: Immutable stored receipt; the browser only replays it.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContestReceiptResponse" }
+        default: { $ref: "#/components/responses/Error" }
+  /ghost-withdraw:
+    post:
+      operationId: withdrawGhost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [transportVersion, idempotencyKey, ghostId]
+              properties:
+                transportVersion: { const: async-multiplayer-v1 }
+                idempotencyKey: { type: string, format: uuid }
+                ghostId: { type: string, format: uuid }
+      responses:
+        "200": { $ref: "#/components/responses/VoidSuccess" }
+        default: { $ref: "#/components/responses/Error" }
+  /safety-control:
+    post:
+      operationId: applySafetyControl
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SafetyCommand" }
+      responses:
+        "200": { $ref: "#/components/responses/VoidSuccess" }
+        default: { $ref: "#/components/responses/Error" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Error:
+      description: Typed recoverable failure.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/FailureEnvelope" }
+    VoidSuccess:
+      description: Idempotent command completed.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - { $ref: "#/components/schemas/SuccessEnvelope" }
+              - type: object
+                properties: { value: { type: "null" } }
+  schemas:
+    Digest:
+      type: object
+      additionalProperties: false
+      required: [algorithm, value]
+      properties:
+        algorithm: { const: sha256-v1 }
+        value: { type: string, pattern: "^[0-9a-f]{64}$" }
+    CompatibilityManifest:
+      type: object
+      additionalProperties: false
+      required:
+        - transportVersion
+        - canonicalizationVersion
+        - digestVersion
+        - contestResultVersion
+        - simulationRulesVersion
+        - contentCatalogVersion
+        - trackGeneratorVersion
+        - raceSetupRulesVersion
+        - raceEnrichmentVersion
+        - worldTourScheduleVersion
+        - encounterVarietyVersion
+        - adjacencyRulesVersion
+        - lootRulesVersion
+      properties:
+        transportVersion: { const: async-multiplayer-v1 }
+        canonicalizationVersion: { const: canonical-json-v1 }
+        digestVersion: { const: sha256-v1 }
+        contestResultVersion: { type: string, minLength: 1 }
+        simulationRulesVersion: { type: string, minLength: 1 }
+        contentCatalogVersion: { type: string, minLength: 1 }
+        trackGeneratorVersion: { type: string, minLength: 1 }
+        raceSetupRulesVersion: { type: string, minLength: 1 }
+        raceEnrichmentVersion: { type: string, minLength: 1 }
+        worldTourScheduleVersion: { type: string, minLength: 1 }
+        encounterVarietyVersion: { type: string, minLength: 1 }
+        adjacencyRulesVersion: { type: string, minLength: 1 }
+        lootRulesVersion: { type: string, minLength: 1 }
+    TrackDescriptor:
+      type: object
+      additionalProperties: false
+      required: [generatorVersion, seed, level, regionId, lapCount, trackFingerprint]
+      properties:
+        generatorVersion: { type: string, minLength: 1 }
+        seed: { type: integer }
+        level: { type: integer, minimum: 1 }
+        regionId: { type: string, minLength: 1 }
+        lapCount: { type: integer, minimum: 1, maximum: 64 }
+        trackFingerprint: { $ref: "#/components/schemas/Digest" }
+    CommittedBuild:
+      type: object
+      additionalProperties: false
+      required: [instanceBuild, entrantId, setup, track]
+      properties:
+        instanceBuild: { type: object, description: Versioned Feature 034 InstanceBuild; strict shared validator is authoritative. }
+        entrantId: { type: string, minLength: 1, maxLength: 80 }
+        setup: { type: object, description: LockedRaceSetup; strict shared validator is authoritative. }
+        track: { $ref: "#/components/schemas/TrackDescriptor" }
+    GhostPublishCommand:
+      type: object
+      additionalProperties: false
+      required: [transportVersion, idempotencyKey, manifest, compatibilityKey, committed, committedDigest]
+      properties:
+        transportVersion: { const: async-multiplayer-v1 }
+        idempotencyKey: { type: string, format: uuid }
+        manifest: { $ref: "#/components/schemas/CompatibilityManifest" }
+        compatibilityKey: { $ref: "#/components/schemas/Digest" }
+        committed: { $ref: "#/components/schemas/CommittedBuild" }
+        committedDigest: { $ref: "#/components/schemas/Digest" }
+    GhostDiscoveryCommand:
+      type: object
+      additionalProperties: false
+      required: [transportVersion, compatibilityKey, excludeGhostIds]
+      properties:
+        transportVersion: { const: async-multiplayer-v1 }
+        compatibilityKey: { $ref: "#/components/schemas/Digest" }
+        excludeGhostIds:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items: { type: string, format: uuid }
+    ContestResolveCommand:
+      type: object
+      additionalProperties: false
+      required: [transportVersion, idempotencyKey, offerId, manifest, compatibilityKey, challenger, challengerDigest]
+      properties:
+        transportVersion: { const: async-multiplayer-v1 }
+        idempotencyKey: { type: string, format: uuid }
+        offerId: { type: string, format: uuid }
+        manifest: { $ref: "#/components/schemas/CompatibilityManifest" }
+        compatibilityKey: { $ref: "#/components/schemas/Digest" }
+        challenger: { $ref: "#/components/schemas/CommittedBuild" }
+        challengerDigest: { $ref: "#/components/schemas/Digest" }
+    SafetyCommand:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [transportVersion, idempotencyKey, action, ghostId, reason]
+          properties:
+            transportVersion: { const: async-multiplayer-v1 }
+            idempotencyKey: { type: string, format: uuid }
+            action: { const: report }
+            ghostId: { type: string, format: uuid }
+            reason: { enum: [offensive-pseudonym, suspicious-record, harassment-pattern, other-fixed] }
+        - type: object
+          additionalProperties: false
+          required: [transportVersion, idempotencyKey, action, participantRef]
+          properties:
+            transportVersion: { const: async-multiplayer-v1 }
+            idempotencyKey: { type: string, format: uuid }
+            action: { enum: [block, unblock] }
+            participantRef: { type: string, minLength: 1, maxLength: 160 }
+        - type: object
+          additionalProperties: false
+          required: [transportVersion, idempotencyKey, action]
+          properties:
+            transportVersion: { const: async-multiplayer-v1 }
+            idempotencyKey: { type: string, format: uuid }
+            action: { const: disable-participation }
+    SuccessEnvelope:
+      type: object
+      required: [kind, requestId, value]
+      properties:
+        kind: { const: success }
+        requestId: { type: string, format: uuid }
+        value: {}
+    FailureEnvelope:
+      type: object
+      additionalProperties: false
+      required: [kind, code, message, retryable]
+      properties:
+        kind: { const: failure }
+        code: { type: string, minLength: 1 }
+        message: { type: string, minLength: 1, maxLength: 240 }
+        retryable: { type: boolean }
+        retryAfter: { type: string, format: date-time }
+        requestId: { type: string, format: uuid }
+    ParticipantResponse:
+      allOf:
+        - { $ref: "#/components/schemas/SuccessEnvelope" }
+        - type: object
+          properties:
+            value:
+              type: object
+              required: [participantId, pseudonym, consentVersion]
+              properties:
+                participantId: { type: string, format: uuid }
+                pseudonym: { type: string, minLength: 1, maxLength: 80 }
+                consentVersion: { const: async-sharing-v1 }
+    GhostSummary:
+      type: object
+      additionalProperties: false
+      required: [ghostId, pseudonym, verification, publishedAt, discoverableUntil, compatibilityKey, manifest, track, entrantId]
+      properties:
+        ghostId: { type: string, format: uuid }
+        pseudonym: { type: string, minLength: 1, maxLength: 80 }
+        verification: { const: server-verified }
+        publishedAt: { type: string, format: date-time }
+        discoverableUntil: { type: string, format: date-time }
+        compatibilityKey: { $ref: "#/components/schemas/Digest" }
+        manifest: { $ref: "#/components/schemas/CompatibilityManifest" }
+        track: { $ref: "#/components/schemas/TrackDescriptor" }
+        entrantId: { type: string, minLength: 1, maxLength: 80 }
+    GhostSummaryResponse:
+      allOf:
+        - { $ref: "#/components/schemas/SuccessEnvelope" }
+        - type: object
+          properties: { value: { $ref: "#/components/schemas/GhostSummary" } }
+    DiscoveryOffer:
+      type: object
+      additionalProperties: false
+      required: [offerId, ghost, setupEncounterId, offeredAt, expiresAt]
+      properties:
+        offerId: { type: string, format: uuid }
+        ghost: { $ref: "#/components/schemas/GhostSummary" }
+        setupEncounterId: { type: string, minLength: 1, maxLength: 160 }
+        offeredAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    DiscoveryResponse:
+      allOf:
+        - { $ref: "#/components/schemas/SuccessEnvelope" }
+        - type: object
+          properties:
+            value:
+              oneOf:
+                - { $ref: "#/components/schemas/DiscoveryOffer" }
+                - { type: "null" }
+    ContestReceipt:
+      type: object
+      additionalProperties: false
+      required: [transportVersion, contestId, offerId, inputDigest, resultDigest, eventDigest, result, provenance]
+      properties:
+        transportVersion: { const: async-multiplayer-v1 }
+        contestId: { type: string, format: uuid }
+        offerId: { type: string, format: uuid }
+        inputDigest: { $ref: "#/components/schemas/Digest" }
+        resultDigest: { $ref: "#/components/schemas/Digest" }
+        eventDigest: { $ref: "#/components/schemas/Digest" }
+        result: { type: object, description: Strict versioned EnrichedContestResult. }
+        provenance:
+          type: object
+          required: [kind, ghostId, ghostPseudonym, verification, compatibilityKey, verifierVersion, resolvedAt]
+          properties:
+            kind: { const: async-exhibition }
+            ghostId: { type: string, format: uuid }
+            ghostPseudonym: { type: string, minLength: 1, maxLength: 80 }
+            verification: { const: server-verified }
+            compatibilityKey: { $ref: "#/components/schemas/Digest" }
+            verifierVersion: { type: string, minLength: 1 }
+            resolvedAt: { type: string, format: date-time }
+    ContestReceiptResponse:
+      allOf:
+        - { $ref: "#/components/schemas/SuccessEnvelope" }
+        - type: object
+          properties: { value: { $ref: "#/components/schemas/ContestReceipt" } }

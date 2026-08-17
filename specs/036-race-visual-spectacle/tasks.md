@@ -229,9 +229,10 @@ selection after a cut-in without affecting the retained race.
 - [X] T043 [P] Profile race-scene object lifecycle and clean up PiP/focus/marker
   objects on scene shutdown in `src/scenes/ContestScene.ts` and
   `src/scenes/raceSpectacleVisuals.ts`.
-- [ ] T044 Validate the full manual matrix in
+- [ ] T044 [MANUAL-FRONTIER-OR-OWNER] Validate the full manual matrix in
   `specs/036-race-visual-spectacle/quickstart.md` and record any visual-only
-  owner review evidence in `specs/036-race-visual-spectacle/quickstart.md`.
+  review evidence in `specs/036-race-visual-spectacle/quickstart.md`. The coding
+  agent MUST NOT execute or close this task.
 - [X] T045 Run the focused test files, full test suite, lint, type-check, and
   production build; repair only Feature 036 regressions in `package.json` task
   scripts and affected `src/` or `tests/` files.
@@ -311,8 +312,22 @@ the authoritative remaining development work for Feature 036.
   regressions and record the exact successful commands in
   `specs/036-race-visual-spectacle/quickstart.md` without completing T044.
 
-**Remediation checkpoint**: T046–T057 are complete, automated checks pass, and
-the only remaining Feature 036 task is the genuinely manual T044 matrix.
+**Remediation checkpoint (superseded by owner QA):** T046–T057 are complete and
+their automated checks passed, but the 2026-08-17 deployed-build review failed
+T044 and created T058–T062 below.
+
+---
+
+## Phase 8: Owner QA remediation (2026-08-17)
+
+**Purpose**: Resolve the failed deployed-build visual review recorded in
+`owner-qa-findings-2026-08-17.md`. These tasks block T044.
+
+- [ ] T058 [CODE-DEEPSEEK] Record VIS-036-01 and VIS-036-02 as failed T044 cases in quickstart.md with reproducible race seed/state/viewport evidence
+- [ ] T059 [CODE-DEEPSEEK] Restore a credible, subordinate track scale and road/edge/marking/depth hierarchy in raceSpectacleVisuals.ts without altering retained Track geometry or contest authority
+- [ ] T060 [CODE-DEEPSEEK] Make dense-field car identity readable at start and crossed boundaries using deterministic presentation-only spacing/label-priority treatment that never changes retained positions, order, timing, or results
+- [ ] T061 [CODE-DEEPSEEK] Coordinate ContestScene safe regions with Feature 035 so circuit, focus/PiP, standings/status, evidence, installed cards, and playback controls do not overlap in supported landscape layouts
+- [ ] T062 [CODE-DEEPSEEK] Add dense-field and safe-region regression coverage, rerun T057 automated gates, and provide exact routes, seeds/states, viewport sizes, and expected outcomes for T044; do not capture screenshots, perform visual acceptance, or close T044
 
 ---
 
