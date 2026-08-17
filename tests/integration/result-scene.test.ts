@@ -391,12 +391,12 @@ describe("carSetupLines (T052, contract §10)", () => {
 
     expect(lines[0]).toContain("Driver Aggression");
     expect(lines[0]).toContain("Conservative");
-    expect(lines[0]).toContain("−6");
+    expect(lines[0]).toContain("−5.94 pt");
     expect(lines[1]).toContain("Brake Balance");
     expect(lines[1]).toContain("Stability");
     expect(lines[1]).toContain("rook-differential-braking-valve");
     expect(lines[1]).toContain("voss-split-circuit-brake-valve");
-    expect(lines[1]).toContain("+26");
+    expect(lines[1]).toContain("+12.04 pt");
   });
 
   it("shows Balanced positions as no-change without inventing a nonzero delta", () => {

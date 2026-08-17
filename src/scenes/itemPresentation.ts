@@ -1,6 +1,7 @@
 import { isCountSynergyBuff, isValueScaledBuff, type PhysicalStatTarget } from "../simulation/buffs";
 import { matchesTarget, resolveConditionPercent } from "../simulation/synergy";
 import { applyTierBonus } from "../simulation/tiering";
+import { canonicalPoints } from "../simulation/statNormalization";
 import { enumerateHeldItems } from "../simulation/garage";
 import type { GarageDisposition, PlacementPreview } from "../simulation/garage";
 import type {
@@ -43,16 +44,16 @@ export interface StatPresentationDefinition {
   key: ItemStatKey;
   label: string;
   compactLabel: string;
-  unit: "s" | "speed" | "speed/s";
+  unit: "s" | "pt";
   lowerIsBetter: boolean;
   order: number;
 }
 
 const STAT_DEFINITIONS: Record<ItemStatKey, StatPresentationDefinition> = {
-  acceleration: { key: "acceleration", label: "Acceleration", compactLabel: "Acceleration", unit: "speed/s", lowerIsBetter: false, order: 0 },
-  topSpeed: { key: "topSpeed", label: "Top Speed", compactLabel: "Top Speed", unit: "speed", lowerIsBetter: false, order: 1 },
-  brakingPower: { key: "brakingPower", label: "Braking Power", compactLabel: "Braking", unit: "speed/s", lowerIsBetter: false, order: 2 },
-  corneringSpeed: { key: "corneringSpeed", label: "Cornering Speed", compactLabel: "Cornering", unit: "speed", lowerIsBetter: false, order: 3 },
+  acceleration: { key: "acceleration", label: "Acceleration", compactLabel: "Acceleration", unit: "pt", lowerIsBetter: false, order: 0 },
+  topSpeed: { key: "topSpeed", label: "Top Speed", compactLabel: "Top Speed", unit: "pt", lowerIsBetter: false, order: 1 },
+  brakingPower: { key: "brakingPower", label: "Braking Power", compactLabel: "Braking", unit: "pt", lowerIsBetter: false, order: 2 },
+  corneringSpeed: { key: "corneringSpeed", label: "Cornering Speed", compactLabel: "Cornering", unit: "pt", lowerIsBetter: false, order: 3 },
   time: { key: "time", label: "Lap Time", compactLabel: "Lap Time", unit: "s", lowerIsBetter: true, order: 4 },
 };
 
@@ -328,8 +329,9 @@ function deltaLines(
 ): CompactEffectLine[] {
   if (!contribution) return [];
   return DELTA_FIELDS.flatMap(([stat, field]) => {
-    const value = contribution[field];
-    if (value === undefined || value === 0) return [];
+    const physicalValue = contribution[field];
+    if (physicalValue === undefined || physicalValue === 0) return [];
+    const value = canonicalPoints(contribution)[stat];
     const formatted = formatStatDelta(stat, value, { compact: true });
     return [{
       id: `${prefix}-${stat}`,
@@ -561,8 +563,9 @@ function contributionDeltaLines(
   matched = true,
 ): ResolvedContributionLine[] {
   return DELTA_FIELDS.flatMap(([stat, field]) => {
-    const value = delta[field];
-    if (value === undefined || value === 0) return [];
+    const physicalValue = delta[field];
+    if (physicalValue === undefined || physicalValue === 0) return [];
+    const value = canonicalPoints(delta)[stat];
     const formatted = formatStatDelta(stat, value);
     return [{
       statLabel: statDefinition(stat).label,

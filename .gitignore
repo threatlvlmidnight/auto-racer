@@ -12,6 +12,10 @@ logs/
 # Generated tool files
 *.timestamp-*.mjs
 
+# Local agent tool state (not project artifacts)
+.cline/
+.agents/
+
 # Editors / OS
 .DS_Store
 .vscode/

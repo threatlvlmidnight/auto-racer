@@ -4,12 +4,38 @@
 
 **Created**: 2026-08-15
 
-**Status**: Draft — clarification required
+**Status**: Clarified — ready for planning
 
 **Input**: Add an optional asynchronous multiplayer loop where a player can
 submit a committed build, discover another player’s recorded ghost, and replay a
 shared, verifiable race across devices—without live matchmaking, live steering,
 or making the current static demo depend on an online service.
+
+## Clarifications
+
+### Session 2026-08-15
+
+- Q: Which identity model ships in V1? → A: Use a durable anonymous device
+  identity with optional account linking reserved for a later feature; login is
+  not required for local play or V1 participation.
+- Q: How are ghosts discovered? → A: Use a rotating public compatible-ghost
+  pool only. Direct invitations/challenges are explicitly deferred.
+- Q: Which trust model ships in V1? → A: The optional service is
+  server-authoritative: it accepts committed inputs, resolves the contest, and
+  stores the resulting evidence before discovery/replay.
+- Q: What privacy/retention rule ships first? → A: Use pseudonymous profiles
+  with seven-day discovery retention. Withdrawal immediately stops future
+  discovery; no email, chat, or precise location is collected.
+- Q: Which abuse/cost guardrails ship? → A: Provide report/block controls,
+  server-side rate limits, and a fixed monthly service-spend alert/cap; the
+  numeric cap is still to be selected.
+- Q: What monthly service cap ships in the development pilot? → A: Use a $0
+  development-only pilot. Do not enable a paid production service or overages
+  without explicit owner approval; the static/local game is the fallback if the
+  free optional service pauses or is unavailable.
+- Q: Which optional service platform is selected? → A: Supabase. Use its
+  anonymous identity, relational data, and optional server function capability
+  while keeping the service unconfigured/optional in the static demo.
 
 ## User Scenarios & Testing
 
@@ -113,23 +139,27 @@ reason, while local gameplay stays intact.
   playback from recorded data; it MUST NOT introduce live matchmaking, player
   steering, live opponent interaction, or playback-time outcome computation.
 - **FR-005**: The feature MUST expose compatible remote ghosts through
-  [NEEDS CLARIFICATION: direct invitation/challenge, a rotating public pool,
-  or both] and retain the local-rival alternative when none is available.
+  a rotating public compatible-ghost pool only and retain the local-rival
+  alternative when none is available. Direct challenges are out of scope.
 - **FR-006**: The feature MUST validate remote ghost integrity through
-  [NEEDS CLARIFICATION: server-authoritative resolution, server verification of
-  client submissions, or client-verified replay with clear trust status].
+  server-authoritative resolution from committed inputs, storing resulting
+  evidence before the ghost becomes discoverable.
 - **FR-007**: The feature MUST provide an optional identity and participation
-  model using [NEEDS CLARIFICATION: anonymous device identity, optional account
-  linking, or required account login], with a clear shared-data disclosure.
+  model using durable anonymous device identity, with optional future account
+  linking and a clear shared-data disclosure.
 - **FR-008**: The feature MUST support record withdrawal, expiration/retention,
-  abuse reporting/moderation, and rate limiting appropriate to the chosen
-  identity/discovery model.
+  report/block moderation controls, server-side rate limiting, and a fixed
+  monthly service-spend alert/cap appropriate to the chosen identity/discovery
+  model. The development pilot has a $0 service cap: no paid tier or overages
+  may be enabled without explicit owner approval. Discovery retention is seven
+  days and withdrawal immediately removes a record from future discovery.
 - **FR-009**: The feature MUST reject or quarantine malformed, duplicated,
   tampered, incompatible, expired, withdrawn, or moderated records without
   changing local item/run/race state.
 - **FR-010**: The feature MUST version and document the client/service contract,
   deployment configuration, secrets handling, backup/recovery, observability,
-  and rollback procedure for the optional service.
+  rollback procedure, and Supabase-specific optional-service setup for the
+  optional service.
 - **FR-011**: The feature MUST preserve the authoritative Feature 033 event and
   result contract and the Feature 034 item-instance/versioned run contract; it
   MUST not freeze a remote payload until those dependencies are stable.
@@ -171,5 +201,9 @@ reason, while local gameplay stays intact.
   remote payloads are frozen.
 - A backend may be introduced only as an optional service; no source secret is
   included in the static demo bundle.
+- Supabase is the selected optional platform. Its free tier is development-only;
+  no paid plan or overages are enabled without explicit owner approval.
 - This V1 excludes chat, friends, real-time spectators, payments, global cloud
   saves, and mandatory login.
+- The development pilot has a $0 service cap and must not enable a paid tier or
+  overages without owner approval.

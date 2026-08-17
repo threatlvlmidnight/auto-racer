@@ -75,8 +75,8 @@ describe("raceSetupPresentation (T015)", () => {
     const rows = setupStatRows(input, { "driver-aggression": "low" });
     const acceleration = rows.find((row) => row.key === "acceleration")!;
     expect(acceleration.changed).toBe(true);
-    expect(acceleration.prospectiveValue).toBe(acceleration.currentValue - 6);
-    expect(acceleration.deltaLabel).toContain("−6");
+    expect(acceleration.prospectiveValue).toBeCloseTo(acceleration.currentValue - 6 / 1.01);
+    expect(acceleration.deltaLabel).toContain("−5.9 pt");
   });
 
   it("shows only Driver Aggression when no configurable item is installed", () => {

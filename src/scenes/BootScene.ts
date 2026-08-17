@@ -76,6 +76,13 @@ export class BootScene extends Phaser.Scene {
       this.load.image(`vehicle-${id}`, runtimeAssetUrl(`assets/vehicles/generated/${id}.png`));
     });
 
+    // Feature 036 (T010/T040): the four bespoke player race vehicles. Their
+    // stable keys come from raceVisualProfiles; the files live under
+    // public/assets/race/vehicles/ with provenance in vehicle-asset-manifest.md.
+    entrants.forEach((id) => {
+      this.load.image(`race-player-${id}`, runtimeAssetUrl(`assets/race/vehicles/player-${id}.png`));
+    });
+
     (["coachworks", "velodrome", "fieldworks", "backroads"] as const).forEach((origin) => {
       (["power", "chassis"] as const).forEach((category) => {
         this.load.image(`item-family-${origin}-${category}`, runtimeAssetUrl(`assets/items/families/${origin}-${category}.png`));

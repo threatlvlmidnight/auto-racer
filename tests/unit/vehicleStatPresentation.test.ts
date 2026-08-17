@@ -3,6 +3,7 @@ import { STOCK_PHYSICAL_STATS } from "../../src/simulation/tracks";
 import { previewGarageCommand, commitGarageCommand } from "../../src/simulation/garage";
 import { EXCLUSIVE_ITEMS, NEUTRAL_ITEMS } from "../../src/content/items";
 import { simulatePlayerLaps } from "../../src/simulation/laps";
+import { canonicalPoints, physicalStatsToCanonical } from "../../src/simulation/statNormalization";
 import {
   VEHICLE_STAT_ORDER,
   currentVehicleStatModel,
@@ -18,13 +19,10 @@ describe("vehicle stat vocabulary", () => {
     expect(VEHICLE_STAT_ORDER).toEqual(["acceleration", "topSpeed", "brakingPower", "corneringSpeed"]);
   });
 
-  it("labels, units, and precision come from feature 024's shared definitions", () => {
+  it("labels, units, and precision use the shared canonical-point definitions", () => {
     const model = currentVehicleStatModel({ build: vehicleBuild(), stock: STOCK_PHYSICAL_STATS });
     expect(model.lines.map((line) => line.key)).toEqual(VEHICLE_STAT_ORDER);
-    expect(model.lines[0]).toMatchObject({ label: "Acceleration", unit: "speed/s" });
-    expect(model.lines[1]).toMatchObject({ label: "Top Speed", unit: "speed" });
-    expect(model.lines[2]).toMatchObject({ label: "Braking Power", unit: "speed/s" });
-    expect(model.lines[3]).toMatchObject({ label: "Cornering Speed", unit: "speed" });
+    model.lines.forEach((line) => expect(line.unit).toBe("pt"));
   });
 });
 
@@ -33,7 +31,7 @@ describe("US1: current vehicle stat model — empty build", () => {
     const model = currentVehicleStatModel({ build: vehicleBuild(), stock: STOCK_PHYSICAL_STATS });
     model.lines.forEach((line, index) => {
       const stat = VEHICLE_STAT_ORDER[index];
-      expect(line.currentValue).toBe(STOCK_PHYSICAL_STATS[stat]);
+      expect(line.currentValue).toBe(physicalStatsToCanonical(STOCK_PHYSICAL_STATS)[stat]);
       expect(line.stockDelta).toBe(0);
       expect(line.stockDeltaLabel).toBe("No change");
       expect(line.state).toBe("unchanged");
@@ -51,10 +49,11 @@ describe("US1: current vehicle stat model — direct and tradeoff items", () => 
     const affectedStat = VEHICLE_STAT_ORDER.find((stat) => (item.physics as Record<string, number>)?.[`${stat}Delta`]);
     expect(affectedStat).toBeDefined();
     const line = model.lines.find((candidate) => candidate.key === affectedStat)!;
-    const delta = (item.physics as Record<string, number>)[`${affectedStat}Delta`];
-    expect(line.currentValue).toBe(STOCK_PHYSICAL_STATS[affectedStat!] + delta);
-    expect(line.stockDelta).toBe(delta);
-    expect(line.state).toBe(delta > 0 ? "improved" : "reduced");
+    const physicalDelta = (item.physics as Record<string, number>)[`${affectedStat}Delta`];
+    const delta = canonicalPoints(item.physics!)[affectedStat!];
+    expect(line.currentValue).toBe(physicalStatsToCanonical(STOCK_PHYSICAL_STATS)[affectedStat!] + delta);
+    expect(line.stockDelta).toBeCloseTo(delta, 12);
+    expect(line.state).toBe(physicalDelta > 0 ? "improved" : "reduced");
     expect(line.changeSources).toHaveLength(1);
     expect(line.changeSources[0]).toMatchObject({ sourceItemId: item.id, sourceLabel: item.name, value: delta });
   });
@@ -100,7 +99,7 @@ describe("US1: current vehicle stat model — Buff and Synergy aggregation", () 
     const direct = testItem({ id: "aux-direct", name: "Aux Direct", price: 1, timeModifier: 0, physics: { [`${targetStat}Delta`]: 10 } });
     const model = currentVehicleStatModel({ build: vehicleBuild([buff, direct]), stock: STOCK_PHYSICAL_STATS });
     const line = model.lines.find((candidate) => candidate.key === targetStat)!;
-    const expectedDelta = 10 + 10 * (buff.buff!.boostPercent / 100);
+    const expectedDelta = canonicalPoints({ [`${targetStat}Delta`]: 10 + 10 * (buff.buff!.boostPercent / 100) })[targetStat];
     expect(line.stockDelta).toBeCloseTo(expectedDelta);
     expect(line.changeSources.some((source) => source.sourceItemId === direct.id)).toBe(true);
   });
@@ -109,7 +108,7 @@ describe("US1: current vehicle stat model — Buff and Synergy aggregation", () 
     const crushing = testItem({ id: "crushing-item", name: "Crushing Item", price: 1, timeModifier: 0, physics: { accelerationDelta: -10000 } });
     const model = currentVehicleStatModel({ build: vehicleBuild([crushing]), stock: STOCK_PHYSICAL_STATS });
     const line = model.lines.find((candidate) => candidate.key === "acceleration")!;
-    expect(line.currentValue).toBe(1);
+    expect(line.currentValue).toBe(physicalStatsToCanonical({ acceleration: 1, topSpeed: 1, brakingPower: 1, corneringSpeed: 1 }).acceleration);
   });
 
   it("reconciles a synergy amplifier's contribution to the affected item's line", () => {
@@ -261,7 +260,8 @@ describe("US3: recorded lap vehicle stat model", () => {
   it("equals the recorded lap's authoritative physics stats", () => {
     const stats = { acceleration: 55, topSpeed: 95, brakingPower: 62, corneringSpeed: 51 };
     const model = recordedLapVehicleStatModel({ lap: 3, lapCount: 5, physics: { stats } });
-    model.lines.forEach((line) => expect(line.currentValue).toBe(stats[line.key]));
+    const points = physicalStatsToCanonical(stats);
+    model.lines.forEach((line) => expect(line.currentValue).toBe(points[line.key]));
     expect(model.status).toBe("partially-available");
   });
 

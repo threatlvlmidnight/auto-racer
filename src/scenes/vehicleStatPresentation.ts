@@ -6,6 +6,7 @@ import {
   type UnconditionalStatContribution,
 } from "../simulation/laps";
 import { STOCK_PHYSICAL_STATS, type PhysicalStats } from "../simulation/tracks";
+import { canonicalPoints, physicalStatsToCanonical } from "../simulation/statNormalization";
 import type { ItemDefinition, ItemPhysicalContributionEvidence, LiveStatChange, VehicleBuild } from "../simulation/types";
 import { conditionLabel as physicsConditionLabel, formatStatDelta, statDefinition } from "./itemPresentation";
 
@@ -49,16 +50,18 @@ export function reduceLiveStatPanel(
     if (consumed.has(change.boundaryId) || change.stat === "time") continue;
     consumed.add(change.boundaryId);
     const definition = statDefinition(change.stat);
-    const decimals = Number.isInteger(change.currentValue) ? 0 : 1;
-    const deltaDecimals = Number.isInteger(change.delta) ? 0 : 1;
+    const currentValue = canonicalValue(change.stat, change.currentValue);
+    const delta = canonicalValue(change.stat, change.delta);
+    const decimals = Number.isInteger(currentValue) ? 0 : 1;
+    const deltaDecimals = Number.isInteger(delta) ? 0 : 1;
     latest.set(change.stat, {
       stat: change.stat,
       label: definition.compactLabel,
-      value: change.currentValue,
-      valueLabel: `${change.currentValue.toFixed(decimals)} ${definition.unit}`,
-      delta: change.delta,
-      deltaLabel: `${change.delta >= 0 ? "+" : ""}${change.delta.toFixed(deltaDecimals)} ${definition.unit}`,
-      marker: change.delta > 0 ? "↑" : change.delta < 0 ? "↓" : "→",
+      value: currentValue,
+      valueLabel: `${currentValue.toFixed(decimals)} ${definition.unit}`,
+      delta,
+      deltaLabel: `${delta >= 0 ? "+" : ""}${delta.toFixed(deltaDecimals)} ${definition.unit}`,
+      marker: delta > 0 ? "↑" : delta < 0 ? "↓" : "→",
       sourceLabel: change.sourceItemName,
       amplifierLabel: change.amplifierSources.length === 0
         ? null
@@ -231,16 +234,26 @@ function sourceLabelFor(itemId: string, lookup: ReadonlyMap<string, ItemDefiniti
   return lookup.get(itemId)?.name ?? itemId;
 }
 
+function canonicalValue(stat: VehicleStatKey, physicalValue: number): number {
+  switch (stat) {
+    case "acceleration": return canonicalPoints({ accelerationDelta: physicalValue }).acceleration;
+    case "topSpeed": return canonicalPoints({ topSpeedDelta: physicalValue }).topSpeed;
+    case "brakingPower": return canonicalPoints({ brakingPowerDelta: physicalValue }).brakingPower;
+    case "corneringSpeed": return canonicalPoints({ corneringSpeedDelta: physicalValue }).corneringSpeed;
+  }
+}
+
 function unconditionalSource(
   contribution: UnconditionalStatContribution,
   lookup: ReadonlyMap<string, ItemDefinition>,
 ): StatChangeSource {
-  const formatted = formatStatDelta(contribution.stat, contribution.value, { compact: true });
+  const value = canonicalValue(contribution.stat, contribution.value);
+  const formatted = formatStatDelta(contribution.stat, value, { compact: true });
   return {
     sourceItemId: contribution.sourceItemId,
     sourceLabel: sourceLabelFor(contribution.sourceItemId, lookup),
     stat: contribution.stat,
-    value: contribution.value,
+    value,
     valueLabel: formatted.valueLabel,
     state: "active",
   };
@@ -252,12 +265,13 @@ function conditionalSource(
 ): ConditionalStatSource {
   const sourceLabel = sourceLabelFor(potential.sourceItemId, lookup);
   if (potential.kind === "track-segment") {
-    const formatted = formatStatDelta(potential.stat, potential.value, { compact: true });
+    const value = canonicalValue(potential.stat, potential.value);
+    const formatted = formatStatDelta(potential.stat, value, { compact: true });
     return {
       sourceItemId: potential.sourceItemId,
       sourceLabel,
       stat: potential.stat,
-      value: potential.value,
+      value,
       valueLabel: formatted.valueLabel,
       state: "conditional",
       conditionLabel: physicsConditionLabel(potential.condition),
@@ -333,11 +347,12 @@ export interface CurrentVehicleStatInput {
 export function currentVehicleStatModel(input: CurrentVehicleStatInput): VehicleStatPanelModel {
   const resolved = resolveCurrentBuildPhysicalStats(input.build);
   const lookup = vehicleItemLookup(input.build);
+  const stock = physicalStatsToCanonical(input.stock);
   const lines = VEHICLE_STAT_ORDER.map((stat) => {
     const sources = resolved.contributions
       .filter((contribution) => contribution.stat === stat)
       .map((contribution) => unconditionalSource(contribution, lookup));
-    return lineFromValues(stat, input.stock[stat], resolved.stats[stat], sources);
+    return lineFromValues(stat, stock[stat], resolved.canonicalStats[stat], sources);
   });
   const conditionalSources = resolved.conditionalPotential.map((potential) => conditionalSource(potential, lookup));
   return {
@@ -369,12 +384,13 @@ export function prospectiveVehicleStatModel(input: ProspectiveVehicleStatInput):
   const current = resolveCurrentBuildPhysicalStats(input.currentBuild);
   const prospective = resolveCurrentBuildPhysicalStats(input.prospectiveBuild);
   const lookup = vehicleItemLookup(input.prospectiveBuild);
+  const stock = physicalStatsToCanonical(input.stock);
   const lines = VEHICLE_STAT_ORDER.map((stat) => {
     const sources = prospective.contributions
       .filter((contribution) => contribution.stat === stat)
       .map((contribution) => unconditionalSource(contribution, lookup));
-    const line = lineFromValues(stat, input.stock[stat], prospective.stats[stat], sources);
-    const comparisonDelta = prospective.stats[stat] - current.stats[stat];
+    const line = lineFromValues(stat, stock[stat], prospective.canonicalStats[stat], sources);
+    const comparisonDelta = prospective.canonicalStats[stat] - current.canonicalStats[stat];
     const formatted = formatStatDelta(stat, comparisonDelta, { compact: false });
     return {
       ...line,
@@ -417,8 +433,9 @@ function lapChangeSources(
 ): StatChangeSource[] {
   return itemContributions.flatMap((contribution) => {
     if (!contribution.active) return [];
-    const value = contribution.flatResolvedDelta[DELTA_KEY_FOR_STAT[stat]];
-    if (!value) return [];
+    const physicalValue = contribution.flatResolvedDelta[DELTA_KEY_FOR_STAT[stat]];
+    if (!physicalValue) return [];
+    const value = canonicalValue(stat, physicalValue);
     const formatted = formatStatDelta(stat, value, { compact: true });
     return [{
       sourceItemId: contribution.sourceItemId,
@@ -435,8 +452,9 @@ function lapConditionalSources(
   return itemContributions.flatMap((contribution) =>
     contribution.conditionalResolvedDeltas.flatMap((entry) =>
       VEHICLE_STAT_ORDER.flatMap((stat) => {
-        const value = entry.delta[DELTA_KEY_FOR_STAT[stat]];
-        if (!value) return [];
+        const physicalValue = entry.delta[DELTA_KEY_FOR_STAT[stat]];
+        if (!physicalValue) return [];
+        const value = canonicalValue(stat, physicalValue);
         const formatted = formatStatDelta(stat, value, { compact: true });
         return [{
           sourceItemId: contribution.sourceItemId,
@@ -470,7 +488,8 @@ export function recordedLapVehicleStatModel(input: RecordedLapVehicleStatInput):
     : { kind, lap: input.lap, lapCount: input.lapCount };
 
   if (!input.physics) {
-    const lines = VEHICLE_STAT_ORDER.map((stat) => lineFromValues(stat, STOCK_PHYSICAL_STATS[stat], null, []));
+    const stock = physicalStatsToCanonical(STOCK_PHYSICAL_STATS);
+    const lines = VEHICLE_STAT_ORDER.map((stat) => lineFromValues(stat, stock[stat], null, []));
     const unavailableReason = kind === "test-day"
       ? "This Test Day run has no track-aware physical-stat evidence."
       : `No recorded physics evidence for lap ${input.lap}.`;
@@ -482,10 +501,12 @@ export function recordedLapVehicleStatModel(input: RecordedLapVehicleStatInput):
 
   const lookup = input.itemLookup ?? new Map<string, ItemDefinition>();
   const itemContributions = input.physics.itemContributions;
+  const stock = physicalStatsToCanonical(STOCK_PHYSICAL_STATS);
+  const current = physicalStatsToCanonical(input.physics.stats);
   const lines = VEHICLE_STAT_ORDER.map((stat) => lineFromValues(
     stat,
-    STOCK_PHYSICAL_STATS[stat],
-    input.physics!.stats[stat],
+    stock[stat],
+    current[stat],
     itemContributions ? lapChangeSources(itemContributions, stat, lookup) : [],
   ));
   const conditionalSources = itemContributions ? lapConditionalSources(itemContributions, lookup) : [];

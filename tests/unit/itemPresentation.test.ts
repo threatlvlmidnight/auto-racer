@@ -23,10 +23,10 @@ import { placementBehaviorInventory } from "../fixtures/item-presentation-fixtur
 const ALL_ITEMS = [NEUTRAL_ITEMS, ...Object.values(EXCLUSIVE_ITEMS)].flat();
 
 describe("item stat vocabulary", () => {
-  it("uses one stable physical-stat order and abstract units", () => {
+  it("uses one stable canonical-stat order and point units", () => {
     expect(ITEM_STAT_ORDER).toEqual(["acceleration", "topSpeed", "brakingPower", "corneringSpeed", "time"]);
-    expect(statDefinition("acceleration")).toMatchObject({ label: "Acceleration", unit: "speed/s" });
-    expect(statDefinition("topSpeed")).toMatchObject({ label: "Top Speed", unit: "speed" });
+    expect(statDefinition("acceleration")).toMatchObject({ label: "Acceleration", unit: "pt" });
+    expect(statDefinition("topSpeed")).toMatchObject({ label: "Top Speed", unit: "pt" });
   });
 
   it("communicates mathematical direction rather than sign alone", () => {
@@ -112,7 +112,7 @@ describe("selection, layout, and unavailable evidence", () => {
     expect(reduceItemSelection(state, { type: "dismiss" })).toEqual(createItemSelectionState());
   });
 
-  it("adapts recorded physical evidence without recomputing its values", () => {
+  it("adapts recorded physical evidence into comparable canonical points", () => {
     const item = ALL_ITEMS.find((candidate) => candidate.physics)!;
     const evidence = resolvedItemEvidence(item, { kind: "physical", evidence: {
       lap: 2, sourceItemId: item.id, sourceLocation: { area: "board", index: 0 },
@@ -121,7 +121,7 @@ describe("selection, layout, and unavailable evidence", () => {
       buffApplications: [], synergyApplications: [],
     } });
     expect(evidence).toMatchObject({ lap: 2, tier: 2, active: true, fired: true, evidenceAvailability: "available" });
-    expect(evidence.contributionLines[0]).toMatchObject({ statLabel: "Top Speed", effectiveValueLabel: "+7 speed" });
+    expect(evidence.contributionLines[0]).toMatchObject({ statLabel: "Top Speed", effectiveValueLabel: "+53.85 pt" });
   });
 
   it.each([[800, 450], [1920, 1080], [1366, 768], [1024, 768], [390, 844]])("keeps layout inside %sx%s", (width, height) => {

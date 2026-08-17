@@ -17,13 +17,27 @@ import type {
  * not expose hidden cross-stat conversion ratios.
  */
 
-/** Converts an authored physics-delta object's present deltas into canonical points. */
+/**
+ * Physical units represented by one player-facing canonical point. These
+ * were measured against STOCK_PHYSICAL_STATS on the deterministic reference
+ * corpus in tests/fixtures/balance-fixtures.ts. They are deliberately not
+ * display units: authored content remains in physical units and crosses this
+ * adapter exactly once before it is shown or combined with other sources.
+ */
+export const PHYSICAL_UNITS_PER_CANONICAL_POINT: Readonly<CanonicalPhysicalStats> = {
+  acceleration: 1.01,
+  topSpeed: 0.13,
+  brakingPower: 2.16,
+  corneringSpeed: 0.25,
+};
+
+/** Converts an authored physical-delta object into player-facing canonical points. */
 export function canonicalPoints(delta: ItemPhysicsContribution): CanonicalPhysicalStats {
   return {
-    acceleration: delta.accelerationDelta ?? 0,
-    topSpeed: delta.topSpeedDelta ?? 0,
-    brakingPower: delta.brakingPowerDelta ?? 0,
-    corneringSpeed: delta.corneringSpeedDelta ?? 0,
+    acceleration: (delta.accelerationDelta ?? 0) / PHYSICAL_UNITS_PER_CANONICAL_POINT.acceleration,
+    topSpeed: (delta.topSpeedDelta ?? 0) / PHYSICAL_UNITS_PER_CANONICAL_POINT.topSpeed,
+    brakingPower: (delta.brakingPowerDelta ?? 0) / PHYSICAL_UNITS_PER_CANONICAL_POINT.brakingPower,
+    corneringSpeed: (delta.corneringSpeedDelta ?? 0) / PHYSICAL_UNITS_PER_CANONICAL_POINT.corneringSpeed,
   };
 }
 
@@ -46,10 +60,45 @@ export function authoredTierOneCanonical(item: ItemDefinition): CanonicalPhysica
 }
 
 export function canonicalToPhysical(value: CanonicalPhysicalStats): CanonicalPhysicalStats {
-  // The feature's calibration assigns one canonical point to one physical
-  // point (spec FR-043: a 1:1 graft, no exchange ratio). The adapter exists to
-  // give lap simulation one place to derive internal coefficients.
-  return { ...value };
+  const physical = (points: number, unitsPerPoint: number): number =>
+    Math.round(points * unitsPerPoint * 1e12) / 1e12;
+  return {
+    acceleration: physical(value.acceleration, PHYSICAL_UNITS_PER_CANONICAL_POINT.acceleration),
+    topSpeed: physical(value.topSpeed, PHYSICAL_UNITS_PER_CANONICAL_POINT.topSpeed),
+    brakingPower: physical(value.brakingPower, PHYSICAL_UNITS_PER_CANONICAL_POINT.brakingPower),
+    corneringSpeed: physical(value.corneringSpeed, PHYSICAL_UNITS_PER_CANONICAL_POINT.corneringSpeed),
+  };
+}
+
+/** Converts a full physical stat profile to the same canonical display scale. */
+export function physicalStatsToCanonical(value: CanonicalPhysicalStats): CanonicalPhysicalStats {
+  return canonicalPoints({
+    accelerationDelta: value.acceleration,
+    topSpeedDelta: value.topSpeed,
+    brakingPowerDelta: value.brakingPower,
+    corneringSpeedDelta: value.corneringSpeed,
+  });
+}
+
+/** Adapts canonical points back to the four-field delta shape consumed by physics. */
+export function physicalDeltaFromCanonical(value: CanonicalPhysicalStats): ItemPhysicsContribution {
+  const physical = canonicalToPhysical(value);
+  const delta: ItemPhysicsContribution = {};
+  if (value.acceleration !== 0) delta.accelerationDelta = physical.acceleration;
+  if (value.topSpeed !== 0) delta.topSpeedDelta = physical.topSpeed;
+  if (value.brakingPower !== 0) delta.brakingPowerDelta = physical.brakingPower;
+  if (value.corneringSpeed !== 0) delta.corneringSpeedDelta = physical.corneringSpeed;
+  return delta;
+}
+
+/** Adds canonical values without letting raw physical deltas bypass the boundary. */
+export function addCanonical(...values: readonly CanonicalPhysicalStats[]): CanonicalPhysicalStats {
+  return values.reduce<CanonicalPhysicalStats>((sum, value) => ({
+    acceleration: sum.acceleration + value.acceleration,
+    topSpeed: sum.topSpeed + value.topSpeed,
+    brakingPower: sum.brakingPower + value.brakingPower,
+    corneringSpeed: sum.corneringSpeed + value.corneringSpeed,
+  }), { acceleration: 0, topSpeed: 0, brakingPower: 0, corneringSpeed: 0 });
 }
 
 /** Per-tier scaling mirrors the Definition-based tier authority (tier scaling applies to both). */
@@ -131,10 +180,10 @@ export function resolveCanonicalContributions(
  * Coefficients are centralized and injectable for balance tests.
  */
 export const REFERENCE_MARGINAL_SECONDS_PER_POINT: Readonly<Record<CanonicalStatTarget, number>> = {
-  acceleration: 0.010,
-  topSpeed: 0.0105,
-  brakingPower: 0.0102,
-  corneringSpeed: 0.0108,
+  acceleration: 0.035607,
+  topSpeed: 0.035314,
+  brakingPower: 0.033486,
+  corneringSpeed: 0.034835,
 };
 
 export interface ReferenceMarginal {
@@ -168,4 +217,3 @@ export function marginalSpreadMultiplier(): number {
 export function marginalSpreadExceedsTenPercent(): boolean {
   return marginalSpreadMultiplier() > 1.1;
 }
-

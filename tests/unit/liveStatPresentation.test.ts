@@ -13,14 +13,14 @@ const change: LiveStatChange = {
 describe("live stat presentation reducer (032 T016)", () => {
   it("shows current value, signed delta, non-color arrow, source, and amplifier", () => {
     const next = reduceLiveStatPanel(empty, [change]);
-    expect(next.lines[0]).toMatchObject({ stat: "topSpeed", valueLabel: "14.3 speed", deltaLabel: "+2.3 speed", marker: "↑", sourceLabel: "Forged Pistons", amplifierLabel: "Cooling Jacket +15%", changed: true });
+    expect(next.lines[0]).toMatchObject({ stat: "topSpeed", valueLabel: "110 pt", deltaLabel: "+17.7 pt", marker: "↑", sourceLabel: "Forged Pistons", amplifierLabel: "Cooling Jacket +15%", changed: true });
   });
 
   it("consumes a boundary exactly once and clears transient changed state when unchanged", () => {
     const first = reduceLiveStatPanel(empty, [change]);
     const second = reduceLiveStatPanel(first, [change]);
     expect(second.lines[0].changed).toBe(false);
-    expect(second.lines[0].value).toBe(14.3);
+    expect(second.lines[0].value).toBeCloseTo(14.3 / 0.13);
     expect(second.consumedBoundaryIds).toEqual([change.boundaryId]);
   });
 

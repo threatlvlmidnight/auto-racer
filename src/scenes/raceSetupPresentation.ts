@@ -1,7 +1,8 @@
-import { DELTA_KEY_FOR_STAT, type PhysicalStatTarget } from "../simulation/buffs";
+import { type PhysicalStatTarget } from "../simulation/buffs";
 import { resolveCurrentBuildPhysicalStats } from "../simulation/laps";
 import { lockRaceSetup, type RaceSetupInput } from "../simulation/raceSetup";
 import { summarizeTrack, trackCenterline, type Track } from "../simulation/tracks";
+import { canonicalPoints } from "../simulation/statNormalization";
 import type {
   EligibleSetupControl,
   ItemPhysicsContribution,
@@ -109,7 +110,7 @@ function deltaLabelFor(stat: PhysicalStatTarget, value: number): string {
 
 function positionDeltaSummary(delta: Required<ItemPhysicsContribution>): string {
   const parts = STAT_ORDER
-    .map((stat) => ({ stat, value: delta[DELTA_KEY_FOR_STAT[stat]] }))
+    .map((stat) => ({ stat, value: canonicalPoints(delta)[stat] }))
     .filter((entry) => entry.value !== 0)
     .map((entry) => `${statDefinition(entry.stat).compactLabel} ${deltaLabelFor(entry.stat, entry.value)}`);
   return parts.length > 0 ? parts.join(" · ") : "No setup change";
@@ -122,15 +123,16 @@ function positionDeltaSummary(delta: Required<ItemPhysicsContribution>): string 
  * `lockRaceSetup` at Start Race (contract §9).
  */
 export function setupStatRows(input: RaceSetupInput, selections: SetupSelections): readonly SetupStatRow[] {
-  const current = resolveCurrentBuildPhysicalStats(input.build).stats;
+  const current = resolveCurrentBuildPhysicalStats(input.build).canonicalStats;
   const preview = lockRaceSetup(input, selections);
   const previewDelta = "totalDelta" in preview
     ? preview.totalDelta
     : { accelerationDelta: 0, topSpeedDelta: 0, brakingPowerDelta: 0, corneringSpeedDelta: 0 };
 
+  const previewPoints = canonicalPoints(previewDelta);
   return STAT_ORDER.map((stat) => {
     const definition = statDefinition(stat);
-    const deltaValue = previewDelta[DELTA_KEY_FOR_STAT[stat]];
+    const deltaValue = previewPoints[stat];
     const currentValue = current[stat];
     const prospectiveValue = Math.max(1, currentValue + deltaValue);
     return {

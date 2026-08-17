@@ -4,9 +4,9 @@
 
 **Created**: 2026-08-15
 
-**Status**: Implemented — retained live-run authority, all seven encounter
-surfaces, Exhibition playback, Tag Specialist, modifications, deferred
-Scrutineering, cadence/history, and recovery are wired and validated.
+**Status**: Implemented — all 78 tasks complete (reviewed 2026-08-16). The
+stat-normalization follow-up (T012–T016) is delivered and evidenced in
+`STAT-NORMALIZATION-FOLLOWUP.md`.
 
 **Input**: Expand between-race choices beyond shops and reward drafts with solo
 Exhibitions, voluntary sacrifices, transformations, upgrades, and build-responsive

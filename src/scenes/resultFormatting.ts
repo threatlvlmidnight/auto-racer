@@ -1,4 +1,5 @@
 import { setupControlDefinition } from "../simulation/raceSetup";
+import { canonicalPoints } from "../simulation/statNormalization";
 import type { CarResult, LockedSetupControl, NCarContestResult, OfferedItem, ScoredRaceRecordProjection } from "../simulation/types";
 import { projectRunRecord, type Run } from "../simulation/run";
 import { compactItemModel, economyReceiptLines, itemInspectorModel } from "./itemPresentation";
@@ -127,16 +128,17 @@ function itemSectionLabel(title: string, items: OfferedItem[]): string {
 }
 
 function signedNumber(value: number): string {
-  return value > 0 ? `+${value}` : value < 0 ? `−${Math.abs(value)}` : "0";
+  const magnitude = Math.abs(value).toFixed(2).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
+  return value > 0 ? `+${magnitude}` : value < 0 ? `−${magnitude}` : "0";
 }
 
 function signedDeltaLabel(control: LockedSetupControl): string {
-  const { appliedDelta } = control;
+  const appliedDelta = canonicalPoints(control.appliedDelta);
   const parts: string[] = [];
-  if (appliedDelta.accelerationDelta) parts.push(`Accel ${signedNumber(appliedDelta.accelerationDelta)}`);
-  if (appliedDelta.topSpeedDelta) parts.push(`Top Speed ${signedNumber(appliedDelta.topSpeedDelta)}`);
-  if (appliedDelta.brakingPowerDelta) parts.push(`Braking ${signedNumber(appliedDelta.brakingPowerDelta)}`);
-  if (appliedDelta.corneringSpeedDelta) parts.push(`Cornering ${signedNumber(appliedDelta.corneringSpeedDelta)}`);
+  if (appliedDelta.acceleration) parts.push(`Accel ${signedNumber(appliedDelta.acceleration)} pt`);
+  if (appliedDelta.topSpeed) parts.push(`Top Speed ${signedNumber(appliedDelta.topSpeed)} pt`);
+  if (appliedDelta.brakingPower) parts.push(`Braking ${signedNumber(appliedDelta.brakingPower)} pt`);
+  if (appliedDelta.corneringSpeed) parts.push(`Cornering ${signedNumber(appliedDelta.corneringSpeed)} pt`);
   return parts.length > 0 ? parts.join(" · ") : "No change";
 }
 

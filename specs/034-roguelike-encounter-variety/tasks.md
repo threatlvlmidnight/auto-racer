@@ -5,6 +5,11 @@
 **Tests**: Required for deterministic simulation, transaction, content-corpus,
 integration, and presentation contracts. Owner performs visual acceptance.
 
+> **Implementation review (2026-08-16):** The stat-normalization follow-up is
+> complete. T012–T016 now use a measured non-identity conversion boundary and
+> production-simulation acceptance gate. See
+> [STAT-NORMALIZATION-FOLLOWUP.md](./STAT-NORMALIZATION-FOLLOWUP.md).
+
 ## Phase 1: Setup and cross-feature reconciliation
 
 - [X] T001 Reconcile Feature 033 retained overtake and race-evidence contracts needed by Guarded in `specs/033-race-enrichment/` and `specs/034-roguelike-encounter-variety/contracts/encounter-variety-contract.md`

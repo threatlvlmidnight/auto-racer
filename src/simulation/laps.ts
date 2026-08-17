@@ -14,6 +14,13 @@ import { resolveInstallation } from "./slots";
 import { resolveSynergyEffects } from "./synergy";
 import { applyTierBonus } from "./tiering";
 import {
+  addCanonical,
+  canonicalPoints,
+  canonicalToPhysical,
+  physicalDeltaFromCanonical,
+  physicalStatsToCanonical,
+} from "./statNormalization";
+import {
   matchesPhysicsCondition,
   simulateLapPhysics,
   STOCK_PHYSICAL_STATS,
@@ -151,8 +158,9 @@ const MIN_PHYSICAL_STAT = 1;
 
 /**
  * A build's resolved PhysicalStats: the stock baseline plus every active
- * held item's own ItemPhysicsContribution, summed directly — never a ratio
- * or count of items (021 research.md Decision 6, contract §1). Storage
+ * held item's own ItemPhysicsContribution after each contribution crosses the
+ * canonical-stat boundary — never a ratio or count of items (021 research.md
+ * Decision 6, contract §1). Storage
  * items excluded unless active, matching every other per-lap fold's
  * existing active-item filtering convention.
  *
@@ -167,24 +175,20 @@ export function resolvePhysicalStats(
   activeItems: readonly OfferedItem[],
   boostsByStat: Partial<Record<PhysicalStatTarget, number>>,
 ): PhysicalStats {
-  const totals = activeItems.reduce(
+  const canonicalTotals = activeItems.reduce(
     (sum, item) => {
       const scaled = item.physics ? scaleAllStats(item.physics, boostsByStat) : undefined;
-      return {
-        acceleration: sum.acceleration + (scaled?.accelerationDelta ?? 0),
-        topSpeed: sum.topSpeed + (scaled?.topSpeedDelta ?? 0),
-        brakingPower: sum.brakingPower + (scaled?.brakingPowerDelta ?? 0),
-        corneringSpeed: sum.corneringSpeed + (scaled?.corneringSpeedDelta ?? 0),
-      };
+      return addCanonical(sum, canonicalPoints(scaled ?? {}));
     },
     { acceleration: 0, topSpeed: 0, brakingPower: 0, corneringSpeed: 0 },
   );
+  const resolved = canonicalToPhysical(addCanonical(physicalStatsToCanonical(STOCK_PHYSICAL_STATS), canonicalTotals));
 
   return {
-    acceleration: Math.max(MIN_PHYSICAL_STAT, STOCK_PHYSICAL_STATS.acceleration + totals.acceleration),
-    topSpeed: Math.max(MIN_PHYSICAL_STAT, STOCK_PHYSICAL_STATS.topSpeed + totals.topSpeed),
-    brakingPower: Math.max(MIN_PHYSICAL_STAT, STOCK_PHYSICAL_STATS.brakingPower + totals.brakingPower),
-    corneringSpeed: Math.max(MIN_PHYSICAL_STAT, STOCK_PHYSICAL_STATS.corneringSpeed + totals.corneringSpeed),
+    acceleration: Math.max(MIN_PHYSICAL_STAT, resolved.acceleration),
+    topSpeed: Math.max(MIN_PHYSICAL_STAT, resolved.topSpeed),
+    brakingPower: Math.max(MIN_PHYSICAL_STAT, resolved.brakingPower),
+    corneringSpeed: Math.max(MIN_PHYSICAL_STAT, resolved.corneringSpeed),
   };
 }
 
@@ -208,6 +212,8 @@ export type ConditionalStatPotential =
 
 export interface CurrentBuildPhysicalStatsResult {
   stats: PhysicalStats;
+  /** Equivalent totals on the player-facing comparable point scale. */
+  canonicalStats: import("./types").CanonicalPhysicalStats;
   contributions: readonly UnconditionalStatContribution[];
   conditionalPotential: readonly ConditionalStatPotential[];
 }
@@ -279,7 +285,8 @@ export function resolveCurrentBuildPhysicalStats(build: Build): CurrentBuildPhys
     });
   });
 
-  return { stats: resolvePhysicalStats(activeItems, boostsByStat), contributions, conditionalPotential };
+  const stats = resolvePhysicalStats(activeItems, boostsByStat);
+  return { stats, canonicalStats: physicalStatsToCanonical(stats), contributions, conditionalPotential };
 }
 
 /** Applies every stat's own boostsByStat percent to a single delta object, once per stat key. */
@@ -313,7 +320,7 @@ function resolveConditionalPhysicsContributions(
     (item.conditionalPhysics ?? []).map((contribution) => ({
       ...contribution,
       sourceItemId: item.id,
-      delta: scaleAllStats(contribution.delta, boostsByStat),
+      delta: physicalDeltaFromCanonical(canonicalPoints(scaleAllStats(contribution.delta, boostsByStat))),
     })));
 }
 
@@ -531,11 +538,15 @@ export function simulatePlayerLaps(
     let physicsResult: ReturnType<typeof simulateLapPhysics> | undefined;
     if (track) {
       const baseStats = resolvePhysicalStats(activeItems, lapBoosts.boostsByStat);
+      const withSetup = canonicalToPhysical(addCanonical(
+        physicalStatsToCanonical(baseStats),
+        canonicalPoints(setupDeltas),
+      ));
       physicsStats = {
-        acceleration: Math.max(MIN_PHYSICAL_STAT, baseStats.acceleration + (setupDeltas.accelerationDelta ?? 0)),
-        topSpeed: Math.max(MIN_PHYSICAL_STAT, baseStats.topSpeed + (setupDeltas.topSpeedDelta ?? 0)),
-        brakingPower: Math.max(MIN_PHYSICAL_STAT, baseStats.brakingPower + (setupDeltas.brakingPowerDelta ?? 0)),
-        corneringSpeed: Math.max(MIN_PHYSICAL_STAT, baseStats.corneringSpeed + (setupDeltas.corneringSpeedDelta ?? 0)),
+        acceleration: Math.max(MIN_PHYSICAL_STAT, withSetup.acceleration),
+        topSpeed: Math.max(MIN_PHYSICAL_STAT, withSetup.topSpeed),
+        brakingPower: Math.max(MIN_PHYSICAL_STAT, withSetup.brakingPower),
+        corneringSpeed: Math.max(MIN_PHYSICAL_STAT, withSetup.corneringSpeed),
       };
       const conditionalPhysicsContributions =
         resolveConditionalPhysicsContributions(activeItems, lapBoosts.boostsByStat);

@@ -13,12 +13,14 @@ import {
   type CrossedPlaybackEvent,
   type LiveProjectionState,
   type NCarPlaybackSchedule,
+  type NCarFrameState,
   type PlaybackController,
   type PlaybackSpeed,
   applyGuardedOvertakeOverlay,
 } from "../simulation/playback";
-import { generateTrack, pointAtProgress, trackCenterline } from "../simulation/tracks";
+import { generateTrack, pointAtProgress } from "../simulation/tracks";
 import { STOCK_PHYSICAL_STATS, type PhysicalStats } from "../simulation/tracks";
+import { addCanonical, canonicalPoints, canonicalToPhysical, physicalStatsToCanonical } from "../simulation/statNormalization";
 import { deriveLiveStatChangesByLap } from "../simulation/laps";
 import {
   type EnrichedContestResult,
@@ -51,6 +53,30 @@ import { raceBoardLayout } from "./raceBoardPresentation";
 import { enrichmentCallout } from "./raceEnrichmentPresentation";
 import { createAudioState, emitCue, isBrowserAudioMuted, setAudioMuted, setBrowserAudioMuted, startBrowserEngine, startEngine, stopBrowserEngine, stopEngine, unlockAudio, unlockBrowserAudio, type AudioState } from "./audioPresentation";
 import { resolveSoloExhibitionContest, type ExhibitionTrial } from "../simulation/exhibition";
+import {
+  buildCircuitVisualModel,
+  completeActiveSpectacle,
+  createSpectaclePresentationState,
+  focusPositions,
+  focusSelectCar,
+  focusWindowDisplayModel,
+  selectSpectacleMomentsFromResult,
+  spectacleActivated,
+  spectacleEventCrossed,
+  spectacleMomentModel,
+  type CircuitVisualModel,
+  type FocusPositionView,
+  type SpectaclePresentationState,
+  type SpectacleParticipantView,
+} from "./raceSpectaclePresentation";
+import {
+  createCircuitVisual,
+  createVehicleMarker,
+  renderFocusWindow,
+  renderPipPanel,
+} from "./raceSpectacleVisuals";
+import { fieldVisualProfiles, raceVisualProfileForCar, type RaceVisualProfile } from "../content/raceVisualProfiles";
+import { availableRaceVehicleTextureKey } from "./visualAssets";
 
 const BOARD_SLOT_HEIGHT = 58;
 const BOARD_Y = 406;
@@ -90,9 +116,10 @@ export class ContestScene extends Phaser.Scene {
       stopBrowserEngine();
     }
   };
-  private markers = new Map<string, Phaser.GameObjects.Image>();
+  private markers = new Map<string, Phaser.GameObjects.Container>();
   private trails = new Map<string, { x: number; y: number }[]>();
   private trailGraphics?: Phaser.GameObjects.Graphics;
+  private circuitGraphics?: Phaser.GameObjects.Graphics;
   private playerLapLabel?: Phaser.GameObjects.Text;
   private liveStatState: LiveStatPanelState = { lines: [], consumedBoundaryIds: [] };
   private liveStatPanel?: Phaser.GameObjects.Container;
@@ -114,6 +141,16 @@ export class ContestScene extends Phaser.Scene {
   private vehicleStatPanel?: Phaser.GameObjects.Container;
   private audioState: AudioState = createAudioState();
   private exhibitionMode = false;
+  // Feature 036 (T031/T032/T039): race-local spectacle state (selected moment
+  // map, focus window, reduced-motion + asset flags) plus live HUD objects.
+  private spectacle?: SpectaclePresentationState;
+  private pipPanel?: Phaser.GameObjects.Container;
+  private focusWindow?: Phaser.GameObjects.Container;
+  private pipActiveFrames = 0;
+  private readonly PIP_FRAME_WINDOW = 90;
+  private fieldProfiles?: ReadonlyMap<string, RaceVisualProfile>;
+  private circuitModel?: CircuitVisualModel;
+  private lastFrame?: NCarFrameState;
 
   constructor() {
     super("ContestScene");
@@ -223,12 +260,10 @@ export class ContestScene extends Phaser.Scene {
     const playerResult = contestResult.cars.find((car) => car.role === "player");
     if (!playerResult) return;
     const setupDelta: Partial<ItemPhysicsContribution> = playerResult.setup?.totalDelta ?? {};
-    const baselineStats: PhysicalStats = {
-      acceleration: STOCK_PHYSICAL_STATS.acceleration + (setupDelta.accelerationDelta ?? 0),
-      topSpeed: STOCK_PHYSICAL_STATS.topSpeed + (setupDelta.topSpeedDelta ?? 0),
-      brakingPower: STOCK_PHYSICAL_STATS.brakingPower + (setupDelta.brakingPowerDelta ?? 0),
-      corneringSpeed: STOCK_PHYSICAL_STATS.corneringSpeed + (setupDelta.corneringSpeedDelta ?? 0),
-    };
+    const baselineStats: PhysicalStats = canonicalToPhysical(addCanonical(
+      physicalStatsToCanonical(STOCK_PHYSICAL_STATS),
+      canonicalPoints(setupDelta),
+    ));
     const boundaryView = {
       ...nCarBoundaryView(schedule, contestResult),
       playerStatChanges: deriveLiveStatChangesByLap(
@@ -272,7 +307,23 @@ export class ContestScene extends Phaser.Scene {
       this.controlButtons.clear();
       this.auxiliaryControlButtons.forEach((button) => button.destroy());
       this.auxiliaryControlButtons = [];
+      // Feature 036 (T043): clean up PiP, focus, marker, and circuit objects
+      // on scene shutdown so no presentation object leaks into the next scene.
+      this.customCleanupSpectacleObjects();
     });
+  }
+
+  private customCleanupSpectacleObjects(): void {
+    this.pipPanel?.destroy(true);
+    this.pipPanel = undefined;
+    this.focusWindow?.destroy(true);
+    this.focusWindow = undefined;
+    this.circuitGraphics?.destroy();
+    this.circuitGraphics = undefined;
+    this.markers.forEach((container) => container.destroy(true));
+    this.markers.clear();
+    this.trails.clear();
+    this.spectacle = undefined;
   }
 
   update(_time: number, delta: number): void {
@@ -302,6 +353,7 @@ export class ContestScene extends Phaser.Scene {
       null,
       this.previousFinishedCarIds,
     );
+    this.lastFrame = frame;
     frame.cars.forEach((car) => {
       const marker = this.markers.get(car.id);
       if (marker) this.positionMarker(car.id, marker, car.progress);
@@ -316,6 +368,12 @@ export class ContestScene extends Phaser.Scene {
     // player-fired/finished lines (still valid, immutable-evidence facts)
     // only get the ticker when no checkpoint just changed.
     this.consumePlaybackEvents(this.playbackController.lastEvents, frame);
+    // Feature 036 (T032): finish any bounded PiP window on its own frame count.
+    // This never pauses, rewinds, or otherwise mutates the playback controller.
+    this.tickSpectaclePip();
+    // Feature 036 (T054): keep the focus mini-markers following the displayed
+    // car(s) using the current frame's retained positions (read-only).
+    this.renderFocusWindowLayer();
     this.previousFinishedCarIds = frame.cars.filter((car) => car.progress.finished).map((car) => car.id);
 
     // 030-race-playback-controls (T020): the controller is the single
@@ -359,6 +417,24 @@ export class ContestScene extends Phaser.Scene {
       } else if (event.kind === "enrichment-event" && event.enrichmentEvent) {
         // Only projects immutable evidence. Full/compact selection was made
         // by the resolver and is never recomputed in the scene.
+        // Feature 036 (T032): feed only the existing crossed boundary into the
+        // pure spectacle reducer; it selects/activates retained moments and
+        // deterministically suppresses conflicts without touching the controller.
+        if (this.spectacle) {
+          const prev = this.spectacle;
+          const next = spectacleEventCrossed(prev, event.enrichmentEvent.eventId);
+          if (next !== prev) {
+            // T052: only a newly-activated moment starts its PiP window. A
+            // colliding moment that becomes suppressed never restarts or
+            // extends the winning event's duration.
+            const activated = spectacleActivated(prev, next);
+            this.spectacle = next;
+            if (activated) {
+              this.pipActiveFrames = this.PIP_FRAME_WINDOW;
+              this.renderSpectacleLayers();
+            }
+          }
+        }
         const callout = enrichmentCallout(event.enrichmentEvent);
         this.tickerText?.setText(callout.text);
       } else if (event.kind === "checkpoint" && event.projection) {
@@ -519,12 +595,9 @@ export class ContestScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    const points = trackCenterline(track);
-    const trackGraphics = this.add.graphics();
-    trackGraphics.lineStyle(30, 0x30353a, 1);
-    this.strokeClosedPath(trackGraphics, points);
-    trackGraphics.lineStyle(2, 0xd5d8da, 0.8);
-    this.strokeClosedPath(trackGraphics, points);
+    const circuitModel = buildCircuitVisualModel(track);
+    this.circuitModel = circuitModel;
+    this.circuitGraphics = createCircuitVisual(this, circuitModel, regionId).setDepth(1);
     this.add
       .text(60, 60, track.name.toUpperCase(), {
         fontSize: "11px",
@@ -534,17 +607,26 @@ export class ContestScene extends Phaser.Scene {
 
     this.trailGraphics = this.add.graphics().setDepth(3);
 
+    // Feature 036 (T018/T019/T047): profile-aware vehicle markers with stable
+    // number/pattern/label identity, field-unique numbers, and a labeled
+    // no-asset fallback. Placement still uses pointAtProgress via
+    // positionMarker (contract §2).
+    const playerEntrantId = this.run?.identity.entrantId;
+    this.fieldProfiles = fieldVisualProfiles(this.schedule!.cars, playerEntrantId);
     this.schedule!.cars.forEach((car) => {
-      const marker = this.add
-        .image(0, 0, car.role === "player" ? "player-vehicle" : "rival-vehicle")
-        .setDisplaySize(32, 16)
-        .setDepth(car.role === "player" ? 6 : 4);
-      if (car.role === "rival") marker.setTint(tintFromHex(car.color));
-      this.markers.set(car.id, marker);
+      const profile = this.fieldProfiles!.get(car.id) ?? raceVisualProfileForCar(car, playerEntrantId);
+      const textureKey = availableRaceVehicleTextureKey(this, profile.vehicleKey);
+      const handle = createVehicleMarker(this, profile, textureKey, tintFromHex(car.color));
+      handle.container.setDepth(car.role === "player" ? 6 : 4);
+      this.markers.set(car.id, handle.container);
       this.trails.set(car.id, []);
       const start: CarProgress = { lapIndex: 0, lapProgress: 0, finished: false };
-      this.positionMarker(car.id, marker, start);
+      this.positionMarker(car.id, handle.container, start);
     });
+
+    // Feature 036 (T031): initialize the bounded spectacle state once from the
+    // immutable result; it never reconstructs or resolves events.
+    this.initializeSpectaclePresentation();
 
     // 027-race-legibility-integrity (US1/US2): a fixed set of stable rows —
     // never a reordering per-car list — updated only at completed-player-lap
@@ -582,7 +664,7 @@ export class ContestScene extends Phaser.Scene {
     this.renderVehicleStatPanel();
   }
 
-  private positionMarker(carId: string, marker: Phaser.GameObjects.Image, progress: CarProgress): void {
+  private positionMarker(carId: string, marker: Phaser.GameObjects.Container, progress: CarProgress): void {
     const point = pointAtProgress(this.schedule!.track, progress.lapProgress);
     marker.setPosition(point.x, point.y);
     marker.setRotation(point.headingRadians);
@@ -625,12 +707,122 @@ export class ContestScene extends Phaser.Scene {
     this.projectionChangeText?.setText(presentation.changeLabel ?? "");
   }
 
-  private strokeClosedPath(graphics: Phaser.GameObjects.Graphics, points: readonly { x: number; y: number }[]): void {
-    graphics.beginPath();
-    graphics.moveTo(points[0].x, points[0].y);
-    points.slice(1).forEach((point) => graphics.lineTo(point.x, point.y));
-    graphics.closePath();
-    graphics.strokePath();
+  // --- Feature 036 spectacle life-cycle (T031/T032/T039) --------------------
+
+  private prefersReducedMotion(): boolean {
+    return typeof window !== "undefined"
+      && typeof window.matchMedia === "function"
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  private carLabelFor(id: string): string {
+    const car = this.schedule?.cars.find((entry) => entry.id === id);
+    if (!car) return id;
+    return raceVisualProfileForCar(car, this.run?.identity.entrantId).label;
+  }
+
+  private initializeSpectaclePresentation(): void {
+    if (!this.result || !this.schedule) return;
+    const assetAvailability: Record<string, boolean> = {};
+    this.schedule.cars.forEach((car) => {
+      const key = this.fieldProfiles?.get(car.id)?.vehicleKey;
+      if (key) assetAvailability[key] = availableRaceVehicleTextureKey(this, key) !== undefined;
+    });
+    this.spectacle = createSpectaclePresentationState({
+      moments: selectSpectacleMomentsFromResult(this.result, (id) => this.carLabelFor(id)),
+      playerCarId: "player",
+      reducedMotion: this.prefersReducedMotion(),
+      assetAvailability,
+    });
+    this.renderSpectacleLayers();
+  }
+
+  private focusSelectorOptions(): { carId: string; label: string; number: string }[] {
+    if (!this.schedule) return [];
+    return this.schedule.cars.map((car) => {
+      const profile = this.fieldProfiles?.get(car.id) ?? raceVisualProfileForCar(car, this.run?.identity.entrantId);
+      return { carId: car.id, label: profile.label, number: profile.number };
+    });
+  }
+
+  private handleFocusSelect(carId: string): void {
+    if (!this.spectacle) return;
+    this.spectacle = { ...this.spectacle, focus: focusSelectCar(this.spectacle.focus, carId) };
+    this.renderSpectacleLayers();
+  }
+
+  private featuredParticipants(carIds: readonly string[]): SpectacleParticipantView[] {
+    const views: SpectacleParticipantView[] = [];
+    for (const carId of carIds) {
+      const car = this.schedule?.cars.find((entry) => entry.id === carId);
+      const profile = this.fieldProfiles?.get(carId)
+        ?? raceVisualProfileForCar(
+          car ?? { id: carId, role: "rival", name: carId, color: "#c0524a" },
+          this.run?.identity.entrantId,
+        );
+      views.push({
+        carId,
+        label: profile.label,
+        number: profile.number,
+        colorHex: tintFromHex(car?.color ?? "#c0524a"),
+      });
+    }
+    return views;
+  }
+
+  private focusWindowPositions(): readonly FocusPositionView[] {
+    if (!this.spectacle || !this.lastFrame || !this.schedule) return [];
+    const progressById = new Map(this.lastFrame.cars.map((entry) => [entry.id, entry.progress]));
+    return focusPositions(
+      this.spectacle.focus,
+      (carId) => progressById.get(carId),
+      this.schedule.track,
+      (id) => this.carLabelFor(id),
+    );
+  }
+
+  private renderPipLayer(): void {
+    this.pipPanel?.destroy(true);
+    this.pipPanel = undefined;
+    if (!this.spectacle) return;
+    const activeMomentId = this.spectacle.focus.activeMomentId;
+    if (!activeMomentId) return;
+    const moment = this.spectacle.selected.get(activeMomentId);
+    if (!moment) return;
+    const featured = this.featuredParticipants(moment.participants);
+    const model = spectacleMomentModel(moment, this.spectacle.reducedMotion, featured);
+    this.pipPanel = renderPipPanel(this, model, { x: 24, y: 258 });
+  }
+
+  private renderFocusWindowLayer(): void {
+    this.focusWindow?.destroy(true);
+    this.focusWindow = undefined;
+    if (!this.spectacle) return;
+    const displayModel = focusWindowDisplayModel(this.spectacle.focus, (id) => this.carLabelFor(id));
+    this.focusWindow = renderFocusWindow(
+      this,
+      displayModel,
+      this.focusSelectorOptions(),
+      (id) => this.handleFocusSelect(id),
+      this.focusWindowPositions(),
+      this.circuitModel,
+    );
+  }
+
+  private renderSpectacleLayers(): void {
+    this.renderPipLayer();
+    this.renderFocusWindowLayer();
+  }
+
+  /** Completes the bounded PiP window after its frame count; never touches playback. */
+  private tickSpectaclePip(): void {
+    if (!this.spectacle || !this.spectacle.focus.activeMomentId) return;
+    this.pipActiveFrames -= 1;
+    if (this.pipActiveFrames <= 0) {
+      this.spectacle = completeActiveSpectacle(this.spectacle);
+      this.pipActiveFrames = 0;
+      this.renderSpectacleLayers();
+    }
   }
 
   private renderBoard(board: (OfferedItem | null)[]): void {

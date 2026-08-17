@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CanonicalStatTarget } from "../../src/simulation/types";
 import {
   BALANCE_ENTRANTS,
+  BALANCED_REFERENCE_TRACK_SEEDS,
   BALANCE_SEEDS,
   MARGINAL_VALUE_CORPUS,
   NELL_CATALOG,
@@ -10,10 +11,9 @@ import {
   representativeBalanceFixture,
 } from "../fixtures/balance-fixtures";
 import {
-  marginalSpreadExceedsTenPercent,
-  marginalSpreadMultiplier,
-  REFERENCE_MARGINAL_SECONDS_PER_POINT,
+  canonicalToPhysical,
 } from "../../src/simulation/statNormalization";
+import { generateTrack, simulateLapPhysics, STOCK_PHYSICAL_STATS } from "../../src/simulation/tracks";
 
 describe("Feature 032 deterministic balance harness", () => {
   it("keeps Nell and the stock vehicle immutable controls", () => {
@@ -43,11 +43,29 @@ describe("Feature 032 deterministic balance harness", () => {
 });
 
 describe("Feature 034 balanced reference-track 10% acceptance gate (T016, SC-013)", () => {
-  it("keeps the one-point marginal stat spread within 10%", () => {
-    const spread = marginalSpreadMultiplier();
-    expect(spread).toBeGreaterThan(0);
-    expect(spread).toBeLessThanOrEqual(1.1);
-    expect(marginalSpreadExceedsTenPercent()).toBe(false);
+  it("measures production lap simulation for exactly one canonical point of each stat", () => {
+    const tracks = BALANCED_REFERENCE_TRACK_SEEDS.map((seed) => generateTrack(seed, 1));
+    const marginals = (Object.keys(MARGINAL_VALUE_CORPUS) as CanonicalStatTarget[]).map((stat) => {
+      const onePoint = canonicalToPhysical({
+        acceleration: stat === "acceleration" ? 1 : 0,
+        topSpeed: stat === "topSpeed" ? 1 : 0,
+        brakingPower: stat === "brakingPower" ? 1 : 0,
+        corneringSpeed: stat === "corneringSpeed" ? 1 : 0,
+      });
+      const saving = tracks.reduce((sum, track) => {
+        const baseline = simulateLapPhysics(STOCK_PHYSICAL_STATS, track.segments).totalSeconds;
+        const boosted = simulateLapPhysics({
+          acceleration: STOCK_PHYSICAL_STATS.acceleration + onePoint.acceleration,
+          topSpeed: STOCK_PHYSICAL_STATS.topSpeed + onePoint.topSpeed,
+          brakingPower: STOCK_PHYSICAL_STATS.brakingPower + onePoint.brakingPower,
+          corneringSpeed: STOCK_PHYSICAL_STATS.corneringSpeed + onePoint.corneringSpeed,
+        }, track.segments).totalSeconds;
+        return sum + baseline - boosted;
+      }, 0) / tracks.length;
+      return { stat, saving };
+    });
+    const mean = marginals.reduce((sum, entry) => sum + entry.saving, 0) / marginals.length;
+    marginals.forEach(({ saving }) => expect(Math.abs(saving - mean) / mean).toBeLessThanOrEqual(0.1));
   });
 });
 
@@ -57,7 +75,6 @@ describe("Feature 034 four-stat marginal-value corpus snapshot (T003)", () => {
     targets.forEach((stat) => {
       expect(typeof MARGINAL_VALUE_CORPUS[stat]).toBe("number");
       expect(MARGINAL_VALUE_CORPUS[stat]).toBeGreaterThan(0);
-      expect(MARGINAL_VALUE_CORPUS[stat]).toBe(REFERENCE_MARGINAL_SECONDS_PER_POINT[stat]);
     });
   });
 
@@ -65,4 +82,3 @@ describe("Feature 034 four-stat marginal-value corpus snapshot (T003)", () => {
     expect(Object.keys(MARGINAL_VALUE_CORPUS).sort()).toEqual(["acceleration", "brakingPower", "corneringSpeed", "topSpeed"]);
   });
 });
-

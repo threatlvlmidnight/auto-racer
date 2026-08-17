@@ -11,6 +11,7 @@ import {
 import { createItemInstance } from "../../src/simulation/itemInstances";
 import type { ItemDefinition } from "../../src/simulation/types";
 import { testItem } from "../fixtures/vehicle-build-fixtures";
+import { PHYSICAL_UNITS_PER_CANONICAL_POINT } from "../../src/simulation/statNormalization";
 
 function accelerationItem(accelerationDelta: number): ItemDefinition {
   return testItem({
@@ -28,7 +29,7 @@ describe("resolveModificationEffect — behavior families (T031/T034, FR-044)", 
     const graft = buildWorkshopModification("graft-accel-into-cornering", "factory-1", 5);
     const effect = resolveModificationEffect(graft, item);
     expect(effect.points.acceleration).toBe(0);
-    expect(effect.points.corneringSpeed).toBe(4);
+    expect(effect.points.corneringSpeed).toBe(4 / PHYSICAL_UNITS_PER_CANONICAL_POINT.acceleration);
     expect(effect.guardedOncePerRace).toBe(false);
     expect(effect.adaptedMount).toBe(false);
   });
@@ -37,7 +38,7 @@ describe("resolveModificationEffect — behavior families (T031/T034, FR-044)", 
     const item = accelerationItem(6);
     const twin = buildWorkshopModification("twin-tuned", "factory-2", 3);
     const effect = resolveModificationEffect(twin, item);
-    expect(effect.points.acceleration).toBe(6);
+    expect(effect.points.acceleration).toBe(6 / PHYSICAL_UNITS_PER_CANONICAL_POINT.acceleration);
     expect(effect.points.topSpeed).toBe(0);
   });
 

@@ -1,5 +1,6 @@
 import type { EntrantId, Origin, RegionId } from "../simulation/types";
 import { UI_CHROME_MASTER_TEXTURE_KEY } from "./uiChrome";
+import { PLAYER_VISUAL_PROFILES, racePlayerTextureKey } from "../content/raceVisualProfiles";
 
 /** Stable runtime key for the optional transparent control master. */
 export const UI_CHROME_ASSET_KEY = UI_CHROME_MASTER_TEXTURE_KEY;
@@ -48,4 +49,27 @@ export function regionalRaceBackdrop(regionId: RegionId | null | undefined): Pro
 
 export function itemFamilyAssetKey(origin: Origin, category: "power" | "chassis"): string {
   return `item-family-${origin}-${category}`;
+}
+
+// ---------------------------------------------------------------------------
+// Feature 036 race player vehicle assets (T010/T040)
+// ---------------------------------------------------------------------------
+
+/** The four manifested bespoke player texture keys (preloaded in BootScene). */
+export const RACE_PLAYER_VEHICLE_KEYS: readonly string[] = Object.freeze(
+  PLAYER_VISUAL_PROFILES.map((profile) => profile.vehicleKey!).filter(Boolean),
+);
+
+/** Stable texture key for a given player entrant. */
+export function racePlayerTextureKeyById(entrantId: EntrantId): string {
+  return racePlayerTextureKey(entrantId);
+}
+
+/** Safe no-art lookup: returns a texture key only when it is actually loaded. */
+export function availableRaceVehicleTextureKey(
+  scene: { textures: { exists(key: string): boolean } },
+  key: string | undefined,
+): string | undefined {
+  if (!key) return undefined;
+  return scene.textures.exists(key) ? key : undefined;
 }
