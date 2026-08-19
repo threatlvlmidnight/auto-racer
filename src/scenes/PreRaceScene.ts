@@ -26,6 +26,7 @@ import {
 } from "./demoTheme";
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
 import { circuitIdentityLine, circuitPresentationIdentity } from "./circuitPresentation";
+import { formatStatPoint, preRaceCaptionMetrics } from "./sceneLayoutBands";
 import { createRuntimeTextControl } from "./uiChrome";
 import { identityForEntrant } from "../content/driverRaceIdentities";
 import { DEFAULT_RACE_ENRICHMENT_CONFIG } from "../simulation/enrichmentConfig";
@@ -195,15 +196,17 @@ export class PreRaceScene extends Phaser.Scene {
     const stage = this.setupInput.run.stages[this.setupInput.run.stageIndex];
     if (stage?.regionId) {
       const raceLabel = stage.raceKind === "local" ? "LOCAL RACE" : "CHAMPIONSHIP RACE";
-      // Feature 035 US1: recorded track name + explicit LOCATION identity.
-      // Bound the caption to the centre column so long track/region labels never
-      // collide with the right-side statistics panel (T022 collision fix).
+      // Feature 035 US1 + T046: one primary circuit identity. Bound the caption
+      // to the centre column (via a pure metric) so a long track/region line
+      // never runs into the left track summary or the right stats panel. The
+      // left track block no longer repeats the track name, so the circuit name
+      // appears exactly once on this screen (UI-035-01 de-duplication).
       const identity = circuitPresentationIdentity(this.setupInput.track, stage);
       const caption = `${circuitIdentityLine(identity)} · ${raceLabel}`;
-      const fontSize = caption.length > 52 ? 9 : 11;
-      this.track(this.add.text(LOGICAL_WIDTH / 2, 51, caption, {
-        fontSize: `${fontSize}px`, fontFamily: UI_FONT, fontStyle: "bold", color: "#cddbd2",
-        align: "center", wordWrap: { width: 520 }, maxLines: 2,
+      const metrics = preRaceCaptionMetrics(caption.length);
+      this.track(this.add.text(metrics.x, metrics.y, caption, {
+        fontSize: `${metrics.maxFontSize}px`, fontFamily: UI_FONT, fontStyle: "bold", color: "#cddbd2",
+        align: "center", wordWrap: { width: metrics.width }, maxLines: metrics.maxLines,
       }).setOrigin(0.5));
     }
 
@@ -279,7 +282,11 @@ export class PreRaceScene extends Phaser.Scene {
     graphics.strokePath();
     graphics.lineStyle(1.5, 0xd5d8da, 0.9);
     graphics.strokePath();
-    this.track(this.add.text(20, 62, model.track.headline.toUpperCase(), {
+    // T046: the circuit name is rendered exactly once, by the centre identity
+    // caption. This left block is a profile/context header only (laps + segment
+    // + demand + capability), never a duplicate of the track identity
+    // (UI-035-01 de-duplication).
+    this.track(this.add.text(20, 62, `TRACK PROFILE · ${model.lapCount} LAP${model.lapCount === 1 ? "" : "S"}`, {
       fontSize: "11px", fontFamily: UI_FONT, fontStyle: "bold", color: "#ffd447",
     }));
     this.track(this.add.text(20, 78, [model.track.segmentLine, model.track.demandLine].join("\n"), {
@@ -299,7 +306,7 @@ export class PreRaceScene extends Phaser.Scene {
       fontSize: "11px", fontFamily: UI_FONT, fontStyle: "bold", color: "#d7e4e7",
     }).setOrigin(0.5));
     const lines = model.stats.map((row) =>
-      `${row.label}: ${row.currentValue} → ${row.prospectiveValue}${row.changed ? ` (${row.deltaLabel})` : ""}`);
+      `${row.label}: ${formatStatPoint(row.currentValue)} → ${formatStatPoint(row.prospectiveValue)}${row.changed ? ` (${row.deltaLabel})` : ""}`);
     this.track(this.add.text(LOGICAL_WIDTH - 130, 100, lines.join("\n"), {
       fontSize: "11px", fontFamily: UI_FONT, color: "#e5ecec", lineSpacing: 6, align: "left",
     }).setOrigin(0.5));

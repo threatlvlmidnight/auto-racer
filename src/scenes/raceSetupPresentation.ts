@@ -3,6 +3,7 @@ import { resolveCurrentBuildPhysicalStats } from "../simulation/laps";
 import { lockRaceSetup, type RaceSetupInput } from "../simulation/raceSetup";
 import { summarizeTrack, trackCenterline, type Track } from "../simulation/tracks";
 import { canonicalPoints } from "../simulation/statNormalization";
+import { formatStatPoint } from "./sceneLayoutBands";
 import type {
   EligibleSetupControl,
   ItemPhysicsContribution,
@@ -140,9 +141,9 @@ export function setupStatRows(input: RaceSetupInput, selections: SetupSelections
       label: definition.label,
       unit: definition.unit,
       currentValue,
-      currentLabel: `${currentValue} ${definition.unit}`,
+      currentLabel: `${formatStatPoint(currentValue)} ${definition.unit}`,
       prospectiveValue,
-      prospectiveLabel: `${prospectiveValue} ${definition.unit}`,
+      prospectiveLabel: `${formatStatPoint(prospectiveValue)} ${definition.unit}`,
       deltaLabel: deltaLabelFor(stat, deltaValue),
       changed: deltaValue !== 0,
     };

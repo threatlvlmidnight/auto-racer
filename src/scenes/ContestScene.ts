@@ -36,6 +36,7 @@ import { contestSceneInput, raceLapLabel, type ContestSceneInput } from "./runPr
 import { addDemoBackdrop, addRunStamp, DISPLAY_FONT, UI_FONT } from "./demoTheme";
 import { circuitIdentityLine, circuitPresentationIdentity } from "./circuitPresentation";
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
+import { CONTEST_IDENTITY_MAX_WIDTH, contestSafeRegions, validateBands } from "./sceneLayoutBands";
 import { recordedLapVehicleStatModel, reduceLiveStatPanel, vehicleItemLookup, type LiveStatPanelState } from "./vehicleStatPresentation";
 import { createLiveStatPanel, createVehicleStatPanel } from "./vehicleStatVisuals";
 import { projectionPresentation } from "./raceProjectionPresentation";
@@ -158,6 +159,12 @@ export class ContestScene extends Phaser.Scene {
 
   create(data: { run?: Run; encounterId?: string; setup?: LockedRaceSetup; exhibition?: boolean }): void {
     configureHiDpiScene(this);
+    // T048: assert the exclusive safe regions before drawing — presentation-only,
+    // never mutates playback or result authority.
+    const safe = validateBands(contestSafeRegions());
+    if (safe.kind === "invalid") {
+      console.warn(`[ContestScene] safe-region violation: ${safe.overlaps.join("; ")}`);
+    }
     if (!data.run || !data.encounterId) {
       this.scene.start("RunScene", { unavailable: true });
       return;
@@ -572,7 +579,11 @@ export class ContestScene extends Phaser.Scene {
         color: "#f1eee5",
       })
       .setOrigin(0.5);
-    // Feature 035 US1 (T022): the resolved track name + LOCATION region identity.
+    // Feature 035 US1 (T022/T048): the resolved track name + LOCATION region
+    // identity, bounded to the top identity safe region so a long line never
+    // runs into the standings sidebar or the status band (UI-035-03). The
+    // small duplicated track.name at the top-left is removed — the circuit
+    // name renders exactly once here.
     const stage = this.run?.stages[this.run.stageIndex];
     const identity = circuitPresentationIdentity(track, stage);
     this.add
@@ -582,7 +593,8 @@ export class ContestScene extends Phaser.Scene {
         fontStyle: "bold",
         color: "#cddbd2",
         align: "center",
-        wordWrap: { width: 520 },
+        wordWrap: { width: CONTEST_IDENTITY_MAX_WIDTH },
+        maxLines: 2,
       })
       .setOrigin(0.5);
     this.add

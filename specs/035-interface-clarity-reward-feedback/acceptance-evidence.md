@@ -2,11 +2,13 @@
 
 **Feature**: `035-interface-clarity-reward-feedback`
 **Branch**: `035-interface-clarity-reward-feedback`
-**Status**: **INVALIDATED BY IMPLEMENTATION REVIEW (2026-08-16).** Automated
-gates are green, but this document overstates production integration and visual
-acceptance. It is not release evidence until every reopened task satisfies
-`IMPLEMENTATION-REVIEW-FOLLOWUP.md` and the evidence below is replaced with
-observed results.
+**Status**: **REMEDIATION COMPLETE — PENDING OWNER QA (2026-08-19).** The
+T045–T050 CODE-DEEPSEEK remediation is implemented and its automated gates are
+green (129 files / 1934 tests, lint, build, build:pages). T043 remains an
+owner-performed browser acceptance at the four supported viewports, using the
+exact runbook and expected outcomes recorded in `## T050` below. This document
+is release evidence only for the automated parts until the owner T043 sweep is
+recorded.
 
 ---
 
@@ -135,3 +137,71 @@ that fails if the surface disconnects:
 
 No change to odds, price, tier authority, simulation, economy, or Test Day
 scoring was introduced.
+## T045 — Owner QA 2026-08-17 findings recorded as failed T043 cases
+
+The deployment-era owner screenshots (owner-qa-findings-2026-08-17.md) invalidated
+the earlier landscape PASS. Each reproduced cluster is recorded here as a FAILED
+T043 case with its dense-state fixture and the supported landscape viewport the
+owner confirmed. Remediation is addressed by the CODE-DEEPSEEK tasks listed; the
+automated parts are green, and each case stays OPEN pending the T043 browser
+re-check.
+
+| T043 case | Scene | Reproduced dense state | Viewport | Owner failure | Code task | Remediation evidence |
+| --- | --- | --- | --- | --- | --- | --- |
+| UI-035-01 | PreRaceScene | four canonical stat points (e.g. `45.54…`, `27.77…`), long `track name · LOCATION: region` identity | all supported (owner deploy screenshots); 800×450 is the tightest logical canvas | circuit identity rendered twice; long identity line ran into CAR·CURRENT→PROSPECTIVE panel; raw floats `45.54455445544554` / `27.777777777777775` | T046 | single identity caption bound to the centre column (`preRaceCaptionMetrics`), `formatStatPoint` bounded point labels, left block is TRACK PROFILE only |
+| UI-035-02 | PrepareScene (Parts Supplier) | long-name, multi-effect item + upgrade-eligible + unavailable + visible receipt + installed/storage rows | all supported; 800×450 tightest | upgrade cue over stat lines; receipt crowding; installed-card content collided with WORKSHOP STORAGE heading / storage row | T047 | `prepareDenseBands` reserves exclusive vertical regions; `offerCardEffectLineFit` keeps effect lines above the state-chip strip; storage heading moved to its own band between the installed and storage rows |
+| UI-035-03 | ContestScene | identity + standings + status + installed build + playback controls at 1×/2× | all supported; 800×450 tightest | identity/status/installed/playback labels competed for the same top/bottom bands; installed content clipped at the bottom | T048 (inner HUD allocation co-ordinates with Feature 036 T061) | `contestSafeRegions` defines exclusive identity/status/lower-HUD bands; identity caption bounded and de-duplicated; playback authority untouched |
+
+Each case re-enters the T043 browser matrix at all four supported viewports
+(1920×1080, 1366×768, 1024×768, 800×450) before it may close.
+
+## T050 — Automated gates and exact T043 verification runbook
+
+**Automated gates (2026-08-19 run):** `npm test` 129 files / **1934 tests** ✅ ·
+`npm run lint` ✅ · `npm run build` ✅ · `npm run build:pages` ✅ · `tsc --noEmit`
+✅. New production-path regression suite:
+`tests/integration/interface-clarity-dense-state.test.ts` (9 tests) plus the
+existing `interface-clarity-*`, `supplier-feedback`, `pre-race-setup`, and
+`circuit-presentation` suites. No simulation/economy/tier authority changed.
+
+Below are exact ephemeral routes and expected outcomes for the owner T043 sweep.
+These are not captured screenshots or a substitute for visual acceptance.
+
+### Route 1 — PreRace (UI-035-01)
+
+- **Route**: `RunScene` → open a scheduled race → `PreRaceScene`.
+- **State**: any active PvP stage; long track/region identity; four stat rows.
+- **Viewports**: 1920×1080, 1366×768, 1024×768, 800×450.
+- **Expected**: circuit name + `LOCATION:` region appears exactly once (centre
+  caption); caption stays within x≈240…500 and wraps to ≤2 lines; right panel
+  shows bounded values (integer or one decimal, e.g. `45.5`, no `45.544554…`);
+  ADV/equipment controls, BACK / INVENTORY / TEST DAY · UNSCORED / START RACE all
+  reachable; left block reads `TRACK PROFILE · N LAPS` (no repeated track name).
+
+### Route 2 — Parts Supplier (UI-035-02)
+
+- **Route**: `RunScene` → Parts Supplier → select an
+  upgrade-eligible/unaffordable offer → purchase to show a receipt.
+- **State**: long-name, multi-effect offer + upgrade cue + unavailable/purchased
+  + `CONFIRMED` receipt + installed row + `WORKSHOP STORAGE · INERT BY DEFAULT`.
+- **Viewports**: as above.
+- **Expected**: offer effect lines readable below reserved state chips; receipt
+  bounded and `DISMISS ×` dismissible without hiding the build/vehicle readout;
+  installed and storage rows in separate, non-overlapping bands; no stat line
+  covered by the upgrade chip.
+
+### Route 3 — Contest HUD (UI-035-03)
+
+- **Route**: `PreRaceScene` → `START RACE` → `ContestScene`.
+- **State**: identity + standings + status + installed build + playback at 1×
+  and 2×.
+- **Viewports**: as above.
+- **Expected**: identity caption bounded to the top band at ≤2 lines; no
+  duplicated track name; standings/sidebar, status, installed cards, and the
+  PAUSE/PLAYBACK controls all reachable and readable at both speeds; no
+  consequential text clipped at the bottom.
+
+Inner lower-HUD horizontal allocation is co-ordinated with Feature 036
+(T061), which remains a separate open task; if the owner observes an
+installed↔playback overlap after this pass, it must be re-opened there rather
+than silently re-waived to Feature 026.

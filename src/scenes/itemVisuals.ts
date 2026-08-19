@@ -11,6 +11,7 @@ import {
 import { itemVisualDescriptor } from "./itemVisualDescriptor";
 import { cardFeedbackState, resolveCardLayout } from "./cardFeedbackPresentation";
 import { DEMO_COLORS, UI_FONT } from "./demoTheme";
+import { offerCardEffectLineFit } from "./sceneLayoutBands";
 
 export function createItemIcon(
   scene: Phaser.Scene,
@@ -180,7 +181,14 @@ export function createItemCard(
     effectCount: allEffectLines.length,
     metadataDensity: 1,
   });
-  const visibleLineLimit = layout.effectLinesVisible;
+  const visibleLineLimit = offerEmphasis
+    ? offerCardEffectLineFit({
+        height: options.height,
+        effectLinesVisible: layout.effectLinesVisible,
+        effectsStartY: metadataY + metadata.height + 3,
+        lineHeight: 15,
+      })
+    : layout.effectLinesVisible;
   const hiddenLineCount = Math.max(0, allEffectLines.length - visibleLineLimit);
   const effectText = allEffectLines.slice(0, visibleLineLimit).join("\n");
   const effects = scene.add.text(-options.width / 2 + 8, metadataY + metadata.height + 3, effectText, {

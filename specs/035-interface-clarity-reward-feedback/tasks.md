@@ -9,10 +9,10 @@ contracts/interface-clarity-contract.md, quickstart.md
 their implementation. Phaser scene work consumes those models; owner browser
 acceptance records visual/input evidence after automated gates pass.
 
-> **Owner acceptance (2026-08-17): FAILED.** The earlier implementation-review
-> work landed, but deployed-build screenshots exposed supported-landscape
-> collisions. T043 and T045–T050 remain open; see
-> [owner-qa-findings-2026-08-17.md](./owner-qa-findings-2026-08-17.md).
+> **Owner acceptance (2026-08-17): FAILED → Phase 7 remediation landed
+> (2026-08-19).** T045–T050 (CODE-DEEPSEEK) are implemented and their automated
+> gates pass; see the T045/T050 sections in acceptance-evidence.md and the T043
+> runbook there. T043 (browser QA) remains the owner's manual gate.
 
 ## Format: [ID] [P?] [Story] Description
 
@@ -156,12 +156,12 @@ consequential content without claiming new portrait reflow.
 screenshots before T043 can be completed. See
 `owner-qa-findings-2026-08-17.md`.
 
-[ ] T045 [CODE-DEEPSEEK] Record UI-035-01 through UI-035-03 as failed T043 cases in acceptance-evidence.md, including the exact dense-state fixture and viewport for each reproduction
-[ ] T046 [CODE-DEEPSEEK] Fix PreRaceScene circuit/header/stat-panel collisions, remove duplicated identity, and apply bounded normalized-stat formatting rather than raw floating-point output
-[ ] T047 [CODE-DEEPSEEK] Fix PrepareScene Supplier cards, semantic state regions, upgrade cue, receipt, installed row, and storage row so the combined long-name/multi-stat/upgrade/unavailable/receipt fixture has no overlap
-[ ] T048 [CODE-DEEPSEEK] Coordinate ContestScene safe regions for identity, focus/standings, status/evidence, installed build, and playback controls with Feature 036 without changing playback or result authority
-[ ] T049 [CODE-DEEPSEEK] Add production-path regression coverage for the three dense states and layout-bound invariants; pure audit-case arrays do not satisfy this task
-[ ] T050 [CODE-DEEPSEEK] Re-run automated gates and provide exact routes, seeds/states, viewport sizes, and expected outcomes for T043 verification; do not capture screenshots, perform visual acceptance, or close T043
+[X] T045 [CODE-DEEPSEEK] Record UI-035-01 through UI-035-03 as failed T043 cases in acceptance-evidence.md, including the exact dense-state fixture and viewport for each reproduction
+[X] T046 [CODE-DEEPSEEK] Fix PreRaceScene circuit/header/stat-panel collisions, remove duplicated identity, and apply bounded normalized-stat formatting rather than raw floating-point output
+[X] T047 [CODE-DEEPSEEK] Fix PrepareScene Supplier cards, semantic state regions, upgrade cue, receipt, installed row, and storage row so the combined long-name/multi-stat/upgrade/unavailable/receipt fixture has no overlap
+[X] T048 [CODE-DEEPSEEK] Coordinate ContestScene safe regions for identity, focus/standings, status/evidence, installed build, and playback controls with Feature 036 without changing playback or result authority
+[X] T049 [CODE-DEEPSEEK] Add production-path regression coverage for the three dense states and layout-bound invariants; pure audit-case arrays do not satisfy this task
+[X] T050 [CODE-DEEPSEEK] Re-run automated gates and provide exact routes, seeds/states, viewport sizes, and expected outcomes for T043 verification; do not capture screenshots, perform visual acceptance, or close T043
 
 ## Dependencies and execution order
 

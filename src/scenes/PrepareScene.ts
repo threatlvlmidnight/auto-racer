@@ -48,6 +48,7 @@ import {
 } from "./demoTheme";
 import { GARAGE_BACKDROP_BY_ENTRANT } from "./visualAssets";
 import { configureHiDpiScene, LOGICAL_WIDTH } from "./layout";
+import { prepareDenseBands, PREPARE_STORAGE_HEADING_Y } from "./sceneLayoutBands";
 import {
   currentVehicleStatModel,
   prospectiveVehicleStatModel,
@@ -291,20 +292,22 @@ export class PrepareScene extends Phaser.Scene {
     });
     const latestReceipt = payload.receipts?.[Math.max(0, payload.receipts.length - 1)];
     if (latestReceipt && !this.receiptDismissed) {
+      const receiptBand = prepareDenseBands(true).find((band) => band.id === "receipt")!;
+      const receiptY = (receiptBand.top + receiptBand.bottom) / 2;
       const detail = latestReceipt.status === "upgraded"
         ? `${latestReceipt.itemName}: Tier ${latestReceipt.oldTier} → Tier ${latestReceipt.newTier}`
         : `${latestReceipt.itemName}: purchased`;
-      this.track(this.add.rectangle(LOGICAL_WIDTH / 2, INSPECTOR_Y, LOGICAL_WIDTH - 48, 60, 0x101817, 0.97)
+      this.track(this.add.rectangle(LOGICAL_WIDTH / 2, receiptY, LOGICAL_WIDTH - 48, 60, 0x101817, 0.97)
         .setStrokeStyle(2, 0x82c9aa, 0.85));
-      this.track(this.add.text(40, INSPECTOR_Y - 21, `CONFIRMED · ${detail}`, {
+      this.track(this.add.text(40, receiptY - 21, `CONFIRMED · ${detail}`, {
         fontSize: "11px", fontFamily: UI_FONT, fontStyle: "bold", color: "#82c9aa",
       }));
       if (latestReceipt.changedEffects.length > 0) {
-        this.track(this.add.text(40, INSPECTOR_Y, latestReceipt.changedEffects.map((effect: { label: string; oldValue: string; newValue: string }) => `${effect.label}: ${effect.oldValue} → ${effect.newValue}`).join(" · "), {
+        this.track(this.add.text(40, receiptY, latestReceipt.changedEffects.map((effect: { label: string; oldValue: string; newValue: string }) => `${effect.label}: ${effect.oldValue} → ${effect.newValue}`).join(" · "), {
           fontSize: "9px", fontFamily: UI_FONT, color: "#d7e4e7",
         }));
       }
-      const dismiss = this.add.text(LOGICAL_WIDTH - 42, INSPECTOR_Y - 21, "DISMISS ×", {
+      const dismiss = this.add.text(LOGICAL_WIDTH - 42, receiptY - 21, "DISMISS ×", {
         fontSize: "10px", fontFamily: UI_FONT, fontStyle: "bold", color: "#f1eee5",
       }).setOrigin(1, 0).setInteractive({ useHandCursor: true });
       dismiss.on("pointerdown", () => { this.receiptDismissed = true; this.render(); });
@@ -520,7 +523,10 @@ export class PrepareScene extends Phaser.Scene {
     );
     const totalWidth = positions.length * slotWidth + (positions.length - 1) * SLOT_GAP;
     const startX = (LOGICAL_WIDTH - totalWidth) / 2 + slotWidth / 2;
-    this.track(this.add.text(startX - slotWidth / 2, STORAGE_Y - SLOT_HEIGHT / 2 - 24, label, {
+    // T047 (UI-035-02): the stored-row heading sits in the deliberate band between
+    // the installed-row bottom and the storage row so the two rows own
+    // independent measured bounds and never collide.
+    this.track(this.add.text(startX - slotWidth / 2, PREPARE_STORAGE_HEADING_Y, label, {
       fontSize: "13px",
       fontFamily: UI_FONT,
       fontStyle: "bold",
